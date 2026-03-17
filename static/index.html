@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dryer Merger v4.1</title>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a25;--bg4:#22222f;--tx:#e8e6e0;--tx2:#9a9890;--tx3:#5a5850;--bd:rgba(255,255,255,0.06);--bd2:rgba(255,255,255,0.12);--blue:#4a9eff;--blue2:#2563eb;--green:#22c55e;--green2:#16a34a;--red:#ef4444;--amber:#f59e0b;--teal:#14b8a6;--font:'IBM Plex Sans KR',sans-serif;--mono:'JetBrains Mono',monospace;--r:10px;--rl:14px}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:var(--font);background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5;min-height:100vh}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:var(--tx3);border-radius:3px}
+.app{max-width:1200px;margin:0 auto;padding:20px}
+.hdr{display:flex;align-items:center;gap:14px;margin-bottom:24px}.hdr h1{font-size:20px;font-weight:500}.hdr .bdg{font-size:11px;background:var(--bg3);color:var(--tx2);padding:3px 10px;border-radius:20px}
+.tabs{display:flex;gap:2px;background:var(--bg2);padding:3px;border-radius:var(--r);margin-bottom:20px}.tb{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:500;border:none;background:0;color:var(--tx2);cursor:pointer;border-radius:8px;transition:.15s}.tb.on{background:var(--bg3);color:var(--tx)}
+.cd{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rl);padding:20px;margin-bottom:16px}.ct{font-size:12px;font-weight:500;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+.bt{padding:8px 18px;border-radius:8px;font-size:13px;font-weight:500;border:1px solid var(--bd2);background:var(--bg3);color:var(--tx);cursor:pointer;transition:.15s;font-family:var(--font)}.bt:hover{background:var(--bg4)}.bt:disabled{opacity:.4;cursor:not-allowed}
+.bp{background:var(--blue2);border-color:var(--blue2);color:#fff}.bp:hover{background:var(--blue)}.bg{background:var(--green2);border-color:var(--green2);color:#fff}.bg:hover{background:var(--green)}.bs{padding:5px 12px;font-size:12px}
+input,select{font-family:var(--font);font-size:13px;padding:7px 12px;background:var(--bg);border:1px solid var(--bd2);border-radius:8px;color:var(--tx);outline:0}input:focus,select:focus{border-color:var(--blue)}
+.pr{display:flex;gap:8px;margin-bottom:12px}.pi{flex:1;font-family:var(--mono)}
+.cl{border:1px solid var(--bd);border-radius:8px;max-height:200px;overflow-y:auto}.ci{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--bd);cursor:pointer;font-size:13px;transition:.1s}.ci:last-child{border:0}.ci:hover{background:rgba(255,255,255,.02)}.ci.on{background:rgba(74,158,255,.08)}.ci input{accent-color:var(--blue)}
+.ft{font-size:10px;padding:2px 6px;border-radius:4px;font-family:var(--mono)}.fb{background:rgba(34,197,94,.08);color:var(--green);border:1px solid rgba(34,197,94,.15)}.fa{background:rgba(74,158,255,.08);color:var(--blue);border:1px solid rgba(74,158,255,.15)}.fm{background:rgba(245,158,11,.08);color:var(--amber);border:1px solid rgba(245,158,11,.15)}
+.pb{width:100%;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin:8px 0}.pf{height:100%;background:linear-gradient(90deg,var(--green2),var(--teal));border-radius:4px;transition:width .3s}
+.lv{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:12px;font-family:var(--mono);font-size:12px;line-height:1.8;max-height:260px;overflow-y:auto}.ll{white-space:pre-wrap;word-break:break-all}.li{color:var(--blue)}.lo{color:var(--green)}.lw{color:var(--amber)}.le{color:var(--red)}.ld{color:var(--tx3)}
+.sb{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500}
+.rr{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)}.rr:last-child{border:0}.rn{font-family:var(--mono);font-size:13px}
+.it{font-size:12px;color:var(--tx2)}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:768px){.fg{grid-template-columns:1fr}}
+.fr{display:flex;align-items:center;gap:8px;margin-bottom:10px}.fl{width:120px;font-size:12px;color:var(--tx2);text-align:right;flex-shrink:0}.fi{flex:1}.fi input,.fi select{width:100%}.fu{font-size:11px;color:var(--tx3);min-width:30px}
+.tw{border:1px solid var(--bd);border-radius:8px;overflow:auto;max-height:320px}table{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono)}th{background:var(--bg3);padding:8px 10px;text-align:right;font-weight:500;color:var(--tx2);position:sticky;top:0;z-index:1;white-space:nowrap}th:first-child,td:first-child{text-align:left}td{padding:6px 10px;text-align:right;border-top:1px solid var(--bd);white-space:nowrap}
+.cw{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:12px;height:300px;position:relative}.cc{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.cc label{font-size:12px;color:var(--tx2)}.cc select{padding:5px 8px;font-size:12px}
+.eg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.eg label{font-size:11px;color:var(--tx2);display:block;margin-bottom:4px}.eg input{width:100%;font-size:12px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback}=React;const API='';
+
+function App(){const[tab,setTab]=useState('run');const[cfg,setCfg]=useState(null);const[sid,setSid]=useState(null);const[st,setSt]=useState(null);const[pf,setPf]=useState(null);
+useEffect(()=>{fetch(`${API}/api/config`).then(r=>r.json()).then(setCfg)},[]);
+return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span className="bdg">v4.1 — 경로 탐색</span></div>
+<div className="tabs"><button className={`tb ${tab==='run'?'on':''}`} onClick={()=>setTab('run')}>실행</button><button className={`tb ${tab==='config'?'on':''}`} onClick={()=>setTab('config')}>설정</button><button className={`tb ${tab==='preview'?'on':''}`} onClick={()=>setTab('preview')}>미리보기</button></div>
+{tab==='run'&&cfg&&<RunTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt} go={f=>{setPf(f);setTab('preview')}}/>}
+{tab==='config'&&cfg&&<CfgTab cfg={cfg} setCfg={setCfg}/>}
+{tab==='preview'&&<PrvTab init={pf}/>}
+</div>)}
+
+function RunTab({cfg,sid,setSid,st,setSt,go}){
+const[path,setPath]=useState(localStorage.getItem('dryer_path')||'D:\\');
+const[cases,setCases]=useState([]);const[cf,setCf]=useState({});const[sel,setSel]=useState(new Set());
+const[busy,setBusy]=useState(false);const[poll,setPoll]=useState(false);
+const[exp,setExp]=useState({load_kg:'',imc_kg:'',fmc_kg:''});const pr=useRef();
+
+const browse=async()=>{setBusy(true);try{const r=await fetch(`${API}/api/browse`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});const d=await r.json();if(!r.ok){alert(d.detail);setBusy(false);return}setCases(d.cases||[]);setPath(d.path);localStorage.setItem('dryer_path',d.path);setSel(new Set(d.cases||[]))}catch(e){alert(e.message)}setBusy(false)};
+
+const confirm=async()=>{if(!sel.size){alert('선택 없음');return}try{const r=await fetch(`${API}/api/select`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category_path:path,case_names:[...sel]})});const d=await r.json();if(!r.ok){alert(d.detail);return}setSid(d.session_id);setCf(d.cases||{});setSt({status:'ready',progress:0,log:[],results:[]})}catch(e){alert(e.message)}};
+
+const run=async()=>{if(!sid)return;const ex=(exp.load_kg&&exp.imc_kg&&exp.fmc_kg)?{load_kg:+exp.load_kg,imc_kg:+exp.imc_kg,fmc_kg:+exp.fmc_kg}:null;
+try{await fetch(`${API}/api/process`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid,config:cfg,experimental:ex})});setPoll(true)}catch(e){alert(e.message)}};
+
+useEffect(()=>{if(!poll||!sid)return;const id=setInterval(async()=>{try{const r=await fetch(`${API}/api/status/${sid}`);const d=await r.json();setSt(d);if(d.status==='done'||d.status==='error')setPoll(false)}catch(e){console.error(e)}},800);pr.current=id;return()=>clearInterval(id)},[poll,sid]);
+
+const tog=n=>{setSel(p=>{const s=new Set(p);s.has(n)?s.delete(n):s.add(n);return s})};
+
+return(<div>
+<div className="cd"><div className="ct">데이터 경로</div>
+<div className="pr"><input className="pi" value={path} onChange={e=>setPath(e.target.value)} placeholder="예: D:\02. WBC\실험데이터" onKeyDown={e=>e.key==='Enter'&&browse()}/><button className={`bt bp`} onClick={browse} disabled={busy}>{busy?'탐색 중...':'경로 탐색'}</button></div>
+{cases.length>0&&<><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}><span className="it">{cases.length}개 케이스 — {sel.size}개 선택</span><div style={{display:'flex',gap:6}}><button className="bt bs" onClick={()=>setSel(new Set(cases))}>전체</button><button className="bt bs" onClick={()=>setSel(new Set())}>해제</button></div></div>
+<div className="cl">{cases.map(c=><div key={c} className={`ci ${sel.has(c)?'on':''}`} onClick={()=>tog(c)}><input type="checkbox" checked={sel.has(c)} readOnly/><span>{c}</span></div>)}</div>
+<div style={{marginTop:12}}><button className="bt bg" onClick={confirm}>케이스 확정 ({sel.size}개)</button></div></>}
+</div>
+
+{sid&&st&&<div className="cd">
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}><div className="ct" style={{margin:0}}>처리</div><div style={{display:'flex',gap:8,alignItems:'center'}}><span className="sb" style={{background:st.status==='done'?'rgba(34,197,94,.1)':st.status==='processing'?'rgba(74,158,255,.1)':st.status==='error'?'rgba(239,68,68,.1)':'rgba(245,158,11,.1)',color:st.status==='done'?'var(--green)':st.status==='processing'?'var(--blue)':st.status==='error'?'var(--red)':'var(--amber)'}}>{st.status}</span><button className="bt bg" onClick={run} disabled={st.status==='processing'}>{st.status==='processing'?'처리 중...':'실행'}</button></div></div>
+
+<div style={{marginBottom:14}}><div className="it" style={{marginBottom:6}}>실험 입력값 (RMC 계산용, 선택사항):</div><div className="eg"><div><label>건조부하 [kg]</label><input value={exp.load_kg} onChange={e=>setExp(p=>({...p,load_kg:e.target.value}))} placeholder="3.0"/></div><div><label>초기 함수율 무게 [kg]</label><input value={exp.imc_kg} onChange={e=>setExp(p=>({...p,imc_kg:e.target.value}))} placeholder="4.8"/></div><div><label>최종 함수율 무게 [kg]</label><input value={exp.fmc_kg} onChange={e=>setExp(p=>({...p,fmc_kg:e.target.value}))} placeholder="3.15"/></div></div></div>
+
+{Object.keys(cf).length>0&&<div style={{marginBottom:14}}>{Object.entries(cf).map(([c,f])=><div key={c} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 0',fontSize:12}}><span style={{color:'var(--tx2)',minWidth:200}}>{c}</span><div style={{display:'flex',gap:4}}>{f.br?.length>0&&<span className="ft fb">BR×{f.br.length}</span>}{f.ams?.length>0&&<span className="ft fa">AMS×{f.ams.length}</span>}{f.mx100?.length>0&&<span className="ft fm">MX×{f.mx100.length}</span>}</div></div>)}</div>}
+
+<div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--tx2)',marginBottom:4}}><span>진행률</span><span>{st.progress}%</span></div>
+<div className="pb"><div className="pf" style={{width:st.progress+'%'}}/></div>
+
+{st.log?.length>0&&<div className="lv" style={{marginTop:12}}>{st.log.map((l,i)=><div key={i} className={`ll ${l.includes('에러')||l.includes('Error')?'le':l.includes('경고')?'lw':l.includes('→')||l.includes('완료')?'lo':l.includes('처리 중')?'li':'ld'}`}>{l}</div>)}</div>}
+
+{st.results?.length>0&&<div style={{marginTop:14}}><div className="ct">결과 파일</div>{st.results.map(f=><div key={f} className="rr"><span className="rn">{f}</span><div style={{display:'flex',gap:6}}><button className="bt bs" onClick={()=>go(f)}>미리보기</button><a href={`${API}/api/results/${f}`} download className="bt bs bp" style={{textDecoration:'none'}}>다운로드</a></div></div>)}</div>}
+</div>}
+</div>)}
+
+function CfgTab({cfg,setCfg}){const[l,sL]=useState(JSON.parse(JSON.stringify(cfg)));const[sv,sSv]=useState(false);
+const s=(p,v)=>{const n=JSON.parse(JSON.stringify(l));const k=p.split('.');let t=n;for(let i=0;i<k.length-1;i++)t=t[k[i]];t[k[k.length-1]]=v;sL(n)};
+const save=async()=>{sSv(true);try{await fetch(`${API}/api/config`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(l)});setCfg(JSON.parse(JSON.stringify(l)));alert('저장 완료')}catch(e){alert(e.message)}sSv(false)};
+const F=({lb,p,t='text',o,u,st})=>{const k=p.split('.');let v=l;for(const x of k)v=v?.[x];return(<div className="fr"><div className="fl">{lb}</div><div className="fi">{o?<select value={v||''} onChange={e=>s(p,e.target.value)}>{o.map(x=><option key={x}>{x}</option>)}</select>:<input type={t} value={v??''} step={st} onChange={e=>s(p,t==='number'?Number(e.target.value):e.target.value)}/>}</div>{u&&<span className="fu">{u}</span>}</div>)};
+return(<div><div className="fg"><div>
+<div className="cd"><div className="ct">실험 환경</div><F lb="냉매" p="environment.refrigerant" o={['Propane','R410A','R134a','R32','R290','R1234yf']}/><F lb="대기압" p="environment.patm" t="number" st="0.001" u="kPa"/><F lb="백엔드" p="environment.backend" o={['HEOS','REFPROP']}/></div>
+<div className="cd"><div className="ct">처리 모드</div><F lb="시료" p="processing.setup_type" o={['BR','AMS','MX100']}/><F lb="기준 시간" p="processing.data_time" o={['BR','AMS','MX100']}/><F lb="필터 모드" p="processing.filter_mode" o={['Dry_Only','Wash_and_Dry']}/><F lb="리샘플링" p="processing.time_interval" t="number" u="초"/></div>
+<div className="cd"><div className="ct">Stage 2</div><F lb="활성화" p="calculation.enabled" o={['true','false']}/><F lb="증발기출구 RH" p="calculation.rh_eva_out_assumed" t="number" st="0.01"/><F lb="DAQ PC" p="calculation.selected_pc" o={['none','Gasan_PC1','Gasan_PC2','Gasan_PC3']}/></div>
+</div><div>
+<div className="cd"><div className="ct">후처리 필터</div><F lb="LPF τ" p="filtering.lpf_tau" t="number" st="0.1"/><F lb="노이즈 윈도우" p="filtering.noise_window" t="number"/><F lb="노이즈 임계값" p="filtering.noise_threshold" t="number" st="0.1"/><F lb="최소 Hz" p="filtering.min_hz" t="number" u="Hz"/><F lb="종료 탐색" p="filtering.last_min" t="number" st="0.5" u="분"/></div>
+<div className="cd"><div className="ct">센서 보정 [°C]</div><F lb="T_Cond_In" p="calculation.sensor_offsets.T_Cond_In" t="number" st="0.1"/><F lb="T_Cond_Out" p="calculation.sensor_offsets.T_Cond_Out" t="number" st="0.1"/><F lb="T_Cond_M1" p="calculation.sensor_offsets.T_Cond_M1" t="number" st="0.1"/><F lb="T_Air_Eva_Out" p="calculation.sensor_offsets.T_Air_Eva_Out" t="number" st="0.1"/><F lb="T_Comp_In" p="calculation.sensor_offsets.T_Comp_In" t="number" st="0.1"/><F lb="T_Comp_Out" p="calculation.sensor_offsets.T_Comp_Out" t="number" st="0.1"/></div>
+<div className="cd"><div className="ct">fTemp 계수</div><F lb="K1" p="ftemp.k1" t="number" st="0.001"/><F lb="K2" p="ftemp.k2" t="number" st="0.001"/><F lb="K3" p="ftemp.k3" t="number" st="0.001"/><F lb="AutoDelta" p="ftemp.auto_delta" t="number"/></div>
+</div></div><div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:4}}><button className="bt" onClick={()=>sL(JSON.parse(JSON.stringify(cfg)))}>초기화</button><button className="bt bp" onClick={save} disabled={sv}>{sv?'저장 중...':'설정 저장'}</button></div></div>)}
+
+function PrvTab({init}){const[rs,setRs]=useState([]);const[sel,setSel]=useState(init||'');const[pv,setPv]=useState(null);const[ld,setLd]=useState(false);
+const[xC,sXC]=useState('Time_min');const[yC,sYC]=useState('');const[y2,sY2]=useState('');const[u2,sU2]=useState(false);const cr=useRef();const ci=useRef();
+useEffect(()=>{fetch(`${API}/api/results`).then(r=>r.json()).then(d=>{setRs(d);if(init&&d.some(x=>x.name===init))setSel(init);else if(d.length&&!sel)setSel(d[0].name)})},[]);
+useEffect(()=>{if(!sel)return;setLd(true);fetch(`${API}/api/preview/${sel}?max_rows=5000`).then(r=>r.json()).then(d=>{setPv(d);const nc=d.numeric_columns;if(nc.length){if(!yC||!nc.includes(yC))sYC(nc.find(c=>c.includes('DuctOutTemp'))||nc[0]);if(!y2||!nc.includes(y2))sY2(nc.find(c=>c.includes('EvaInTemp'))||nc[Math.min(1,nc.length-1)])}setLd(false)})},[sel]);
+const draw=useCallback(()=>{if(!pv||!cr.current)return;const cs=pv.columns,xi=cs.indexOf(xC),yi=cs.indexOf(yC);if(xi<0||yi<0)return;
+const xD=pv.data.map(r=>r[xi]),yD=pv.data.map(r=>r[yi]);const ds=[{label:yC,data:yD,borderColor:'#4a9eff',borderWidth:1.2,pointRadius:0,tension:.1,yAxisID:'y'}];
+const sc={x:{title:{display:1,text:xC,color:'#9a9890'},ticks:{color:'#5a5850',maxTicksLimit:10},grid:{color:'rgba(255,255,255,.04)'}},y:{title:{display:1,text:yC,color:'#4a9eff'},ticks:{color:'#4a9eff'},grid:{color:'rgba(255,255,255,.04)'},position:'left'}};
+if(u2&&y2){const i2=cs.indexOf(y2);if(i2>=0){ds.push({label:y2,data:pv.data.map(r=>r[i2]),borderColor:'#ef4444',borderWidth:1.2,pointRadius:0,tension:.1,yAxisID:'y2'});sc.y2={title:{display:1,text:y2,color:'#ef4444'},ticks:{color:'#ef4444'},grid:{drawOnChartArea:0},position:'right'}}}
+if(ci.current)ci.current.destroy();ci.current=new Chart(cr.current,{type:'line',data:{labels:xD,datasets:ds},options:{responsive:1,maintainAspectRatio:0,animation:{duration:300},plugins:{legend:{labels:{color:'#9a9890',font:{size:11}}}},scales:sc}})},[pv,xC,yC,y2,u2]);
+useEffect(()=>{if(pv)draw()},[pv,draw]);
+return(<div>
+<div className="cd"><div style={{display:'flex',gap:8,alignItems:'center',marginBottom:14}}><span className="it">파일:</span><select value={sel} onChange={e=>setSel(e.target.value)} style={{flex:1,minWidth:200}}>{rs.map(r=><option key={r.name} value={r.name}>{r.name}</option>)}</select><button className="bt bs" onClick={()=>fetch(`${API}/api/results`).then(r=>r.json()).then(setRs)}>새로고침</button></div>
+{ld&&<div style={{textAlign:'center',padding:30,color:'var(--tx2)'}}>로딩 중...</div>}
+{pv&&!ld&&<><div className="it" style={{marginBottom:10}}>{sel} — {pv.total_rows?.toLocaleString()}행 × {pv.columns.length}열</div><div className="tw"><table><thead><tr>{pv.columns.map(c=><th key={c}>{c}</th>)}</tr></thead><tbody>{pv.data.slice(0,200).map((r,i)=><tr key={i}>{r.map((v,j)=><td key={j}>{v==null?'':typeof v==='number'?(Number.isInteger(v)?v:v.toFixed(2)):v}</td>)}</tr>)}</tbody></table></div></>}
+</div>
+{pv&&!ld&&<div className="cd"><div className="ct">차트</div><div className="cc"><label>X:</label><select value={xC} onChange={e=>sXC(e.target.value)}>{pv.columns.map(c=><option key={c}>{c}</option>)}</select><label>Y:</label><select value={yC} onChange={e=>sYC(e.target.value)}>{pv.numeric_columns.map(c=><option key={c}>{c}</option>)}</select><label style={{marginLeft:8}}><input type="checkbox" checked={u2} onChange={e=>sU2(e.target.checked)} style={{marginRight:4,verticalAlign:'middle'}}/>Y2:</label><select value={y2} onChange={e=>sY2(e.target.value)} disabled={!u2}>{pv.numeric_columns.map(c=><option key={c}>{c}</option>)}</select><button className="bt bs bp" onClick={draw}>그리기</button></div><div className="cw"><canvas ref={cr}/></div></div>}
+</div>)}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

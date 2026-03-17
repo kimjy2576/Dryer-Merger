@@ -1,0 +1,189 @@
+# ================================================================
+#  건조기 HP 실험 데이터 통합 분석 프로그램 - 설정 파일
+#  Stage 1: 데이터 병합 (merge)
+#  Stage 2: 성능 계산 (calc)
+# ================================================================
+
+# --- 실험 환경 ---
+environment:
+  patm: 101.325            # 대기압 [kPa]
+  refrigerant: "Propane"   # 냉매 (CoolProp 이름)
+  backend: "HEOS"          # CoolProp 백엔드: "HEOS" | "REFPROP"
+
+# --- Stage 1: 데이터 병합 ---
+processing:
+  filter_mode: "Dry_Only"
+  time_interval: 1
+  data_time: "BR"
+  setup_type: "BR"
+
+filtering:
+  noise_columns: []
+  lpf_columns: ["d_currentABS_IqeRef", "T_Air_Eva_Out"]
+  lpf_tau: 15
+  noise_window: 60
+  noise_threshold: 5
+  min_hz: 10
+  last_min: 2
+
+spike_removal:
+  target_columns: ["Po_WD", "Po_Comp", "Po_Fan"]
+  window: 3
+  sigma: 2
+
+ftemp:
+  k1: 0.3
+  k2: 1.45
+  k3: 1.0
+  auto_delta: 6000
+  moving_avg_start_min: 10
+  moving_avg_window_min: 5
+
+outlier_thresholds:
+  "Po_": [0, 1000]
+  "T_":  [0, 100]
+  "P_":  [0, 10]
+  "RH_": [0, 100]
+
+mx100:
+  useless_columns: [0, 1, 3]
+
+# --- Stage 2: 성능 계산 ---
+calculation:
+  enabled: true
+  compressor_volume_cc: 7.5       # 압축기 체적 [cc]
+  rh_eva_out_assumed: 0.80        # 증발기 출구 예측 RH [-]
+
+  # 센서 오프셋 보정 [°C] — 센서별로 적용 (0이면 보정 없음)
+  sensor_offsets:
+    T_Cond_In: -2.0
+    T_Cond_Out: -2.0
+    T_Cond_M1: -2.0
+    T_Air_Eva_Out: -2.0
+    T_Comp_In: -2.0
+    T_Comp_Out: -2.0
+
+  # DAQ PC별 전력 보정 상수 [W]
+  power_corrections:
+    Gasan_PC1: { Po_WD: 0.8, Po_Comp: 2.0, Po_Fan: 6.0 }
+    Gasan_PC2: { Po_WD: 0.0, Po_Comp: 4.0, Po_Fan: 3.5 }
+    Gasan_PC3: { Po_WD: 0.0, Po_Comp: -3.5, Po_Fan: 5.5 }
+    none: { Po_WD: 0.0, Po_Comp: 0.0, Po_Fan: 0.0 }
+  selected_pc: "none"            # 사용할 PC: "Gasan_PC1" | ... | "none"
+
+  # 드럼 전력 추정 (Po_Drum 컬럼이 없을 때)
+  drum_power:
+    on_watts: 25
+    off_watts: 10
+    on_seconds: 56
+    off_seconds: 4
+
+  # 풍량 추정 계수 (CMM = Po_Fan / coeff_a * coeff_b)
+  airflow_estimation:
+    method: "fan_power"          # "fan_power" | "energy_balance"
+    coeff_a: 57
+    coeff_b: 3.2
+
+  # 후처리 LPF 대상 컬럼
+  calc_lpf_columns:
+    - "Flow_ref_kgH_recalc"
+    - "Flow_air_Cond_CMM"
+    - "Flow_air_Eva_CMM"
+    - "Qrefr_Eva_recalc"
+    - "Qrefr_Cond_recalc"
+  calc_lpf_tau: 10
+
+# --- 컬럼 매핑 (기존과 동일) ---
+column_mappings:
+  ams:
+    "RequestRpm": "Request_RPM"
+    "CurrentRpm": "Current_RPM"
+    "Cooling Fan": "HP_CoolingFan"
+    "CompTargetHz[*10]": "HP_CompTargetHz"
+    "CompCurrentHz": "HP_CompCurrentHz"
+    "CompIpmTemp": "HP_CompIpmTemp"
+    "FanSpeed[/100]": "HP_FanSpeed"
+    "EevCurrentPosition": "HP_EEV_Position"
+    "DryFtemp": "HP_F_Temp"
+    "Fan IPM Temp": "HP_FanIpmTemp"
+    "HP Fan QCurrent": "HP Fan Q Current"
+    "_DRY_DUCT_IN_TEMP_": "Heatpump_DuctInTemp"
+    "_DRY_DUCT_OUT_TEMP_": "Heatpump_DuctOutTemp"
+    "_DRY_EVA_IN_TEMP_": "Heatpump_EvaInTemp"
+    "_DRY_EVA_OUT_TEMP_": "Heatpump_EvaOutTemp"
+    "Heatpump_CompTemp": "Heatpump_CompTemp"
+    "SuperHeatDegree[*10]": "HP_SuperHeatDegree"
+    "Heatpump_Comp Current": "HP Comp Current"
+    "행정 정보2(소 행정 정보)": "SubProcess"
+    "전력": "Po_WD"
+    "소비전력량": "E_WD"
+    "wash_thermistor_temperature": "TM_Wash"
+  blackrose:
+    "HeatPump PressSwitch": "Heatpump_PressSwitch"
+
+ams_scale_factors:
+  "HP_CompTargetHz": 0.1
+  "HP_FanSpeed": 100.0
+  "HP_SuperHeatDegree": 0.1
+  "HP Comp Current": 0.1
+
+subprocess_mapping:
+  "59": 1
+  "HPDRY_HEATING_STEP": 2
+  "HPDRY_DRYING_STEP": 3
+  "HPDRY_IRON_STEP": 4
+  "HPDRY_CUPBOARD_STEP": 5
+  "HPDRY_COOLING_STEP": 6
+
+selected_columns:
+  br:
+    - "Time"
+    - "Current_RPM"
+    - "Request_RPM"
+    - "Wash_Temp"
+    - "Dry_Temp"
+    - "HP_CoolingFan"
+    - "HP_CompTargetHz"
+    - "HP_CompCurrentHz"
+    - "HP_CompIpmTemp"
+    - "HP_FanSpeed"
+    - "HP_EEV_Position"
+    - "HP_F_Temp"
+    - "HP_FanIpmTemp"
+    - "HP Fan Q Current"
+    - "HP Comp Current"
+    - "Heatpump_DuctInTemp"
+    - "Heatpump_DuctOutTemp"
+    - "Heatpump_EvaInTemp"
+    - "Heatpump_EvaOutTemp"
+    - "Heatpump_CompTemp"
+    - "d_currentABS_IqeRef"
+    - "HP_EEV_State"
+    - "HP_SuperHeatDegree"
+    - "Heatpump_DryMotionInfo"
+    - "Heatpump_PressSwitch"
+  ams:
+    - "Time"
+    - "Current_RPM"
+    - "Request_RPM"
+    - "HP_CoolingFan"
+    - "HP_CompTargetHz"
+    - "HP_CompCurrentHz"
+    - "HP_CompIpmTemp"
+    - "HP_FanSpeed"
+    - "HP_EEV_Position"
+    - "HP_F_Temp"
+    - "HP_FanIpmTemp"
+    - "HP Fan Q Current"
+    - "Heatpump_DuctInTemp"
+    - "Heatpump_DuctOutTemp"
+    - "Heatpump_EvaInTemp"
+    - "Heatpump_EvaOutTemp"
+    - "Heatpump_CompTemp"
+    - "HP_SuperHeatDegree"
+    - "HP Comp Current"
+    - "Heatpump_PressSwitch"
+    - "SubProcess"
+    - "Po_WD"
+    - "E_WD"
+    - "TM_Wash"
