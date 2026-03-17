@@ -2,7 +2,7 @@
 server.py — FastAPI 백엔드 (v4.1 — 서버 경로 탐색 방식)
 파일 업로드 없이 서버 로컬/네트워크 경로에서 직접 데이터를 읽음.
 """
-import os, uuid, time, traceback
+import os, sys, uuid, time, traceback
 from pathlib import Path
 from typing import Optional
 
@@ -25,7 +25,12 @@ def health():
     return {"status": "ok"}
 
 BASE_DIR = Path(__file__).parent
-RESULT_DIR = BASE_DIR / "results"
+# EXE 번들 시 results는 EXE가 있는 폴더에 생성
+if getattr(sys, "frozen", False):
+    EXE_DIR = Path(sys.executable).parent
+else:
+    EXE_DIR = BASE_DIR
+RESULT_DIR = EXE_DIR / "results"
 RESULT_DIR.mkdir(exist_ok=True)
 
 sessions: dict[str, dict] = {}
