@@ -349,7 +349,7 @@ def preview(fn: str, max_rows: int = 3000):
 # ══════════════════════════════════════════════
 #  프론트엔드 서빙
 # ══════════════════════════════════════════════
-STATIC = BASE_DIR / "static"
+STATIC = Path(sys._MEIPASS) / "static" if getattr(sys, "frozen", False) else BASE_DIR / "static"
 @app.get("/")
 def index():
     f = STATIC / "index.html"

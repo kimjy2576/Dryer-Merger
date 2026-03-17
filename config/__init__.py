@@ -9,7 +9,7 @@ import sys
 def _get_base_path():
     """PyInstaller 번들 환경에서도 올바른 경로를 반환한다."""
     if getattr(sys, "frozen", False):
-        return sys._MEIPASS
+        return os.path.join(sys._MEIPASS, "config")
     return os.path.dirname(os.path.abspath(__file__))
 
 
