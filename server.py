@@ -20,6 +20,10 @@ from config import load_config
 app = FastAPI(title="Dryer Merger", version="4.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 BASE_DIR = Path(__file__).parent
 RESULT_DIR = BASE_DIR / "results"
 RESULT_DIR.mkdir(exist_ok=True)

@@ -171,11 +171,18 @@ class FluidProperties:
 
 
 # ════════════════════════════════════════
-#  물 포화압력 — 0°C 이하 얼음 포화압 분기
+#  물 포화압력 — lazy 초기화 (import 시 CoolProp 호출 제거)
 # ════════════════════════════════════════
-_WATER_T = np.linspace(-0.01, 110, 2201)
-_WATER_PSAT_LIQ = np.array([
-    PropsSI("P", "T", max(t, 0.01) + 273.15, "Q", 0, "Water") / 1000 for t in _WATER_T])
+_WATER_T = None
+_WATER_PSAT_LIQ = None
+
+def _init_water_table():
+    global _WATER_T, _WATER_PSAT_LIQ
+    if _WATER_T is not None:
+        return
+    _WATER_T = np.linspace(-0.01, 110, 2201)
+    _WATER_PSAT_LIQ = np.array([
+        PropsSI("P", "T", max(t, 0.01) + 273.15, "Q", 0, "Water") / 1000 for t in _WATER_T])
 
 def _psat_ice(t_c):
     """얼음 위 포화 수증기압 [kPa] (Murphy & Koop 2005)."""
@@ -185,6 +192,7 @@ def _psat_ice(t_c):
 
 def psat_water(t_c):
     """물/얼음 위 포화 수증기압 [kPa]. 0°C 미만은 얼음 포화압."""
+    _init_water_table()
     t = np.asarray(t_c, dtype=float)
     p_liq = np.interp(t, _WATER_T, _WATER_PSAT_LIQ)
     p_ice = _psat_ice(t)
