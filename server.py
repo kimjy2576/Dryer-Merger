@@ -48,6 +48,7 @@ class SelectRequest(BaseModel):
 class MergeRequest(BaseModel):
     session_id: str
     config: Optional[dict] = None
+    variable_settings: Optional[dict] = None  # {"col_name": {"include": bool, "weight": float, "bias": float}, ...}
 
 class CalcRequest(BaseModel):
     session_id: str
@@ -130,6 +131,67 @@ def _classify_files(folder: Path) -> dict:
 
 
 # ══════════════════════════════════════════════
+#  컬럼 스캔 API (Merge 전 변수 설정용)
+# ══════════════════════════════════════════════
+@app.post("/api/scan-columns")
+def scan_columns(req: BrowseRequest):
+    """
+    세션의 첫 번째 케이스 폴더에서 BR/AMS/MX100 파일을 읽어
+    사용 가능한 전체 컬럼 목록을 반환한다.
+    """
+    sid = req.path  # session_id를 path 필드로 받음
+    if sid not in sessions:
+        raise HTTPException(404, "세션 없음")
+    s = sessions[sid]
+    category = Path(s["category_path"])
+    case_files = s["case_files"]
+
+    all_columns = {}  # {"col_name": {"source": "BR"|"AMS"|"MX100", "dtype": str}}
+    dt = DEFAULT_CFG["processing"]["data_time"]
+
+    # 첫 번째 케이스에서 샘플 읽기
+    for case_name, cf in case_files.items():
+        case_dir = category / case_name
+        # BR
+        if cf["br"]:
+            try:
+                fp = case_dir / cf["br"][0]
+                for enc in ("cp949", "utf-8"):
+                    try:
+                        df = pd.read_csv(fp, encoding=enc, skiprows=[0], nrows=5)
+                        for c in df.columns:
+                            if c not in all_columns:
+                                all_columns[c] = {"source": "BR", "dtype": str(df[c].dtype)}
+                        break
+                    except: continue
+            except: pass
+        # AMS
+        if cf["ams"]:
+            try:
+                fp = case_dir / cf["ams"][0]
+                df = pd.read_csv(fp, encoding="utf-8", skiprows=[0], nrows=5)
+                for c in df.columns:
+                    if c not in all_columns:
+                        all_columns[c] = {"source": "AMS", "dtype": str(df[c].dtype)}
+            except: pass
+        # MX100
+        if cf["mx100"]:
+            try:
+                fp = case_dir / cf["mx100"][0]
+                df = pd.read_excel(fp, skiprows=24, header=0, nrows=5)
+                for c in df.columns:
+                    if c not in all_columns:
+                        all_columns[c] = {"source": "MX100", "dtype": str(df[c].dtype)}
+            except: pass
+        break  # 첫 번째 케이스만
+
+    return {
+        "total": len(all_columns),
+        "columns": all_columns,
+    }
+
+
+# ══════════════════════════════════════════════
 #  Merge API (Stage 1 분리)
 # ══════════════════════════════════════════════
 @app.post("/api/merge")
@@ -140,11 +202,11 @@ async def start_merge(req: MergeRequest, background_tasks: BackgroundTasks):
     if s["status"] == "processing": raise HTTPException(409, "처리 중")
     cfg = req.config or DEFAULT_CFG
     s.update(status="processing", progress=0, log=[], merge_results=[], error=None)
-    background_tasks.add_task(_run_merge, sid, cfg)
+    background_tasks.add_task(_run_merge, sid, cfg, req.variable_settings)
     return {"status": "started", "mode": "merge"}
 
 
-def _run_merge(sid: str, cfg: dict):
+def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
     s = sessions[sid]
     category = Path(s["category_path"])
     case_files = s["case_files"]
@@ -160,6 +222,14 @@ def _run_merge(sid: str, cfg: dict):
         from postprocessor import run_postprocessing
         from config import get_column_mapping, get_selected_columns
         from io_handler import rename_files_in_folder
+
+        # 변수 설정 로그
+        if var_settings:
+            included = [k for k, v in var_settings.items() if v.get("include", True)]
+            excluded = [k for k, v in var_settings.items() if not v.get("include", True)]
+            wb_applied = [k for k, v in var_settings.items()
+                         if v.get("include", True) and (v.get("weight", 1.0) != 1.0 or v.get("bias", 0.0) != 0.0)]
+            _log(sid, f"  변수 설정: {len(included)}개 포함, {len(excluded)}개 제외, {len(wb_applied)}개 W&B 보정")
 
         total = sum(len(cf[{"BR":"br","AMS":"ams","MX100":"mx100"}[dt]]) for cf in case_files.values())
         done, results = 0, []
@@ -195,6 +265,10 @@ def _run_merge(sid: str, cfg: dict):
                 merged = run_stage1(merged, cfg)
                 merged = run_postprocessing(merged, cfg)
 
+                # ── 변수 설정 적용 (W&B + 포함/제외) ──
+                if var_settings:
+                    merged = _apply_variable_settings(merged, var_settings)
+
                 # _merged.csv 저장
                 parts = case_name.split("_")[:9]
                 prefix = "_".join(parts)
@@ -214,6 +288,34 @@ def _run_merge(sid: str, cfg: dict):
     except Exception as e:
         s.update(status="error", error=str(e))
         _log(sid, f"에러: {e}\n{traceback.format_exc()}")
+
+
+def _apply_variable_settings(df: pd.DataFrame, var_settings: dict) -> pd.DataFrame:
+    """
+    변수별 Weight & Bias 적용 + 제외 컬럼 삭제.
+    var_settings: {"col_name": {"include": bool, "weight": float, "bias": float}}
+    수식: col = col * weight + bias
+    """
+    # 1. W&B 적용 (include=True인 것만)
+    for col, s in var_settings.items():
+        if col not in df.columns:
+            continue
+        if not s.get("include", True):
+            continue
+        w = s.get("weight", 1.0)
+        b = s.get("bias", 0.0)
+        if w != 1.0 or b != 0.0:
+            if pd.api.types.is_numeric_dtype(df[col]):
+                df[col] = df[col] * w + b
+
+    # 2. 제외 컬럼 삭제 (Time, Time_sec, Time_min은 항상 유지)
+    protected = {"Time", "Time_sec", "Time_min"}
+    drop_cols = [col for col, s in var_settings.items()
+                 if not s.get("include", True) and col in df.columns and col not in protected]
+    if drop_cols:
+        df = df.drop(columns=drop_cols)
+
+    return df
 
 
 # ══════════════════════════════════════════════
