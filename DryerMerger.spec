@@ -56,7 +56,7 @@ a = Analysis(
       + collect_submodules('uvicorn'),
     hookspath=[],
     runtime_hooks=[],
-    excludes=['tkinter', 'test', 'unittest', 'matplotlib'],
+    excludes=['tkinter', 'matplotlib'],
     cipher=block_cipher,
     noarchive=False,
 )
