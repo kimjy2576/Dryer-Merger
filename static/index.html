@@ -437,7 +437,8 @@ function RefrigerantField({cfg,onChange}){
     if(!custom.trim())return;
     setChecking(true);setVResult(null);
     try{
-      const r=await fetch(`${API}/api/validate-refrigerant/${encodeURIComponent(custom.trim())}`);
+      const be=cfg?.environment?.backend||'HEOS';
+      const r=await fetch(`${API}/api/validate-refrigerant/${encodeURIComponent(custom.trim())}?backend=${be}`);
       const txt=await r.text();
       let d;
       try{d=JSON.parse(txt)}catch{d={valid:false,input:custom.trim(),error:txt}}
