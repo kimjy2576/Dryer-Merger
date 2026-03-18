@@ -449,34 +449,34 @@ def get_columns(fn: str):
 # ══════════════════════════════════════════════
 CALC_VARIABLES = [
     # 압력 (필수)
-    {"key": "P_Comp_Out",          "label": "압축기 토출 압력",    "unit": "barg",  "category": "압력",     "required": True,  "default_match": ["P_Comp_Out", "P_Cond_In"]},
-    {"key": "P_Comp_In",           "label": "압축기 흡입 압력",    "unit": "barg",  "category": "압력",     "required": True,  "default_match": ["P_Comp_In", "P_Eva_Out"]},
-    {"key": "P_Cond_Out",          "label": "응축기 출구 압력",    "unit": "barg",  "category": "압력",     "required": False, "default_match": ["P_Cond_Out"]},
-    {"key": "P_Eva_In",            "label": "증발기 입구 압력",    "unit": "barg",  "category": "압력",     "required": False, "default_match": ["P_Eva_In"]},
-    # 온도 (필수)
-    {"key": "T_Cond_In",           "label": "응축기 냉매 입구 온도", "unit": "°C", "category": "온도",     "required": True,  "default_match": ["T_Cond_In", "T_Comp_Out", "Heatpump_CompTemp"]},
-    {"key": "T_Cond_Out",          "label": "응축기 냉매 출구 온도", "unit": "°C", "category": "온도",     "required": True,  "default_match": ["T_Cond_Out"]},
-    {"key": "T_Cond_M1",           "label": "응축기 중간 온도",     "unit": "°C",  "category": "온도",     "required": False, "default_match": ["T_Cond_M1"]},
-    {"key": "Heatpump_CompTemp",   "label": "압축기 온도",         "unit": "°C",  "category": "온도",     "required": False, "default_match": ["Heatpump_CompTemp", "T_Comp_Out"]},
-    {"key": "Heatpump_EvaOutTemp", "label": "증발기 냉매 출구 온도", "unit": "°C", "category": "온도",     "required": True,  "default_match": ["Heatpump_EvaOutTemp", "T_Eva_Out"]},
-    {"key": "T_Comp_In",           "label": "압축기 흡입 온도",     "unit": "°C",  "category": "온도",     "required": False, "default_match": ["T_Comp_In", "Heatpump_EvaOutTemp"]},
-    {"key": "T_Comp_Out",          "label": "압축기 토출 온도",     "unit": "°C",  "category": "온도",     "required": False, "default_match": ["T_Comp_Out", "T_Cond_In"]},
-    {"key": "T_Subcooler_Out",     "label": "서브쿨러 출구 온도",   "unit": "°C",  "category": "온도",     "required": False, "default_match": ["T_Subcooler_Out"]},
-    # 공기 온도 (필수)
-    {"key": "T_Air_Eva_Out",       "label": "증발기 공기 출구 온도", "unit": "°C", "category": "공기",     "required": True,  "default_match": ["T_Air_Eva_Out"]},
-    {"key": "Heatpump_DuctInTemp", "label": "덕트 입구 온도",      "unit": "°C",  "category": "공기",     "required": True,  "default_match": ["Heatpump_DuctInTemp", "T_Air_Eva_In"]},
-    {"key": "Heatpump_DuctOutTemp","label": "덕트 출구 온도",      "unit": "°C",  "category": "공기",     "required": True,  "default_match": ["Heatpump_DuctOutTemp", "T_Air_Cond_Out"]},
-    {"key": "RH_Eva_In",           "label": "증발기 입구 RH (측정)", "unit": "-",   "category": "공기",     "required": False, "default_match": ["RH_Eva_In", "RH_Eva_In_measure"]},
-    # 전력 (필수)
-    {"key": "Po_WD",               "label": "총 전력",            "unit": "W",    "category": "전력",     "required": True,  "default_match": ["Po_WD"]},
-    {"key": "Po_Comp",             "label": "압축기 전력",         "unit": "W",    "category": "전력",     "required": True,  "default_match": ["Po_Comp"]},
-    {"key": "Po_Fan",              "label": "팬 전력",            "unit": "W",    "category": "전력",     "required": True,  "default_match": ["Po_Fan"]},
-    # 제어 (선택)
-    {"key": "HP_CompCurrentHz",    "label": "압축기 주파수",       "unit": "Hz",   "category": "제어",     "required": False, "default_match": ["HP_CompCurrentHz"]},
-    {"key": "Heatpump_DryMotionInfo","label": "건조 모션 정보",    "unit": "-",    "category": "제어",     "required": False, "default_match": ["Heatpump_DryMotionInfo"]},
+    {"key": "P_Comp_Out",      "label": "압축기 토출 압력",      "unit": "barg", "category": "압력", "required": True,  "default_match": ["P_Comp_Out", "P_Cond_In"]},
+    {"key": "P_Comp_In",       "label": "압축기 흡입 압력",      "unit": "barg", "category": "압력", "required": True,  "default_match": ["P_Comp_In", "P_Eva_Out"]},
+    {"key": "P_Cond_Out",      "label": "응축기 출구 압력",      "unit": "barg", "category": "압력", "required": False, "default_match": ["P_Cond_Out"]},
+    {"key": "P_Eva_In",        "label": "증발기 입구 압력",      "unit": "barg", "category": "압력", "required": False, "default_match": ["P_Eva_In"]},
+    # 냉매 온도
+    {"key": "T_Cond_In",       "label": "응축기 냉매 입구 온도",  "unit": "°C",  "category": "냉매 온도", "required": True,  "default_match": ["T_Cond_In", "T_Comp_Out", "Heatpump_CompTemp"]},
+    {"key": "T_Cond_Out",      "label": "응축기 냉매 출구 온도",  "unit": "°C",  "category": "냉매 온도", "required": True,  "default_match": ["T_Cond_Out"]},
+    {"key": "T_Cond_Mid",      "label": "응축기 냉매 중간 온도",  "unit": "°C",  "category": "냉매 온도", "required": False, "default_match": ["T_Cond_Mid", "T_Cond_M1"]},
+    {"key": "T_Comp_Body",     "label": "압축기 본체 온도",      "unit": "°C",  "category": "냉매 온도", "required": False, "default_match": ["T_Comp_Body", "Heatpump_CompTemp", "T_Comp_Out"]},
+    {"key": "T_Eva_Out",       "label": "증발기 냉매 출구 온도",  "unit": "°C",  "category": "냉매 온도", "required": True,  "default_match": ["T_Eva_Out", "Heatpump_EvaOutTemp"]},
+    {"key": "T_Comp_In",       "label": "압축기 흡입 온도",      "unit": "°C",  "category": "냉매 온도", "required": False, "default_match": ["T_Comp_In", "Heatpump_EvaOutTemp", "T_Eva_Out"]},
+    {"key": "T_Comp_Out",      "label": "압축기 토출 온도",      "unit": "°C",  "category": "냉매 온도", "required": False, "default_match": ["T_Comp_Out", "T_Cond_In"]},
+    {"key": "T_Subcooler_Out", "label": "서브쿨러 출구 온도",    "unit": "°C",  "category": "냉매 온도", "required": False, "default_match": ["T_Subcooler_Out"]},
+    # 공기 온도
+    {"key": "T_Air_Eva_In",    "label": "증발기 공기 입구 온도",  "unit": "°C",  "category": "공기 온도", "required": True,  "default_match": ["T_Air_Eva_In", "Heatpump_DuctInTemp"]},
+    {"key": "T_Air_Eva_Out",   "label": "증발기 공기 출구 온도",  "unit": "°C",  "category": "공기 온도", "required": True,  "default_match": ["T_Air_Eva_Out"]},
+    {"key": "T_Air_Cond_Out",  "label": "응축기 공기 출구 온도",  "unit": "°C",  "category": "공기 온도", "required": True,  "default_match": ["T_Air_Cond_Out", "Heatpump_DuctOutTemp"]},
+    {"key": "RH_Eva_In",       "label": "증발기 입구 RH (측정)", "unit": "-",   "category": "공기 온도", "required": False, "default_match": ["RH_Eva_In", "RH_Eva_In_measure"]},
+    # 전력
+    {"key": "Po_WD",           "label": "총 전력",             "unit": "W",   "category": "전력", "required": True,  "default_match": ["Po_WD"]},
+    {"key": "Po_Comp",         "label": "압축기 전력",          "unit": "W",   "category": "전력", "required": True,  "default_match": ["Po_Comp"]},
+    {"key": "Po_Fan",          "label": "팬 전력",             "unit": "W",   "category": "전력", "required": True,  "default_match": ["Po_Fan"]},
+    # 제어
+    {"key": "Ctrl_Comp_Hz",    "label": "압축기 주파수",        "unit": "Hz",  "category": "제어", "required": False, "default_match": ["Ctrl_Comp_Hz", "HP_CompCurrentHz"]},
+    {"key": "Ctrl_DryMotion",  "label": "건조 모션 정보",       "unit": "-",   "category": "제어", "required": False, "default_match": ["Ctrl_DryMotion", "Heatpump_DryMotionInfo"]},
     # 시간
-    {"key": "Time_min",            "label": "시간 (분)",          "unit": "min",  "category": "시간",     "required": True,  "default_match": ["Time_min"]},
-    {"key": "Time_sec",            "label": "시간 (초)",          "unit": "sec",  "category": "시간",     "required": True,  "default_match": ["Time_sec"]},
+    {"key": "Time_min",        "label": "시간 (분)",           "unit": "min", "category": "시간", "required": True,  "default_match": ["Time_min"]},
+    {"key": "Time_sec",        "label": "시간 (초)",           "unit": "sec", "category": "시간", "required": True,  "default_match": ["Time_sec"]},
 ]
 
 @app.get("/api/calc-variables")

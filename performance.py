@@ -34,18 +34,18 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
 
     # ── 블록별 의존성 정의 ──
     BLOCKS = {
-        "condenser_air":  {"required": [["T_Air_Eva_Out", "Heatpump_DuctInTemp"], ["Heatpump_DuctOutTemp"]],
+        "condenser_air":  {"required": [["T_Air_Eva_Out", "T_Air_Eva_In"], ["T_Air_Cond_Out"]],
                            "label": "응축기 공기측"},
-        "condenser_ref":  {"required": [["T_Cond_In", "T_Comp_Out", "Heatpump_CompTemp"], ["T_Cond_Out"], ["P_Comp_Out"]],
+        "condenser_ref":  {"required": [["T_Cond_In", "T_Comp_Out", "T_Comp_Body"], ["T_Cond_Out"], ["P_Comp_Out"]],
                            "label": "응축기 냉매측"},
-        "evaporator_ref": {"required": [["P_Comp_In"], ["Heatpump_EvaOutTemp"]],
+        "evaporator_ref": {"required": [["P_Comp_In"], ["T_Eva_Out"]],
                            "label": "증발기 냉매측", "depends": ["condenser_ref"]},
-        "compressor_ref": {"required": [["T_Comp_In", "Heatpump_EvaOutTemp"], ["P_Comp_In"],
-                                         ["T_Cond_In", "Heatpump_CompTemp"], ["P_Comp_Out"]],
+        "compressor_ref": {"required": [["T_Comp_In", "T_Eva_Out"], ["P_Comp_In"],
+                                         ["T_Cond_In", "T_Comp_Body"], ["P_Comp_Out"]],
                            "label": "압축기 냉매측"},
         "mass_flow":      {"label": "질량유량 & 열전달",
                            "depends": ["condenser_air", "condenser_ref", "evaporator_ref", "compressor_ref"]},
-        "performance":    {"required": [["Heatpump_DuctInTemp"], ["Po_Comp"], ["Po_WD"]],
+        "performance":    {"required": [["T_Air_Eva_In"], ["Po_Comp"], ["Po_WD"]],
                            "label": "성능지표",
                            "depends": ["mass_flow"]},
     }
@@ -104,7 +104,7 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
         damping = iter_cfg.get("damping", 0.4)        # 감쇠 계수 (안정성)
 
         T_eva_out = df["T_Air_Eva_Out"].values.astype(float) if "T_Air_Eva_Out" in df.columns \
-            else df["Heatpump_DuctInTemp"].values.astype(float)
+            else df["T_Air_Eva_In"].values.astype(float)
 
         # 초기 가정: 스칼라 → 벡터
         rh_guess = np.full(n, rh_eva_out)
@@ -260,33 +260,52 @@ def _apply_sensor_offsets(df, offsets: dict):
 
 
 def _ensure_columns(df):
-    """누락 컬럼 대체."""
-    defaults = {
-        "Heatpump_EvaInTemp": "T_Eva_In",
+    """레거시 컬럼명을 통일 명명 규칙으로 변환 + 누락 컬럼 대체."""
+    # ── 레거시 → 통일명 자동 변환 ──
+    rename_map = {
         "Heatpump_EvaOutTemp": "T_Eva_Out",
         "Heatpump_DuctInTemp": "T_Air_Eva_In",
         "Heatpump_DuctOutTemp": "T_Air_Cond_Out",
-        "Heatpump_CompTemp": "T_Comp_Out",
+        "Heatpump_CompTemp": "T_Comp_Body",
+        "HP_CompCurrentHz": "Ctrl_Comp_Hz",
+        "Heatpump_DryMotionInfo": "Ctrl_DryMotion",
+        "T_Cond_M1": "T_Cond_Mid",
+        # 추가 호환
+        "Heatpump_EvaInTemp": "T_Eva_In",
+        "T_Air_Eva_In": "T_Air_Eva_In",  # 이미 통일명이면 그대로
     }
-    for tgt, src in defaults.items():
-        if tgt not in df.columns and src in df.columns:
-            df[tgt] = df[src]
+    actual_renames = {}
+    for old, new in rename_map.items():
+        if old in df.columns and new not in df.columns:
+            actual_renames[old] = new
+    if actual_renames:
+        df = df.rename(columns=actual_renames)
 
+    # ── 폴백: 없는 컬럼은 대체 컬럼에서 복제 ──
+    fallbacks = [
+        ("T_Comp_In",      ["T_Eva_Out"]),
+        ("T_Comp_Out",     ["T_Cond_In", "T_Comp_Body"]),
+        ("T_Air_Eva_In",   ["T_Eva_In"]),
+        ("T_Air_Cond_Out", ["T_Air_Eva_In"]),  # 최후 fallback
+    ]
+    for tgt, srcs in fallbacks:
+        if tgt not in df.columns:
+            for src in srcs:
+                if src in df.columns:
+                    df[tgt] = df[src]
+                    break
+
+    # ── 전력 컬럼 보정 ──
     for col in ["Po_Comp", "Po_Fan", "Po_WD"]:
         if col not in df.columns:
-            if "d_currentABS_IqeRef" in df.columns:
-                df[col] = df["d_currentABS_IqeRef"] * 1e9
-            else:
-                df[col] = 0
+            df[col] = 0
 
-    if "Heatpump_DryMotionInfo" not in df.columns:
-        df["Heatpump_DryMotionInfo"] = 0
-    if "HP_CompCurrentHz" not in df.columns:
-        df["HP_CompCurrentHz"] = 0
-    if "T_Comp_In" not in df.columns and "Heatpump_EvaOutTemp" in df.columns:
-        df["T_Comp_In"] = df["Heatpump_EvaOutTemp"]
-    if "T_Comp_Out" not in df.columns and "T_Cond_In" in df.columns:
-        df["T_Comp_Out"] = df["T_Cond_In"]
+    # ── 제어 컬럼 기본값 ──
+    if "Ctrl_DryMotion" not in df.columns:
+        df["Ctrl_DryMotion"] = 0
+    if "Ctrl_Comp_Hz" not in df.columns:
+        df["Ctrl_Comp_Hz"] = 0
+
     return df
 
 
@@ -305,8 +324,8 @@ def _apply_power_corrections(df, calc_cfg):
 # ════════════════════════════════════════════════
 def _calc_condenser_air(df, rh_eva_out, patm):
     T_in = df["T_Air_Eva_Out"].values.astype(float) if "T_Air_Eva_Out" in df.columns \
-        else df["Heatpump_DuctInTemp"].values.astype(float)
-    T_out = df["Heatpump_DuctOutTemp"].values.astype(float)
+        else df["T_Air_Eva_In"].values.astype(float)
+    T_out = df["T_Air_Cond_Out"].values.astype(float)
 
     # 입구 (= 증발기 출구)
     AH_in = abs_humidity(T_in, rh_eva_out, patm)
@@ -333,10 +352,10 @@ def _calc_condenser_air(df, rh_eva_out, patm):
 def _calc_condenser_ref(df, props):
     T_in = df["T_Cond_In"].values.astype(float) if "T_Cond_In" in df.columns \
         else df["T_Comp_Out"].values.astype(float) if "T_Comp_Out" in df.columns \
-        else df["Heatpump_CompTemp"].values.astype(float)
+        else df["T_Comp_Body"].values.astype(float)
     T_out = df["T_Cond_Out"].values.astype(float) if "T_Cond_Out" in df.columns \
-        else df["Heatpump_DuctOutTemp"].values.astype(float)
-    T_m1 = df["T_Cond_M1"].values.astype(float) if "T_Cond_M1" in df.columns else T_out
+        else df["T_Air_Cond_Out"].values.astype(float)
+    T_m1 = df["T_Cond_Mid"].values.astype(float) if "T_Cond_Mid" in df.columns else T_out
     P_in = df["P_Comp_Out"].values.astype(float)
     P_out = df["P_Cond_Out"].values.astype(float) if "P_Cond_Out" in df.columns else P_in
 
@@ -366,7 +385,7 @@ def _calc_evaporator_ref(df, props, ref_cond):
     P_in = df["P_Eva_In"].values.astype(float) if "P_Eva_In" in df.columns \
         else df["P_Comp_In"].values.astype(float)
     P_out = df["P_Comp_In"].values.astype(float)
-    T_out = df["Heatpump_EvaOutTemp"].values.astype(float)
+    T_out = df["T_Eva_Out"].values.astype(float)
 
     # 입구: 과냉 출구와 동일 (등엔탈피 팽창)
     h_in = ref_cond["h_out"].copy()
@@ -400,10 +419,10 @@ def _calc_evaporator_ref(df, props, ref_cond):
 # ════════════════════════════════════════════════
 def _calc_compressor_ref(df, props):
     T_in = df["T_Comp_In"].values.astype(float) if "T_Comp_In" in df.columns \
-        else df["Heatpump_EvaOutTemp"].values.astype(float)
+        else df["T_Eva_Out"].values.astype(float)
     P_in = df["P_Comp_In"].values.astype(float)
     T_out = df["T_Cond_In"].values.astype(float) if "T_Cond_In" in df.columns \
-        else df["Heatpump_CompTemp"].values.astype(float)
+        else df["T_Comp_Body"].values.astype(float)
     P_out = df["P_Comp_Out"].values.astype(float)
 
     h_in = props.h_tp_superheat(T_in, P_in)
@@ -491,9 +510,9 @@ def _filter_mass_flow(raw, time_min, dh_cond):
 #  6. 증발기 공기측 + 성능지표
 # ════════════════════════════════════════════════
 def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, flow, dt, exp):
-    T_eva_in = df["Heatpump_DuctInTemp"].values.astype(float)
+    T_eva_in = df["T_Air_Eva_In"].values.astype(float)
     T_eva_out = df["T_Air_Eva_Out"].values.astype(float) if "T_Air_Eva_Out" in df.columns \
-        else df["Heatpump_DuctInTemp"].values.astype(float) - 5
+        else df["T_Air_Eva_In"].values.astype(float) - 5
     AH_cond_in = air_cond["AH_in"]
     mdot_dair = flow["mdot_dair"]
     Q_eva = flow["Q_eva_filtered"]
@@ -540,7 +559,7 @@ def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, 
     COP_sys_heat = np.where(Po_wd != 0, flow["Q_cond"] / Po_wd, 0)
 
     # 응축수량
-    cold_start = df.loc[df["Heatpump_DryMotionInfo"] == 2, "Time_min"]
+    cold_start = df.loc[df["Ctrl_DryMotion"] == 2, "Time_min"]
     cold_t = cold_start.min() if not cold_start.empty else 99999
     mask_cold = time_min >= cold_t
     water_gs = np.where(mask_cold, 0,
@@ -555,7 +574,7 @@ def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, 
 
     # ── 드럼 열전달 (응축기출구 → 드럼 → 증발기입구) ──
     # 드럼 입구 = 응축기 공기 출구
-    T_drum_in = df["Heatpump_DuctOutTemp"].values.astype(float) if "Heatpump_DuctOutTemp" in df.columns \
+    T_drum_in = df["T_Air_Cond_Out"].values.astype(float) if "T_Air_Cond_Out" in df.columns \
         else T_eva_in  # fallback
     AH_drum_in = air_cond["AH_out"]          # 응축기 출구 AH (현열교환이므로 AH_in과 동일)
     h_drum_in = air_cond["h_out"]             # 응축기 출구 엔탈피
