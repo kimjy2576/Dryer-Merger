@@ -273,6 +273,7 @@ const filteredVars=varCols?Object.entries(varCols).filter(([c])=>
 
 const includedCount=Object.values(varSet).filter(v=>v.include).length;
 const wbCount=Object.values(varSet).filter(v=>v.include&&(v.weight!==1.0||v.bias!==0.0)).length;
+const renameCount=Object.entries(varSet).filter(([k,v])=>v.include&&v.rename&&v.rename!==k).length;
 
 return(<div>
   <PathSelector sid={sid} setSid={setSid} setSt={setSt}/>
@@ -282,7 +283,7 @@ return(<div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}} onClick={()=>varCols&&setVarOpen(p=>!p)}>
       <div className="ct" style={{margin:0}}>변수 설정 (Weight & Bias)</div>
       <div style={{display:'flex',gap:8,alignItems:'center'}}>
-        {varCols&&<span className="it">{includedCount}/{Object.keys(varCols).length}개 포함{wbCount>0&&` / ${wbCount}개 W&B`}</span>}
+        {varCols&&<span className="it">{includedCount}/{Object.keys(varCols).length}개 포함{wbCount>0&&` / ${wbCount}개 W&B`}{renameCount>0&&` / ${renameCount}개 이름변경`}</span>}
         <button className="bt bs bp" onClick={e=>{e.stopPropagation();scanVars()}} disabled={scanning}>{scanning?'스캔 중...':varCols?'재스캔':'변수 스캔'}</button>
         {varCols&&<span style={{fontSize:10,color:'var(--tx3)',transition:'.2s',transform:varOpen?'rotate(180deg)':''}}>▼</span>}
       </div>
@@ -305,25 +306,27 @@ return(<div>
       {/* 변수 테이블 */}
       <div style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden'}}>
         {/* 헤더 */}
-        <div style={{display:'grid',gridTemplateColumns:'32px 1fr 60px 70px 70px 70px',gap:0,padding:'8px 12px',background:'var(--bg3)',fontSize:11,color:'var(--tx2)',fontWeight:500}}>
-          <span></span><span>변수명</span><span>소스</span><span style={{textAlign:'center'}}>Weight</span><span style={{textAlign:'center'}}>Bias</span><span></span>
+        <div style={{display:'grid',gridTemplateColumns:'32px 1fr 1fr 60px 70px 70px 70px',gap:0,padding:'8px 12px',background:'var(--bg3)',fontSize:11,color:'var(--tx2)',fontWeight:500}}>
+          <span></span><span>원본 변수명</span><span>변경 이름</span><span>소스</span><span style={{textAlign:'center'}}>Weight</span><span style={{textAlign:'center'}}>Bias</span><span></span>
         </div>
         {/* 항목 (최대 300개 표시) */}
         <div style={{maxHeight:350,overflowY:'auto'}}>
           {filteredVars.slice(0,300).map(([col,info])=>{
-            const vs=varSet[col]||{include:true,weight:1.0,bias:0.0};
+            const vs=varSet[col]||{include:true,weight:1.0,bias:0.0,rename:''};
             const isModified=vs.weight!==1.0||vs.bias!==0.0;
-            return(<div key={col} style={{display:'grid',gridTemplateColumns:'32px 1fr 60px 70px 70px 70px',gap:0,padding:'5px 12px',borderTop:'1px solid var(--bd)',alignItems:'center',opacity:vs.include?1:.4,fontSize:12}}>
+            const hasRename=vs.rename&&vs.rename!==col;
+            return(<div key={col} style={{display:'grid',gridTemplateColumns:'32px 1fr 1fr 60px 70px 70px 70px',gap:0,padding:'5px 12px',borderTop:'1px solid var(--bd)',alignItems:'center',opacity:vs.include?1:.4,fontSize:12}}>
               <input type="checkbox" checked={vs.include} onChange={e=>setVar(col,'include',e.target.checked)} style={{accentColor:'var(--teal)'}}/>
-              <span style={{fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={col}>{col}</span>
+              <span style={{fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:hasRename?'var(--tx3)':'var(--tx)'}} title={col}>{col}</span>
+              <input type="text" value={vs.rename||''} onChange={e=>setVar(col,'rename',e.target.value)} placeholder={col} style={{fontSize:11,padding:'3px 6px',background:hasRename?'rgba(59,130,246,.08)':'var(--bg)',borderColor:hasRename?'rgba(59,130,246,.3)':'var(--bd2)',fontFamily:'var(--mono)'}} disabled={!vs.include}/>
               <span className={`ft ${info.source==='BR'?'fb':info.source==='AMS'?'fa':'fm'}`}>{info.source}</span>
               <input type="number" value={vs.weight} step="0.01" onChange={e=>setVar(col,'weight',+e.target.value)} style={{width:60,fontSize:11,padding:'3px 5px',textAlign:'center',background:isModified?'rgba(20,184,166,.08)':'var(--bg)'}} disabled={!vs.include}/>
               <input type="number" value={vs.bias} step="0.1" onChange={e=>setVar(col,'bias',+e.target.value)} style={{width:60,fontSize:11,padding:'3px 5px',textAlign:'center',background:isModified?'rgba(20,184,166,.08)':'var(--bg)'}} disabled={!vs.include}/>
-              <button className="bt bs" style={{padding:'2px 6px',fontSize:10}} onClick={()=>setVar(col,'weight',1.0)||setVar(col,'bias',0.0)} disabled={!isModified}>리셋</button>
+              <button className="bt bs" style={{padding:'2px 6px',fontSize:10}} onClick={()=>{setVar(col,'weight',1.0);setVar(col,'bias',0.0);setVar(col,'rename','')}} disabled={!isModified&&!hasRename}>리셋</button>
             </div>)})}
         </div>
       </div>
-      <div className="it" style={{marginTop:8}}>수식: 출력 = 원본 × Weight + Bias / Time, Time_sec, Time_min은 항상 유지됩니다</div>
+      <div className="it" style={{marginTop:8}}>수식: 출력 = 원본 × Weight + Bias / 변경 이름이 있으면 해당 이름으로 출력됩니다</div>
     </div>}
   </div>}
 
@@ -372,9 +375,17 @@ const autoMap=async(fn)=>{
   setMergedCols(d.merged_columns||[]);setMapping(d.mapping||{});setUnmatched(d.unmatched_required||[]);setMapOpen(true);
   }catch(e){alert(e.message)}};
 
-// 파일 선택 변경 시 첫 번째 파일로 자동 매핑
+// 파일 선택 변경 시 컬럼 로드 + 자동 매핑
 const firstSel=[...selFiles][0];
-useEffect(()=>{if(firstSel&&calcVars.length)autoMap(firstSel)},[firstSel,calcVars]);
+useEffect(()=>{
+  if(!firstSel)return;
+  // 1. 컬럼 먼저 로드 (autoMap과 독립)
+  fetch(`${API}/api/columns/${firstSel}`).then(r=>r.json()).then(d=>{
+    if(d.numeric_columns)setMergedCols([...d.columns]);
+  }).catch(()=>{});
+  // 2. 자동 매핑 시도
+  if(calcVars.length)autoMap(firstSel);
+},[firstSel,calcVars]);
 
 const setMap=(calcVar,mergedCol)=>setMapping(p=>{
   const n={...p,[calcVar]:mergedCol||null};

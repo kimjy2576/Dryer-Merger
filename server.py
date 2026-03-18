@@ -247,7 +247,9 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
             excluded = [k for k, v in var_settings.items() if not v.get("include", True)]
             wb_applied = [k for k, v in var_settings.items()
                          if v.get("include", True) and (v.get("weight", 1.0) != 1.0 or v.get("bias", 0.0) != 0.0)]
-            _log(sid, f"  변수 설정: {len(included)}개 포함, {len(excluded)}개 제외, {len(wb_applied)}개 W&B 보정")
+            renamed = [k for k, v in var_settings.items()
+                       if v.get("include", True) and v.get("rename") and v.get("rename") != k]
+            _log(sid, f"  변수 설정: {len(included)}개 포함, {len(excluded)}개 제외, {len(wb_applied)}개 W&B, {len(renamed)}개 이름변경")
 
         total = sum(len(cf[{"BR":"br","AMS":"ams","MX100":"mx100"}[dt]]) for cf in case_files.values())
         done, results = 0, []
@@ -324,8 +326,8 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
 
 def _apply_variable_settings(df: pd.DataFrame, var_settings: dict) -> pd.DataFrame:
     """
-    변수별 Weight & Bias 적용 + 제외 컬럼 삭제.
-    var_settings: {"col_name": {"include": bool, "weight": float, "bias": float}}
+    변수별 Weight & Bias 적용 + 이름 변경 + 제외 컬럼 삭제.
+    var_settings: {"col_name": {"include": bool, "weight": float, "bias": float, "rename": str}}
     수식: col = col * weight + bias
     """
     # 1. W&B 적용 (include=True인 것만)
@@ -340,7 +342,20 @@ def _apply_variable_settings(df: pd.DataFrame, var_settings: dict) -> pd.DataFra
             if pd.api.types.is_numeric_dtype(df[col]):
                 df[col] = df[col] * w + b
 
-    # 2. 제외 컬럼 삭제 (Time, Time_sec, Time_min은 항상 유지)
+    # 2. 이름 변경 (rename이 있고 원본과 다르면)
+    rename_map = {}
+    for col, s in var_settings.items():
+        if col not in df.columns:
+            continue
+        if not s.get("include", True):
+            continue
+        rn = s.get("rename", "")
+        if rn and rn != col and rn not in df.columns:
+            rename_map[col] = rn
+    if rename_map:
+        df = df.rename(columns=rename_map)
+
+    # 3. 제외 컬럼 삭제 (Time, Time_sec, Time_min은 항상 유지)
     protected = {"Time", "Time_sec", "Time_min"}
     drop_cols = [col for col, s in var_settings.items()
                  if not s.get("include", True) and col in df.columns and col not in protected]
