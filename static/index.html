@@ -117,6 +117,35 @@ const scanVars=async()=>{if(!sid)return;setScanning(true);
 const setVar=(col,key,val)=>setVarSet(p=>({...p,[col]:{...p[col],[key]:val}}));
 const selectAll=()=>setVarSet(p=>{const n={...p};Object.keys(n).forEach(k=>n[k]={...n[k],include:true});return n});
 const deselectAll=()=>setVarSet(p=>{const n={...p};Object.keys(n).forEach(k=>n[k]={...n[k],include:false});return n});
+const loadRef=useRef(null);
+
+// 설정 저장
+const saveSettings=()=>{
+  const proj={version:1,type:'merge_settings',variable_settings:varSet,timestamp:new Date().toISOString()};
+  const blob=new Blob([JSON.stringify(proj,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='merge_settings.json';a.click();URL.revokeObjectURL(a.href);
+};
+// 설정 불러오기
+const loadSettings=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>{
+    try{
+      const proj=JSON.parse(ev.target.result);
+      if(proj.variable_settings){
+        setVarSet(prev=>{
+          const merged={...prev};
+          Object.entries(proj.variable_settings).forEach(([col,s])=>{
+            if(merged[col])merged[col]={...merged[col],...s};
+            else merged[col]=s;
+          });
+          return merged;
+        });
+        const cnt=Object.keys(proj.variable_settings).length;
+        alert(`설정 불러오기 완료: ${cnt}개 변수`);
+      }else{alert('유효한 설정 파일이 아닙니다')}
+    }catch(err){alert('파일 오류: '+err.message)}
+  };r.readAsText(f);e.target.value='';
+};
 
 // Merge 실행 (variable_settings 포함)
 const runMerge=async()=>{if(!sid)return;
@@ -154,6 +183,11 @@ return(<div>
         <button className="bt bs" onClick={selectAll}>전체 선택</button>
         <button className="bt bs" onClick={deselectAll}>전체 해제</button>
         <span className="it">{filteredVars.length}개 표시</span>
+        <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+          <button className="bt bs" onClick={saveSettings}>💾 설정 저장</button>
+          <button className="bt bs" onClick={()=>loadRef.current?.click()}>📂 불러오기</button>
+          <input ref={loadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadSettings}/>
+        </div>
       </div>
 
       {/* 변수 테이블 */}
