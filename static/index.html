@@ -368,23 +368,24 @@ useEffect(()=>{if(st?.merge_results?.length)setSelFiles(new Set(st.merge_results
 // CALC_VARIABLES 로드 (1회)
 useEffect(()=>{fetch(`${API}/api/calc-variables`).then(r=>r.json()).then(d=>setCalcVars(d.variables||[]))},[]);
 
-// 자동 매핑
+// 자동 매핑 (컬럼은 건드리지 않음 — mapping만 설정)
 const autoMap=async(fn)=>{
   try{const r=await fetch(`${API}/api/auto-map`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:fn})});
-  const d=await r.json();if(!r.ok){alert(d.detail);return}
-  setMergedCols(d.merged_columns||[]);setMapping(d.mapping||{});setUnmatched(d.unmatched_required||[]);setMapOpen(true);
-  }catch(e){alert(e.message)}};
+  const d=await r.json();if(!r.ok){console.warn('auto-map 실패:',d.detail);return}
+  setMapping(d.mapping||{});setUnmatched(d.unmatched_required||[]);setMapOpen(true);
+  }catch(e){console.warn('auto-map 오류:',e.message)}};
 
-// 파일 선택 변경 시 컬럼 로드 + 자동 매핑
+// 파일 선택 변경 시 컬럼 로드 → 자동 매핑 (순차)
 const firstSel=[...selFiles][0];
 useEffect(()=>{
   if(!firstSel)return;
-  // 1. 컬럼 먼저 로드 (autoMap과 독립)
+  // 1. 컬럼 로드 (항상 실행)
   fetch(`${API}/api/columns/${firstSel}`).then(r=>r.json()).then(d=>{
-    if(d.numeric_columns)setMergedCols([...d.columns]);
-  }).catch(()=>{});
-  // 2. 자동 매핑 시도
-  if(calcVars.length)autoMap(firstSel);
+    const cols=d.columns||[];
+    setMergedCols(cols);
+    // 2. 컬럼 로드 성공 후 자동 매핑 시도
+    if(cols.length&&calcVars.length)autoMap(firstSel);
+  }).catch(e=>console.error('columns 로드 실패:',e));
 },[firstSel,calcVars]);
 
 const setMap=(calcVar,mergedCol)=>setMapping(p=>{
