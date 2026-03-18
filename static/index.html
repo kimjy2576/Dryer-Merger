@@ -82,6 +82,60 @@ return(<div className="cd"><div className="ct">데이터 경로</div>
 </>}
 </div>)}
 
+// ═══ 로컬 파일 불러오기 ═══
+function LocalImport({onImported}){
+const[open,setOpen]=useState(false);
+const[path,setPath]=useState(localStorage.getItem('dryer_calc_path')||'');
+const[files,setFiles]=useState([]);
+const[sel,setSel]=useState(new Set());
+const[busy,setBusy]=useState(false);
+
+const browse=async()=>{if(!path.trim())return;setBusy(true);
+  try{const r=await fetch(`${API}/api/browse-files`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:path.trim()})});
+  const d=await r.json();if(!r.ok){alert(d.detail);setBusy(false);return}
+  setFiles(d.files||[]);localStorage.setItem('dryer_calc_path',d.path);setPath(d.path);
+  // CSV 자동 선택 (merged 포함 파일 우선)
+  const autoSel=new Set(d.files.filter(f=>f.has_merged).map(f=>f.path));
+  setSel(autoSel);
+  }catch(e){alert(e.message)}setBusy(false)};
+
+const togF=p=>{setSel(prev=>{const s=new Set(prev);s.has(p)?s.delete(p):s.add(p);return s})};
+
+const doImport=async()=>{if(!sel.size)return;setBusy(true);
+  try{const r=await fetch(`${API}/api/import-merged`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_paths:[...sel]})});
+  const d=await r.json();
+  if(d.count>0){alert(`${d.count}개 파일을 가져왔습니다.`);if(onImported)onImported();setOpen(false)}
+  if(d.errors?.length)alert('오류:\n'+d.errors.join('\n'));
+  }catch(e){alert(e.message)}setBusy(false)};
+
+return(<div>
+  <button className="bt bs" onClick={()=>setOpen(p=>!p)} style={{marginBottom:open?8:0}}>{open?'▲ 닫기':'📂 로컬 파일 불러오기'}</button>
+  {open&&<div style={{padding:10,background:'var(--bg,#fafaf8)',border:'1px solid var(--bd,#e4e2dc)',borderRadius:8}}>
+    <div style={{display:'flex',gap:6,marginBottom:8}}>
+      <input value={path} onChange={e=>setPath(e.target.value)} placeholder="로컬 폴더 경로 (예: D:\실험데이터\Case_01)" style={{flex:1}} onKeyDown={e=>e.key==='Enter'&&browse()}/>
+      <button className="bt bs bp" onClick={browse} disabled={busy}>{busy?'탐색 중...':'탐색'}</button>
+    </div>
+    {files.length>0&&<>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+        <span className="it">{files.length}개 CSV — {sel.size}개 선택</span>
+        <div style={{display:'flex',gap:4}}>
+          <button className="bt bs" onClick={()=>setSel(new Set(files.map(f=>f.path)))}>전체</button>
+          <button className="bt bs" onClick={()=>setSel(new Set())}>해제</button>
+        </div>
+      </div>
+      <div className="file-sel" style={{maxHeight:150}}>
+        {files.map(f=><div key={f.path} className="file-sel-item" style={{opacity:sel.has(f.path)?1:.5}}>
+          <input type="checkbox" checked={sel.has(f.path)} onChange={()=>togF(f.path)}/>
+          <span style={{flex:1}}>{f.name}{f.has_merged?'':' (비 merged)'}</span>
+          <span className="it">{(f.size/1024).toFixed(0)} KB</span>
+        </div>)}
+      </div>
+      <button className="bt bg bs" onClick={doImport} disabled={busy||!sel.size} style={{marginTop:8}}>{busy?'가져오는 중...':` ${sel.size}개 파일 가져오기`}</button>
+    </>}
+    {files.length===0&&path&&<div className="it" style={{padding:8,textAlign:'center'}}>CSV 파일이 없습니다. 경로를 확인하세요.</div>}
+  </div>}
+</div>)}
+
 // ═══ 공통: 진행률 + 로그 + 결과 ═══
 function StatusPanel({st,resultKey,onPreview}){
 if(!st)return null;
@@ -331,7 +385,11 @@ return(<div>
   {/* 파일 선택 */}
   <div className="cd">
     <div className="ct">입력 파일 선택 (_merged.csv)</div>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+
+    {/* 로컬 파일 불러오기 */}
+    <LocalImport onImported={()=>loadResults()}/>
+
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,marginTop:12}}>
       <span className="it">{results.length}개 파일 — {selFiles.size}개 선택</span>
       <div style={{display:'flex',gap:6}}>
         <button className="bt bs" onClick={()=>setSelFiles(new Set(results.map(r=>r.name)))}>전체</button>
@@ -343,7 +401,7 @@ return(<div>
       <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>togFile(f.name)}/>
       <span style={{flex:1}}>{f.name}</span>
       <span className="it">{(f.size/1024).toFixed(0)} KB</span>
-    </div>)}</div>:<div className="it" style={{padding:16,textAlign:'center'}}>Merged 파일이 없습니다. Merge를 먼저 실행하세요.</div>}
+    </div>)}</div>:<div className="it" style={{padding:16,textAlign:'center'}}>Merged 파일이 없습니다. 아래 경로에서 불러오거나 Merge를 먼저 실행하세요.</div>}
   </div>
 
   {/* 변수 매핑 패널 */}

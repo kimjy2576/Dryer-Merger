@@ -351,6 +351,57 @@ def _apply_variable_settings(df: pd.DataFrame, var_settings: dict) -> pd.DataFra
 
 
 # ══════════════════════════════════════════════
+#  로컬 Merged 파일 임포트 API
+# ══════════════════════════════════════════════
+class ImportRequest(BaseModel):
+    file_paths: list[str]  # 로컬 CSV 파일 절대 경로 리스트
+
+@app.post("/api/import-merged")
+def import_merged(req: ImportRequest):
+    """로컬 경로의 CSV 파일을 results 폴더로 복사."""
+    import shutil
+    imported = []
+    errors = []
+    for fp in req.file_paths:
+        p = Path(fp)
+        if not p.exists():
+            errors.append(f"파일 없음: {fp}")
+            continue
+        if not p.suffix.lower() == '.csv':
+            errors.append(f"CSV 아님: {fp}")
+            continue
+        dest_name = p.name
+        # _merged가 없으면 붙여줌
+        if "_merged" not in dest_name:
+            dest_name = p.stem + "_merged.csv"
+        dest = RESULT_DIR / dest_name
+        try:
+            shutil.copy2(str(p), str(dest))
+            imported.append(dest_name)
+        except Exception as e:
+            errors.append(f"{p.name}: {str(e)}")
+    return {"imported": imported, "errors": errors, "count": len(imported)}
+
+
+@app.post("/api/browse-files")
+def browse_files(req: BrowseRequest):
+    """폴더 내 CSV 파일 목록 반환 (로컬 파일 선택용)."""
+    p = Path(req.path)
+    if not p.exists(): raise HTTPException(404, f"경로 없음: {req.path}")
+    if not p.is_dir(): raise HTTPException(400, f"디렉토리 아님: {req.path}")
+    files = []
+    try:
+        for f in sorted(p.iterdir()):
+            if f.is_file() and f.suffix.lower() == '.csv':
+                files.append({"name": f.name, "path": str(f.resolve()),
+                              "size": f.stat().st_size,
+                              "has_merged": "_merged" in f.name.lower()})
+    except PermissionError:
+        raise HTTPException(403, f"접근 권한 없음: {req.path}")
+    return {"path": str(p.resolve()), "files": files}
+
+
+# ══════════════════════════════════════════════
 #  Calculation API (Stage 2 분리)
 # ══════════════════════════════════════════════
 @app.post("/api/calculate")
