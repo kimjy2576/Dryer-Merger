@@ -14,8 +14,8 @@ environment:
 processing:
   filter_mode: "Dry_Only"
   time_interval: 1
-  data_time: "BR"
-  setup_type: "BR"
+  data_time: "BR"                      # 시간 동기화 기준 소스
+  data_sources: ["BR", "AMS", "MX100"] # 사용할 소스 (체크박스)
 
 filtering:
   noise_columns: []

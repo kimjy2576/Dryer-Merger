@@ -223,6 +223,13 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
         from config import get_column_mapping, get_selected_columns
         from io_handler import rename_files_in_folder
 
+        # 사용 소스 확인
+        sources = cfg["processing"].get("data_sources", ["BR", "AMS", "MX100"])
+        use_br = "BR" in sources
+        use_ams = "AMS" in sources
+        use_mx = "MX100" in sources
+        _log(sid, f"  사용 소스: {', '.join(sources)} / 기준 시간축: {dt}")
+
         # 변수 설정 로그
         if var_settings:
             included = [k for k, v in var_settings.items() if v.get("include", True)]
@@ -245,18 +252,32 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                 t0 = time.perf_counter()
                 _log(sid, f"[{case_name}] {i+1}/{n} 병합 중...")
 
-                bp = str(case_dir / cf["br"][i]) if i < len(cf["br"]) else None
-                ap = str(case_dir / cf["ams"][i]) if i < len(cf["ams"]) else None
-                mp = str(case_dir / cf["mx100"][i]) if i < len(cf["mx100"]) else None
+                # 선택된 소스만 읽기
+                bp = str(case_dir / cf["br"][i]) if use_br and i < len(cf["br"]) else None
+                ap = str(case_dir / cf["ams"][i]) if use_ams and i < len(cf["ams"]) else None
+                mp = str(case_dir / cf["mx100"][i]) if use_mx and i < len(cf["mx100"]) else None
 
                 df_ams, df_br, df_mx = _read(ap, bp, mp, dt)
-                df_br_main, df_br_add = preprocess_blackrose(
-                    df_br, get_selected_columns(cfg, "br"), get_column_mapping(cfg, "blackrose"))
-                df_ams_proc = preprocess_ams(
-                    df_ams, get_column_mapping(cfg, "ams"),
-                    cfg.get("ams_scale_factors", {}), cfg.get("subprocess_mapping", {}),
-                    get_selected_columns(cfg, "ams"))
-                df_mx_proc = preprocess_mx100(df_mx, cfg["mx100"]["useless_columns"])
+
+                # 선택된 소스만 전처리
+                if use_br and not df_br.empty:
+                    df_br_main, df_br_add = preprocess_blackrose(
+                        df_br, get_selected_columns(cfg, "br"), get_column_mapping(cfg, "blackrose"))
+                else:
+                    df_br_main, df_br_add = pd.DataFrame(), pd.DataFrame()
+
+                if use_ams and not df_ams.empty:
+                    df_ams_proc = preprocess_ams(
+                        df_ams, get_column_mapping(cfg, "ams"),
+                        cfg.get("ams_scale_factors", {}), cfg.get("subprocess_mapping", {}),
+                        get_selected_columns(cfg, "ams"))
+                else:
+                    df_ams_proc = pd.DataFrame()
+
+                if use_mx and not df_mx.empty:
+                    df_mx_proc = preprocess_mx100(df_mx, cfg["mx100"]["useless_columns"])
+                else:
+                    df_mx_proc = pd.DataFrame()
 
                 merged = sync_and_merge(
                     [df_br_main, df_br_add, df_mx_proc, df_ams_proc],
