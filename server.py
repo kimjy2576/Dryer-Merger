@@ -426,6 +426,84 @@ def get_columns(fn: str):
 
 
 # ══════════════════════════════════════════════
+#  Calc 필요 변수 정의 + 매핑 API
+# ══════════════════════════════════════════════
+CALC_VARIABLES = [
+    # 압력 (필수)
+    {"key": "P_Comp_Out",          "label": "압축기 토출 압력",    "unit": "barg",  "category": "압력",     "required": True,  "default_match": ["P_Comp_Out", "P_Cond_In"]},
+    {"key": "P_Comp_In",           "label": "압축기 흡입 압력",    "unit": "barg",  "category": "압력",     "required": True,  "default_match": ["P_Comp_In", "P_Eva_Out"]},
+    {"key": "P_Cond_Out",          "label": "응축기 출구 압력",    "unit": "barg",  "category": "압력",     "required": False, "default_match": ["P_Cond_Out"]},
+    {"key": "P_Eva_In",            "label": "증발기 입구 압력",    "unit": "barg",  "category": "압력",     "required": False, "default_match": ["P_Eva_In"]},
+    # 온도 (필수)
+    {"key": "T_Cond_In",           "label": "응축기 냉매 입구 온도", "unit": "°C", "category": "온도",     "required": True,  "default_match": ["T_Cond_In", "T_Comp_Out", "Heatpump_CompTemp"]},
+    {"key": "T_Cond_Out",          "label": "응축기 냉매 출구 온도", "unit": "°C", "category": "온도",     "required": True,  "default_match": ["T_Cond_Out"]},
+    {"key": "T_Cond_M1",           "label": "응축기 중간 온도",     "unit": "°C",  "category": "온도",     "required": False, "default_match": ["T_Cond_M1"]},
+    {"key": "Heatpump_CompTemp",   "label": "압축기 온도",         "unit": "°C",  "category": "온도",     "required": False, "default_match": ["Heatpump_CompTemp", "T_Comp_Out"]},
+    {"key": "Heatpump_EvaOutTemp", "label": "증발기 냉매 출구 온도", "unit": "°C", "category": "온도",     "required": True,  "default_match": ["Heatpump_EvaOutTemp", "T_Eva_Out"]},
+    {"key": "T_Comp_In",           "label": "압축기 흡입 온도",     "unit": "°C",  "category": "온도",     "required": False, "default_match": ["T_Comp_In", "Heatpump_EvaOutTemp"]},
+    {"key": "T_Comp_Out",          "label": "압축기 토출 온도",     "unit": "°C",  "category": "온도",     "required": False, "default_match": ["T_Comp_Out", "T_Cond_In"]},
+    {"key": "T_Subcooler_Out",     "label": "서브쿨러 출구 온도",   "unit": "°C",  "category": "온도",     "required": False, "default_match": ["T_Subcooler_Out"]},
+    # 공기 온도 (필수)
+    {"key": "T_Air_Eva_Out",       "label": "증발기 공기 출구 온도", "unit": "°C", "category": "공기",     "required": True,  "default_match": ["T_Air_Eva_Out"]},
+    {"key": "Heatpump_DuctInTemp", "label": "덕트 입구 온도",      "unit": "°C",  "category": "공기",     "required": True,  "default_match": ["Heatpump_DuctInTemp", "T_Air_Eva_In"]},
+    {"key": "Heatpump_DuctOutTemp","label": "덕트 출구 온도",      "unit": "°C",  "category": "공기",     "required": True,  "default_match": ["Heatpump_DuctOutTemp", "T_Air_Cond_Out"]},
+    # 전력 (필수)
+    {"key": "Po_WD",               "label": "총 전력",            "unit": "W",    "category": "전력",     "required": True,  "default_match": ["Po_WD"]},
+    {"key": "Po_Comp",             "label": "압축기 전력",         "unit": "W",    "category": "전력",     "required": True,  "default_match": ["Po_Comp"]},
+    {"key": "Po_Fan",              "label": "팬 전력",            "unit": "W",    "category": "전력",     "required": True,  "default_match": ["Po_Fan"]},
+    # 제어 (선택)
+    {"key": "HP_CompCurrentHz",    "label": "압축기 주파수",       "unit": "Hz",   "category": "제어",     "required": False, "default_match": ["HP_CompCurrentHz"]},
+    {"key": "Heatpump_DryMotionInfo","label": "건조 모션 정보",    "unit": "-",    "category": "제어",     "required": False, "default_match": ["Heatpump_DryMotionInfo"]},
+    # 시간
+    {"key": "Time_min",            "label": "시간 (분)",          "unit": "min",  "category": "시간",     "required": True,  "default_match": ["Time_min"]},
+    {"key": "Time_sec",            "label": "시간 (초)",          "unit": "sec",  "category": "시간",     "required": True,  "default_match": ["Time_sec"]},
+]
+
+@app.get("/api/calc-variables")
+def get_calc_variables():
+    """Calculation에 필요한 변수 목록 반환."""
+    return {"variables": CALC_VARIABLES}
+
+
+@app.post("/api/auto-map")
+def auto_map(req: BrowseRequest):
+    """
+    merged CSV 파일명을 받아서 CALC_VARIABLES와 자동 매칭 결과를 반환.
+    exact match → default_match 순서로 탐색.
+    """
+    fn = req.path
+    p = RESULT_DIR / fn
+    if not p.exists(): raise HTTPException(404, f"파일 없음: {fn}")
+    df = pd.read_csv(p, nrows=1)
+    merged_cols = df.columns.tolist()
+
+    mapping = {}  # {calc_var: matched_merged_col or null}
+    for v in CALC_VARIABLES:
+        matched = None
+        # 1. exact match
+        if v["key"] in merged_cols:
+            matched = v["key"]
+        else:
+            # 2. default_match 리스트에서 순서대로 탐색
+            for dm in v.get("default_match", []):
+                if dm in merged_cols:
+                    matched = dm
+                    break
+        mapping[v["key"]] = matched
+
+    unmatched = [v["key"] for v in CALC_VARIABLES if v["required"] and not mapping.get(v["key"])]
+
+    return {
+        "filename": fn,
+        "merged_columns": merged_cols,
+        "mapping": mapping,
+        "unmatched_required": unmatched,
+        "total_matched": sum(1 for v in mapping.values() if v),
+        "total_required": sum(1 for v in CALC_VARIABLES if v["required"]),
+    }
+
+
+# ══════════════════════════════════════════════
 #  공통 유틸
 # ══════════════════════════════════════════════
 def _read(ap, bp, mp, dt):
