@@ -78,9 +78,13 @@ def update_config(body: dict):
 @app.get("/api/validate-refrigerant/{name}")
 def validate_ref(name: str):
     """냉매명이 CoolProp에서 유효한지 검증."""
-    from properties import validate_refrigerant
-    backend = DEFAULT_CFG.get("environment", {}).get("backend", "HEOS")
-    return validate_refrigerant(name, backend)
+    try:
+        from properties import validate_refrigerant
+        backend = DEFAULT_CFG.get("environment", {}).get("backend", "HEOS")
+        return validate_refrigerant(name, backend)
+    except Exception as e:
+        return {"valid": False, "input": name, "coolprop_name": name,
+                "error": f"검증 중 오류: {str(e)}"}
 
 
 # ══════════════════════════════════════════════
