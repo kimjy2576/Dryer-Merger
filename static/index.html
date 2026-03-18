@@ -248,6 +248,7 @@ const[poll,setPoll]=useState(false);const pr=useRef();
 const[results,setResults]=useState([]);
 const[selFiles,setSelFiles]=useState(new Set());
 const[exp,setExp]=useState({load_kg:'',imc_kg:'',fmc_kg:''});
+const[calcSid,setCalcSid]=useState(sid);
 // 변수 매핑
 const[calcVars,setCalcVars]=useState([]);     // 서버에서 받은 CALC_VARIABLES
 const[mergedCols,setMergedCols]=useState([]);  // merged CSV 컬럼 목록
@@ -303,7 +304,6 @@ const loadMapping=e=>{
 
 // Calc 실행 (variable_mapping 포함)
 const runCalc=async()=>{
-  if(!sid){alert('Merge 탭에서 세션을 먼저 생성하세요');return}
   if(!selFiles.size){alert('Merged 파일을 선택하세요');return}
   // 필수 누락 경고
   if(unmatched.length){
@@ -311,18 +311,22 @@ const runCalc=async()=>{
     if(!confirm(msg))return;
   }
   const expData=(exp.load_kg&&exp.imc_kg&&exp.fmc_kg)?{load_kg:+exp.load_kg,imc_kg:+exp.imc_kg,fmc_kg:+exp.fmc_kg}:null;
-  // mapping에서 calc_var !== merged_col인 것만 전달
   const vm={};Object.entries(mapping).forEach(([k,v])=>{if(v&&v!==k)vm[k]=v});
-  try{await fetch(`${API}/api/calculate`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({session_id:sid,config:cfg,source_files:[...selFiles],experimental:expData,variable_mapping:Object.keys(vm).length?vm:null})});setPoll(true)}catch(e){alert(e.message)}};
+  try{
+    const r=await fetch(`${API}/api/calculate`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:sid||null,config:cfg,source_files:[...selFiles],experimental:expData,variable_mapping:Object.keys(vm).length?vm:null})});
+    const d=await r.json();
+    if(d.session_id&&!sid){setSid(d.session_id);setCalcSid(d.session_id)}
+    else{setCalcSid(sid)}
+    setPoll(true);
+  }catch(e){alert(e.message)}};
 
-useEffect(()=>{if(!poll||!sid)return;const id=setInterval(async()=>{try{const r=await fetch(`${API}/api/status/${sid}`);const d=await r.json();setSt(d);if(d.status==='done'||d.status==='error')setPoll(false)}catch(e){console.error(e)}},800);pr.current=id;return()=>clearInterval(id)},[poll,sid]);
+useEffect(()=>{if(!poll)return;const s=calcSid||sid;if(!s)return;const id=setInterval(async()=>{try{const r=await fetch(`${API}/api/status/${s}`);const d=await r.json();setSt(d);if(d.status==='done'||d.status==='error')setPoll(false)}catch(e){console.error(e)}},800);pr.current=id;return()=>clearInterval(id)},[poll,calcSid,sid]);
 
 const matchedCount=Object.values(mapping).filter(Boolean).length;
 const categories=[...new Set(calcVars.map(v=>v.category))];
 
 return(<div>
-  {!sid&&<div className="cd"><div className="it" style={{textAlign:'center',padding:20}}>Merge 탭에서 세션을 먼저 생성하거나, 이전에 생성된 merged 파일을 직접 선택하세요.</div></div>}
 
   {/* 파일 선택 */}
   <div className="cd">

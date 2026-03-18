@@ -51,10 +51,10 @@ class MergeRequest(BaseModel):
     variable_settings: Optional[dict] = None  # {"col_name": {"include": bool, "weight": float, "bias": float}, ...}
 
 class CalcRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     config: Optional[dict] = None
     experimental: Optional[dict] = None    # {"load_kg", "imc_kg", "fmc_kg"}
-    source_files: Optional[list[str]] = None  # 특정 merged 파일 지정 (없으면 세션의 merge 결과 사용)
+    source_files: Optional[list[str]] = None  # 특정 merged 파일 지정
     variable_mapping: Optional[dict] = None   # {"calc_var": "merged_col", ...}
 
 
@@ -356,18 +356,24 @@ def _apply_variable_settings(df: pd.DataFrame, var_settings: dict) -> pd.DataFra
 @app.post("/api/calculate")
 async def start_calculation(req: CalcRequest, background_tasks: BackgroundTasks):
     sid = req.session_id
-    if sid not in sessions: raise HTTPException(404, "세션 없음")
+    # 세션 없으면 임시 세션 자동 생성
+    if not sid or sid not in sessions:
+        sid = str(uuid.uuid4())[:8]
+        sessions[sid] = {
+            "status": "ready", "progress": 0, "log": [], "error": None,
+            "category_path": "", "case_files": {},
+            "merge_results": [], "calc_results": [],
+        }
     s = sessions[sid]
     if s["status"] == "processing": raise HTTPException(409, "처리 중")
 
     cfg = req.config or DEFAULT_CFG
-    # 소스 파일: 명시적 지정 or 세션의 merge 결과
     source = req.source_files or s.get("merge_results", [])
-    if not source: raise HTTPException(400, "Merge 결과가 없습니다. Merge를 먼저 실행하세요.")
+    if not source: raise HTTPException(400, "Merged 파일을 선택하세요.")
 
     s.update(status="processing", progress=0, log=[], calc_results=[], error=None, skipped_info={})
     background_tasks.add_task(_run_calc, sid, cfg, source, req.experimental, req.variable_mapping)
-    return {"status": "started", "mode": "calculate", "source_count": len(source)}
+    return {"status": "started", "mode": "calculate", "source_count": len(source), "session_id": sid}
 
 
 def _run_calc(sid: str, cfg: dict, source_files: list[str],
