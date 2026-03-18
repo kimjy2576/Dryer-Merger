@@ -379,6 +379,8 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
             # Stage 2 실행
             df_calc = run_stage2(df, cfg, exp)
             _log(sid, f"  계산 완료: {len(df_calc.columns)}열")
+            rh_mode = "측정값 사용" if "RH_Eva_In" in df.columns else "에너지밸런스 역산"
+            _log(sid, f"  RH 모드: {rh_mode}")
 
             # 스킵된 블록 로그
             skipped = df_calc.attrs.get("skipped_blocks", {})
@@ -458,6 +460,7 @@ CALC_VARIABLES = [
     {"key": "T_Air_Eva_Out",       "label": "증발기 공기 출구 온도", "unit": "°C", "category": "공기",     "required": True,  "default_match": ["T_Air_Eva_Out"]},
     {"key": "Heatpump_DuctInTemp", "label": "덕트 입구 온도",      "unit": "°C",  "category": "공기",     "required": True,  "default_match": ["Heatpump_DuctInTemp", "T_Air_Eva_In"]},
     {"key": "Heatpump_DuctOutTemp","label": "덕트 출구 온도",      "unit": "°C",  "category": "공기",     "required": True,  "default_match": ["Heatpump_DuctOutTemp", "T_Air_Cond_Out"]},
+    {"key": "RH_Eva_In",           "label": "증발기 입구 RH (측정)", "unit": "-",   "category": "공기",     "required": False, "default_match": ["RH_Eva_In", "RH_Eva_In_measure"]},
     # 전력 (필수)
     {"key": "Po_WD",               "label": "총 전력",            "unit": "W",    "category": "전력",     "required": True,  "default_match": ["Po_WD"]},
     {"key": "Po_Comp",             "label": "압축기 전력",         "unit": "W",    "category": "전력",     "required": True,  "default_match": ["Po_Comp"]},

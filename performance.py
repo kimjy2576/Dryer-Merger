@@ -176,7 +176,8 @@ def _empty_perf(n):
             "Q_sen": z, "Q_lat": z, "SFH": z, "LFH": z,
             "COP_cool": z, "COP_heat": z, "COP_sys_cool": z, "COP_sys_heat": z,
             "water_gs": z, "water_gm": z, "water_kg": z,
-            "rmc": z, "Q_dry": z, "COP_dry": z, "SMER": z, "cmm_eva": z}
+            "rmc": z, "Q_dry": z, "COP_dry": z, "SMER": z, "cmm_eva": z,
+            "rh_mode": "skipped"}
 
 
 # ════════════════════════════════════════════════
@@ -432,13 +433,26 @@ def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, 
     Po_wd = df["Po_WD"].values.astype(float)
     time_min = df["Time_min"].values.astype(float)
 
-    # AH / RH 역산 (증발기 입구)
-    safe_flow = np.where(mdot_dair == 0, 1.0, mdot_dair)
-    num = (Q_eva / safe_flow * 3.6) - 1.006 * (T_eva_in - T_eva_out)
-    den = 2501 + 1.86 * (T_eva_in - T_eva_out)
-    AH_eva_in = np.where(mdot_dair == 0, 1e-6, num / den + AH_cond_in)
-    AH_eva_in = np.maximum(AH_eva_in, 1e-8)
-    RH_eva_in = rh_from_ah(AH_eva_in, T_eva_in, patm)
+    # ── RH 측정 유/무 분기 ──
+    has_rh = "RH_Eva_In" in df.columns
+    rh_mode = "measured" if has_rh else "calculated"
+
+    if has_rh:
+        # ── A. RH 측정 있음: 직접 계산 ──
+        RH_eva_in = df["RH_Eva_In"].values.astype(float)
+        # RH가 0~1 범위인지 확인 (% 단위면 변환)
+        if np.nanmean(RH_eva_in) > 1.5:
+            RH_eva_in = RH_eva_in / 100.0
+        RH_eva_in = np.clip(RH_eva_in, 0.01, 1.0)
+        AH_eva_in = abs_humidity(T_eva_in, RH_eva_in, patm)
+    else:
+        # ── B. RH 측정 없음: 에너지 밸런스 역산 ──
+        safe_flow = np.where(mdot_dair == 0, 1.0, mdot_dair)
+        num = (Q_eva / safe_flow * 3.6) - 1.006 * (T_eva_in - T_eva_out)
+        den = 2501 + 1.86 * (T_eva_in - T_eva_out)
+        AH_eva_in = np.where(mdot_dair == 0, 1e-6, num / den + AH_cond_in)
+        AH_eva_in = np.maximum(AH_eva_in, 1e-8)
+        RH_eva_in = rh_from_ah(AH_eva_in, T_eva_in, patm)
 
     h_eva_in = h_moist_air(T_eva_in, AH_eva_in)
 
@@ -497,7 +511,7 @@ def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, 
         "COP_sys_cool": COP_sys_cool, "COP_sys_heat": COP_sys_heat,
         "water_gs": water_gs, "water_gm": water_gm, "water_kg": water_kg,
         "rmc": rmc, "Q_dry": Q_dry, "COP_dry": COP_dry, "SMER": SMER,
-        "cmm_eva": cmm_eva,
+        "cmm_eva": cmm_eva, "rh_mode": rh_mode,
     }
 
 
