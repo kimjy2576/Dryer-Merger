@@ -75,6 +75,14 @@ def update_config(body: dict):
     return {"status": "ok"}
 
 
+@app.get("/api/validate-refrigerant/{name}")
+def validate_ref(name: str):
+    """냉매명이 CoolProp에서 유효한지 검증."""
+    from properties import validate_refrigerant
+    backend = DEFAULT_CFG.get("environment", {}).get("backend", "HEOS")
+    return validate_refrigerant(name, backend)
+
+
 # ══════════════════════════════════════════════
 #  경로 탐색 API
 # ══════════════════════════════════════════════
@@ -366,7 +374,10 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
     try:
         _log(sid, "═══ Calculation 시작 ═══")
         env = cfg["environment"]
-        _log(sid, f"냉매: {env['refrigerant']} ({env.get('backend','HEOS')})")
+        from properties import resolve_refrigerant
+        cp_name = resolve_refrigerant(env["refrigerant"])
+        display = f"{env['refrigerant']}" if env["refrigerant"] == cp_name else f"{env['refrigerant']} → {cp_name}"
+        _log(sid, f"냉매: {display} ({env.get('backend','HEOS')})")
 
         from properties import get_props
         get_props(env["refrigerant"], env["patm"], env.get("backend", "HEOS"))

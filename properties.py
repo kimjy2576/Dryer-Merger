@@ -14,6 +14,55 @@ from scipy.interpolate import RegularGridInterpolator
 import pandas as _pd
 
 
+# ════════════════════════════════════════════════
+#  냉매 별칭 매핑 (사용자 입력 → CoolProp 이름)
+# ════════════════════════════════════════════════
+REFRIGERANT_ALIASES = {
+    "R290": "Propane",
+    "R600a": "IsoButane",
+    "R600": "n-Butane",
+    "R717": "Ammonia",
+    "R744": "CarbonDioxide",
+    "R718": "Water",
+    "R1270": "Propylene",
+    "R22": "R22",
+    "R407C": "R407C",
+    "R404A": "R404A",
+    "R507A": "R507A",
+    "R410A": "R410A",
+    "R134a": "R134a",
+    "R32": "R32",
+    "R1234yf": "R1234yf",
+    "R1234ze(E)": "R1234ze(E)",
+    "R152a": "R152a",
+    "R513A": "R513A",
+    "R454C": "R454C",
+    "R454A": "R454A",
+    "R455A": "R455A",
+    "Propane": "Propane",
+}
+
+
+def resolve_refrigerant(name: str) -> str:
+    """사용자 입력 냉매명을 CoolProp 이름으로 변환."""
+    if name in REFRIGERANT_ALIASES:
+        return REFRIGERANT_ALIASES[name]
+    return name  # 별칭 없으면 그대로 전달 (CoolProp이 직접 판단)
+
+
+def validate_refrigerant(name: str, backend: str = "HEOS") -> dict:
+    """냉매명이 유효한지 검증. 성공 시 CoolProp 이름 + 임계점 반환."""
+    cp_name = resolve_refrigerant(name)
+    try:
+        Tc = PropsSI("Tcrit", f"{backend}::{cp_name}") - 273.15
+        Pc = PropsSI("Pcrit", f"{backend}::{cp_name}") / 1e5
+        return {"valid": True, "input": name, "coolprop_name": cp_name,
+                "Tc": round(Tc, 1), "Pc": round(Pc, 1)}
+    except Exception as e:
+        return {"valid": False, "input": name, "coolprop_name": cp_name,
+                "error": str(e)}
+
+
 class FluidProperties:
     """
     냉매 물성 고속 계산기.
@@ -23,10 +72,11 @@ class FluidProperties:
     """
 
     def __init__(self, refrigerant: str, patm: float = 101.325, backend: str = "HEOS"):
-        self.refrigerant = refrigerant
+        self.refrigerant_input = refrigerant
+        self.refrigerant = resolve_refrigerant(refrigerant)
         self.patm = patm
         self.backend = backend
-        self._ref = f"{backend}::{refrigerant}"
+        self._ref = f"{backend}::{self.refrigerant}"
         self._build_sat_tables()
         self._build_2d_cache()
 

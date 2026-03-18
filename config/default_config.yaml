@@ -7,7 +7,7 @@
 # --- 실험 환경 ---
 environment:
   patm: 101.325            # 대기압 [kPa]
-  refrigerant: "Propane"   # 냉매 (CoolProp 이름)
+  refrigerant: "R290"       # 냉매 (R290 → CoolProp: Propane 자동 변환)
   backend: "HEOS"          # CoolProp 백엔드: "HEOS" | "REFPROP"
 
 # --- Stage 1: 데이터 병합 ---
