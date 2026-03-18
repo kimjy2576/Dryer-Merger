@@ -86,7 +86,7 @@ return(<div className="cd"><div className="ct">데이터 경로</div>
 </div>)}
 
 // ═══ 로컬 파일 불러오기 ═══
-function LocalImport({onImported}){
+function LocalImport({onImported,addSuffix=true}){
 const[open,setOpen]=useState(false);
 const[path,setPath]=useState(localStorage.getItem('dryer_calc_path')||'');
 const[cases,setCases]=useState([]);        // 케이스 폴더 목록
@@ -111,7 +111,7 @@ const scanCsvs=async()=>{if(!selCases.size)return;setBusy(true);
   const d=await r.json();if(!r.ok){alert(d.detail);setBusy(false);return}
   setCaseFiles(d.cases||{});
   // merged 파일 자동 선택
-  const auto=new Set();Object.values(d.cases||{}).forEach(arr=>arr.forEach(f=>{if(f.has_merged)auto.add(f.path)}));
+  const auto=new Set();Object.values(d.cases||{}).forEach(arr=>arr.forEach(f=>{if(f.has_merged||f.has_calc)auto.add(f.path)}));
   setSelFiles(auto);
   }catch(e){alert(e.message)}setBusy(false)};
 
@@ -120,7 +120,7 @@ const allFiles=Object.values(caseFiles).flat();
 
 // 3단계: 가져오기
 const doImport=async()=>{if(!selFiles.size)return;setBusy(true);
-  try{const r=await fetch(`${API}/api/import-merged`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_paths:[...selFiles]})});
+  try{const r=await fetch(`${API}/api/import-merged`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_paths:[...selFiles],add_merged_suffix:addSuffix})});
   const d=await r.json();
   if(d.count>0){alert(`${d.count}개 파일을 가져왔습니다.`);if(onImported)onImported();setOpen(false)}
   if(d.errors?.length)alert('오류:\n'+d.errors.join('\n'));
@@ -160,6 +160,7 @@ return(<div>
         <div style={{display:'flex',gap:4}}>
           <button className="bt bs" onClick={()=>setSelFiles(new Set(allFiles.map(f=>f.path)))}>전체</button>
           <button className="bt bs" onClick={()=>setSelFiles(new Set(allFiles.filter(f=>f.has_merged).map(f=>f.path)))}>merged만</button>
+          <button className="bt bs" onClick={()=>setSelFiles(new Set(allFiles.filter(f=>f.has_calc).map(f=>f.path)))}>calc만</button>
           <button className="bt bs" onClick={()=>setSelFiles(new Set())}>해제</button>
         </div>
       </div>
@@ -169,6 +170,7 @@ return(<div>
           {files.map(f=><div key={f.path} className="file-sel-item" style={{opacity:selFiles.has(f.path)?1:.4}}>
             <input type="checkbox" checked={selFiles.has(f.path)} onChange={()=>togFile(f.path)}/>
             <span style={{flex:1}}>{f.name}</span>
+            {f.has_calc&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:4,background:'rgba(34,197,94,.1)',color:'var(--green,#22c55e)'}}>calc</span>}
             {f.has_merged&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:4,background:'rgba(20,184,166,.1)',color:'var(--teal,#0d9488)'}}>merged</span>}
             <span className="it">{(f.size/1024).toFixed(0)} KB</span>
           </div>)}
@@ -584,7 +586,11 @@ return(<div>
   {/* 파일 선택 */}
   <div className="cd">
     <div className="ct">데이터 파일 선택</div>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+
+    {/* 로컬 파일 불러오기 */}
+    <LocalImport onImported={()=>fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged'))))} addSuffix={false}/>
+
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,marginTop:10}}>
       <span className="it">{files.length}개 — {selFiles.size}개 선택</span>
       <div style={{display:'flex',gap:6}}>
         <button className="bt bs" onClick={()=>setSelFiles(new Set(files.map(f=>f.name)))}>전체</button>

@@ -355,6 +355,7 @@ def _apply_variable_settings(df: pd.DataFrame, var_settings: dict) -> pd.DataFra
 # ══════════════════════════════════════════════
 class ImportRequest(BaseModel):
     file_paths: list[str]  # 로컬 CSV 파일 절대 경로 리스트
+    add_merged_suffix: bool = True  # _merged 접미사 자동 추가 여부
 
 @app.post("/api/import-merged")
 def import_merged(req: ImportRequest):
@@ -371,8 +372,7 @@ def import_merged(req: ImportRequest):
             errors.append(f"CSV 아님: {fp}")
             continue
         dest_name = p.name
-        # _merged가 없으면 붙여줌
-        if "_merged" not in dest_name:
+        if req.add_merged_suffix and "_merged" not in dest_name and "_calc" not in dest_name:
             dest_name = p.stem + "_merged.csv"
         dest = RESULT_DIR / dest_name
         try:
@@ -395,7 +395,8 @@ def browse_files(req: BrowseRequest):
             if f.is_file() and f.suffix.lower() == '.csv':
                 files.append({"name": f.name, "path": str(f.resolve()),
                               "size": f.stat().st_size,
-                              "has_merged": "_merged" in f.name.lower()})
+                              "has_merged": "_merged" in f.name.lower(),
+                              "has_calc": "_calc" in f.name.lower()})
     except PermissionError:
         raise HTTPException(403, f"접근 권한 없음: {req.path}")
     return {"path": str(p.resolve()), "files": files}
@@ -423,6 +424,7 @@ def scan_case_csvs(req: ScanCasesRequest):
                 csvs.append({"name": f.name, "path": str(f.resolve()),
                              "size": f.stat().st_size,
                              "has_merged": "_merged" in f.name.lower(),
+                             "has_calc": "_calc" in f.name.lower(),
                              "case": case})
                 total += 1
         result[case] = csvs
