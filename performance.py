@@ -243,7 +243,8 @@ def _empty_perf(n):
             "Q_sen": z, "Q_lat": z, "SFH": z, "LFH": z,
             "COP_cool": z, "COP_heat": z, "COP_sys_cool": z, "COP_sys_heat": z,
             "water_gs": z, "water_gm": z, "water_kg": z,
-            "rmc": z, "Q_dry": z, "COP_dry": z, "SMER": z, "cmm_eva": z,
+            "rmc": z, "Q_drum_sen": z, "Q_drum_lat": z, "Q_drum_total": z,
+            "Drum_SFH": z, "Drum_LFH": z, "SMER": z, "cmm_eva": z,
             "rh_mode": "skipped"}
 
 
@@ -552,19 +553,40 @@ def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, 
     if exp and exp.get("imc_kg") and exp.get("load_kg"):
         rmc = _calc_rmc(water_kg, exp["imc_kg"], exp["fmc_kg"], exp["load_kg"])
 
-    # 건조 COP / 압축기 효율
-    h_cond_out = air_cond["h_out"]
-    h_eva_in_air = h_eva_in
-    Q_dry = mdot_dair * (h_eva_in_air - h_cond_out) / 3600
-    COP_dry = np.where(Po_comp != 0, Q_dry / Po_comp, 0)
+    # ── 드럼 열전달 (응축기출구 → 드럼 → 증발기입구) ──
+    # 드럼 입구 = 응축기 공기 출구
+    T_drum_in = df["Heatpump_DuctOutTemp"].values.astype(float) if "Heatpump_DuctOutTemp" in df.columns \
+        else T_eva_in  # fallback
+    AH_drum_in = air_cond["AH_out"]          # 응축기 출구 AH (현열교환이므로 AH_in과 동일)
+    h_drum_in = air_cond["h_out"]             # 응축기 출구 엔탈피
 
-    # 압축기 효율
-    comp_work = flow["mdot_ref_filtered"] * flow.get("dh_comp", 0) * 1000 / 3600 \
-        if "dh_comp" not in flow else \
-        flow["mdot_ref_filtered"] * 0  # fallback
+    # 드럼 출구 = 증발기 공기 입구
+    T_drum_out = T_eva_in
+    AH_drum_out = AH_eva_in
+    h_drum_out = h_eva_in
 
-    # SMER
-    SMER = np.where(Q_dry != 0, water_gs / (Q_dry / 1000), 0)
+    # 드럼 현열 [W]: 고온 공기가 세탁물에 열 전달 (공기 냉각)
+    # Q = mdot_da [kg/h] × Cp [kJ/(kg·K)] × ΔT [K] / 3.6 → [W]
+    Cp_da = 1.006  # 건공기 정압비열 [kJ/(kg·K)]
+    Q_drum_sen = mdot_dair * Cp_da * (T_drum_in - T_drum_out) / 3.6
+
+    # 드럼 잠열 [W]: 세탁물 수분이 증발하여 공기가 흡수
+    # Q = mdot_da [kg/h] × ΔAH [kg/kg] × hfg [kJ/kg] / 3.6 → [W]
+    hfg = 2501.0  # 물 증발잠열 [kJ/kg] @25°C
+    Q_drum_lat = mdot_dair * (AH_drum_out - AH_drum_in) * hfg / 3.6
+
+    # 드럼 총 열전달 [W]: 엔탈피 기반
+    Q_drum_total = mdot_dair * (h_drum_out - h_drum_in) / 3.6
+
+    # 드럼 현잠열비
+    Q_drum_sum = Q_drum_sen + Q_drum_lat
+    safe_drum = np.where(np.abs(Q_drum_sum) < 1e-6, 1e-6, Q_drum_sum)
+    Drum_SFH = np.where(np.abs(Q_drum_sum) > 1e-6, Q_drum_sen / safe_drum, 0)
+    Drum_LFH = np.where(np.abs(Q_drum_sum) > 1e-6, Q_drum_lat / safe_drum, 0)
+
+    # SMER [kg/kWh]: 총 전력 대비 제습량
+    # water_gs [g/s] * 3600 / 1000 → [kg/h], Po_WD [W] / 1000 → [kW]
+    SMER = np.where(Po_wd > 0, water_gs * 3.6 / Po_wd, 0)
 
     # 풍량 (증발기측)
     v_da_eva = v_moist_air(T_eva_in, AH_eva_in, patm)
@@ -577,8 +599,10 @@ def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, 
         "COP_cool": COP_cool, "COP_heat": COP_heat,
         "COP_sys_cool": COP_sys_cool, "COP_sys_heat": COP_sys_heat,
         "water_gs": water_gs, "water_gm": water_gm, "water_kg": water_kg,
-        "rmc": rmc, "Q_dry": Q_dry, "COP_dry": COP_dry, "SMER": SMER,
-        "cmm_eva": cmm_eva, "rh_mode": rh_mode,
+        "rmc": rmc,
+        "Q_drum_sen": Q_drum_sen, "Q_drum_lat": Q_drum_lat,
+        "Q_drum_total": Q_drum_total, "Drum_SFH": Drum_SFH, "Drum_LFH": Drum_LFH,
+        "SMER": SMER, "cmm_eva": cmm_eva, "rh_mode": rh_mode,
     }
 
 
@@ -687,18 +711,23 @@ def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf):
     # 열전달량
     out["Qrefr_Cond_recalc"] = flow["Q_cond"]
     out["Qrefr_Eva_recalc"] = flow["Q_eva_filtered"]
-    out["Q_sen"] = perf["Q_sen"]
-    out["Q_lat"] = perf["Q_lat"]
-    out["Q_Dry"] = perf["Q_dry"]
+    out["Q_sen_eva"] = perf["Q_sen"]
+    out["Q_lat_eva"] = perf["Q_lat"]
+
+    # 드럼 열전달
+    out["Q_Drum_Sen"] = perf["Q_drum_sen"]
+    out["Q_Drum_Lat"] = perf["Q_drum_lat"]
+    out["Q_Drum_Total"] = perf["Q_drum_total"]
 
     # 성능
     out["Factor_SFH"] = perf["SFH"]
     out["Factor_LFH"] = perf["LFH"]
+    out["Drum_SFH"] = perf["Drum_SFH"]
+    out["Drum_LFH"] = perf["Drum_LFH"]
     out["COP_cooling"] = perf["COP_cool"]
     out["COP_heating"] = perf["COP_heat"]
     out["COP_sys_cooling"] = perf["COP_sys_cool"]
     out["COP_sys_heating"] = perf["COP_sys_heat"]
-    out["COP_Dry"] = perf["COP_dry"]
     out["SMER"] = perf["SMER"]
 
     # 습도
