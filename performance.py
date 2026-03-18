@@ -16,14 +16,8 @@ from properties import (
 def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataFrame:
     """
     Stage 2 성능 계산 메인 엔트리.
-
-    Parameters:
-        df   : Stage 1 완료된 merged DataFrame
-        cfg  : YAML 설정
-        exp  : 실험 입력값 {"load_kg": float, "imc_kg": float, "fmc_kg": float}
-               None이면 RMC 계산 생략
-    Returns:
-        df_calc : 계산 결과 DataFrame (df 컬럼 + 계산 컬럼)
+    각 계산 블록의 필수 컬럼을 사전 검증하여, 누락 시 해당 블록을 스킵한다.
+    스킵된 블록 정보는 df.attrs["skipped_blocks"]에 저장.
     """
     calc_cfg = cfg["calculation"]
     env = cfg["environment"]
@@ -31,37 +25,106 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
     props = get_props(env["refrigerant"], patm, env.get("backend", "HEOS"))
     rh_eva_out = calc_cfg["rh_eva_out_assumed"]
     time_interval = cfg["processing"]["time_interval"]
+    n = len(df)
 
-    # ── 0. 전처리: 센서 오프셋 + 누락 컬럼 ──
+    # ── 0. 전처리 ──
     df = _apply_sensor_offsets(df, calc_cfg.get("sensor_offsets", {}))
     df = _ensure_columns(df)
     df = _apply_power_corrections(df, calc_cfg)
 
+    # ── 블록별 의존성 정의 ──
+    BLOCKS = {
+        "condenser_air":  {"required": [["T_Air_Eva_Out", "Heatpump_DuctInTemp"], ["Heatpump_DuctOutTemp"]],
+                           "label": "응축기 공기측"},
+        "condenser_ref":  {"required": [["T_Cond_In", "T_Comp_Out", "Heatpump_CompTemp"], ["T_Cond_Out"], ["P_Comp_Out"]],
+                           "label": "응축기 냉매측"},
+        "evaporator_ref": {"required": [["P_Comp_In"], ["Heatpump_EvaOutTemp"]],
+                           "label": "증발기 냉매측", "depends": ["condenser_ref"]},
+        "compressor_ref": {"required": [["T_Comp_In", "Heatpump_EvaOutTemp"], ["P_Comp_In"],
+                                         ["T_Cond_In", "Heatpump_CompTemp"], ["P_Comp_Out"]],
+                           "label": "압축기 냉매측"},
+        "mass_flow":      {"label": "질량유량 & 열전달",
+                           "depends": ["condenser_air", "condenser_ref", "evaporator_ref", "compressor_ref"]},
+        "performance":    {"required": [["Heatpump_DuctInTemp"], ["Po_Comp"], ["Po_WD"]],
+                           "label": "성능지표",
+                           "depends": ["mass_flow"]},
+    }
+
+    def _check_block(name):
+        """블록의 필수 컬럼 체크. 각 그룹은 OR 관계 (하나라도 있으면 OK)."""
+        info = BLOCKS[name]
+        # 의존 블록이 스킵됐으면 자동 스킵
+        for dep in info.get("depends", []):
+            if dep in skipped:
+                return False, f"{BLOCKS[dep]['label']} 스킵됨"
+        # 컬럼 체크
+        for group in info.get("required", []):
+            if not any(c in df.columns for c in group):
+                return False, f"필요 컬럼 없음: {' 또는 '.join(group)}"
+        return True, ""
+
+    skipped = {}  # {block_name: reason}
+    computed = {} # 계산 결과 저장
+
     # ── 1. 응축기 공기측 ──
-    air_cond = _calc_condenser_air(df, rh_eva_out, patm)
+    ok, reason = _check_block("condenser_air")
+    if ok:
+        computed["air_cond"] = _calc_condenser_air(df, rh_eva_out, patm)
+    else:
+        skipped["condenser_air"] = reason
+        computed["air_cond"] = _empty_air_cond(n)
 
     # ── 2. 응축기 냉매측 ──
-    ref_cond = _calc_condenser_ref(df, props)
+    ok, reason = _check_block("condenser_ref")
+    if ok:
+        computed["ref_cond"] = _calc_condenser_ref(df, props)
+    else:
+        skipped["condenser_ref"] = reason
+        computed["ref_cond"] = _empty_ref(n)
 
     # ── 3. 증발기 냉매측 ──
-    ref_eva = _calc_evaporator_ref(df, props, ref_cond)
+    ok, reason = _check_block("evaporator_ref")
+    if ok:
+        computed["ref_eva"] = _calc_evaporator_ref(df, props, computed["ref_cond"])
+    else:
+        skipped["evaporator_ref"] = reason
+        computed["ref_eva"] = _empty_ref_eva(n)
 
     # ── 4. 압축기 냉매측 ──
-    ref_comp = _calc_compressor_ref(df, props)
+    ok, reason = _check_block("compressor_ref")
+    if ok:
+        computed["ref_comp"] = _calc_compressor_ref(df, props)
+    else:
+        skipped["compressor_ref"] = reason
+        computed["ref_comp"] = _empty_ref_comp(n)
 
-    # ── 5. 질량유량 & 열전달량 ──
-    flow = _calc_mass_flow(df, cfg, air_cond, ref_cond, ref_eva, ref_comp, time_interval)
+    # ── 5. 질량유량 & 열전달 ──
+    ok, reason = _check_block("mass_flow")
+    if ok:
+        computed["flow"] = _calc_mass_flow(df, cfg, computed["air_cond"],
+                                            computed["ref_cond"], computed["ref_eva"],
+                                            computed["ref_comp"], time_interval)
+    else:
+        skipped["mass_flow"] = reason
+        computed["flow"] = _empty_flow(n)
 
-    # ── 6. 증발기 공기측 + 성능지표 ──
-    perf = _calc_evaporator_air_and_performance(
-        df, props, patm, rh_eva_out, air_cond, flow, time_interval, exp
-    )
+    # ── 6. 성능지표 ──
+    ok, reason = _check_block("performance")
+    if ok:
+        computed["perf"] = _calc_evaporator_air_and_performance(
+            df, props, patm, rh_eva_out, computed["air_cond"],
+            computed["flow"], time_interval, exp)
+    else:
+        skipped["performance"] = reason
+        computed["perf"] = _empty_perf(n)
 
     # ── 7. 에너지 적산 ──
     df = _calc_energy_integration(df, calc_cfg, time_interval)
 
-    # ── 8. 결과 DataFrame 조립 ──
-    df_calc = _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf)
+    # ── 8. 결과 조립 ──
+    df_calc = _assemble_output(df, computed["air_cond"], computed["ref_cond"],
+                                computed["ref_eva"], computed["ref_comp"],
+                                computed["flow"], computed["perf"])
 
     # ── 9. 후처리 LPF ──
     lpf_cols = calc_cfg.get("calc_lpf_columns", [])
@@ -72,7 +135,48 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
             alpha = 1.0 / (tau + 1.0)
             df_calc[valid] = df_calc[valid].ewm(alpha=alpha, adjust=False).mean().round(2)
 
+    # 스킵 정보를 attrs에 저장 (서버에서 로그 출력용)
+    df_calc.attrs["skipped_blocks"] = skipped
+
     return df_calc
+
+
+# ════════════════════════════════════════════════
+#  빈 결과 생성기 (스킵된 블록 대체)
+# ════════════════════════════════════════════════
+def _empty_air_cond(n):
+    z = np.zeros(n)
+    return {"AH_in": z, "AH_out": z, "RH_in": z, "RH_out": z,
+            "h_in": z, "h_out": z, "v_in": np.ones(n), "v_out": np.ones(n)}
+
+def _empty_ref(n):
+    z = np.zeros(n)
+    return {"h_in": z, "h_out": z, "s_in": z, "s_out": z,
+            "v_in": z, "v_out": z, "dh": z, "T_dew": z, "T_subcool": z}
+
+def _empty_ref_eva(n):
+    z = np.zeros(n)
+    return {"h_in": z, "h_out": z, "s_in": z, "s_out": z,
+            "v_in": z, "v_out": z, "dh": z, "T_boil": z, "T_superheat": z, "quality": z}
+
+def _empty_ref_comp(n):
+    z = np.zeros(n)
+    return {"h_in": z, "h_out": z, "s_in": z, "s_out": z,
+            "v_in": z, "v_out": z, "rho_in": z, "dh": z, "pr": np.ones(n)}
+
+def _empty_flow(n):
+    z = np.zeros(n)
+    return {"cmm_cond": z, "mdot_mair": z, "mdot_dair": z,
+            "mdot_ref": z, "mdot_ref_filtered": z,
+            "Q_cond": z, "Q_eva": z, "Q_eva_filtered": z}
+
+def _empty_perf(n):
+    z = np.zeros(n)
+    return {"AH_eva_in": z, "RH_eva_in": z, "h_eva_in_air": z,
+            "Q_sen": z, "Q_lat": z, "SFH": z, "LFH": z,
+            "COP_cool": z, "COP_heat": z, "COP_sys_cool": z, "COP_sys_heat": z,
+            "water_gs": z, "water_gm": z, "water_kg": z,
+            "rmc": z, "Q_dry": z, "COP_dry": z, "SMER": z, "cmm_eva": z}
 
 
 # ════════════════════════════════════════════════

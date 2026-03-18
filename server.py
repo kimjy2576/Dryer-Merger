@@ -333,7 +333,7 @@ async def start_calculation(req: CalcRequest, background_tasks: BackgroundTasks)
     source = req.source_files or s.get("merge_results", [])
     if not source: raise HTTPException(400, "Merge 결과가 없습니다. Merge를 먼저 실행하세요.")
 
-    s.update(status="processing", progress=0, log=[], calc_results=[], error=None)
+    s.update(status="processing", progress=0, log=[], calc_results=[], error=None, skipped_info={})
     background_tasks.add_task(_run_calc, sid, cfg, source, req.experimental, req.variable_mapping)
     return {"status": "started", "mode": "calculate", "source_count": len(source)}
 
@@ -379,6 +379,17 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
             # Stage 2 실행
             df_calc = run_stage2(df, cfg, exp)
             _log(sid, f"  계산 완료: {len(df_calc.columns)}열")
+
+            # 스킵된 블록 로그
+            skipped = df_calc.attrs.get("skipped_blocks", {})
+            if skipped:
+                _log(sid, f"  [경고] {len(skipped)}개 블록 스킵:")
+                for blk, reason in skipped.items():
+                    _log(sid, f"    - {blk}: {reason}")
+                # 스킵 정보를 세션에 저장 (프론트엔드 팝업용)
+                if "skipped_info" not in s:
+                    s["skipped_info"] = {}
+                s["skipped_info"][fn] = skipped
 
             # _calc.csv 저장
             out_name = fn.replace("_merged.csv", "_calc.csv")
@@ -538,7 +549,7 @@ def _log(sid, msg):
 def get_status(sid: str):
     if sid not in sessions: raise HTTPException(404)
     s = sessions[sid]
-    return {k: s.get(k) for k in ("status","progress","log","merge_results","calc_results","error")}
+    return {k: s.get(k) for k in ("status","progress","log","merge_results","calc_results","error","skipped_info")}
 
 @app.get("/api/results")
 def list_results():

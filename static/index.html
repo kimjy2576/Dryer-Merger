@@ -86,10 +86,23 @@ return(<div className="cd"><div className="ct">데이터 경로</div>
 function StatusPanel({st,resultKey,onPreview}){
 if(!st)return null;
 const results=st[resultKey]||[];
+const skipped=st.skipped_info||{};
+const hasSkipped=Object.keys(skipped).length>0;
 return(<>
 <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--tx2)',marginBottom:4}}><span>진행률</span><span>{st.progress}%</span></div>
 <div className="pb"><div className="pf" style={{width:st.progress+'%'}}/></div>
 {st.log?.length>0&&<div className="lv" style={{marginTop:12}}>{st.log.map((l,i)=><div key={i} className={`ll ${l.includes('에러')||l.includes('Error')?'le':l.includes('경고')?'lw':l.includes('→')||l.includes('완료')?'lo':l.includes('중...')?'li':'ld'}`}>{l}</div>)}</div>}
+{hasSkipped&&st.status==='done'&&<div style={{marginTop:12,padding:14,background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.15)',borderRadius:10}}>
+  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}><span style={{fontSize:16}}>⚠️</span><span style={{fontSize:13,fontWeight:500,color:'var(--amber)'}}>일부 계산이 스킵되었습니다</span></div>
+  {Object.entries(skipped).map(([fn,blocks])=><div key={fn} style={{marginBottom:8}}>
+    <div style={{fontSize:11,color:'var(--tx2)',fontFamily:'var(--mono)',marginBottom:4}}>{fn}</div>
+    {Object.entries(blocks).map(([blk,reason])=><div key={blk} style={{display:'flex',alignItems:'center',gap:8,padding:'3px 0',fontSize:11}}>
+      <span style={{color:'var(--amber)',minWidth:130}}>{blk}</span>
+      <span style={{color:'var(--tx3)'}}>{reason}</span>
+    </div>)}
+  </div>)}
+  <div style={{fontSize:11,color:'var(--tx3)',marginTop:4}}>스킵된 블록의 출력값은 0으로 채워집니다. 변수 매핑을 확인하세요.</div>
+</div>}
 {results.length>0&&<div style={{marginTop:14}}><div className="ct">결과 파일 ({results.length}개)</div>{results.map(f=><div key={f} className="rr"><div style={{display:'flex',alignItems:'center',gap:8}}><span className="rn">{f}</span><span className={`rt ${f.includes('_merged')?'rt-m':'rt-c'}`}>{f.includes('_merged')?'merged':'calc'}</span></div><div style={{display:'flex',gap:6}}>{onPreview&&<button className="bt bs" onClick={()=>onPreview(f)}>미리보기</button>}<a href={`${API}/api/results/${f}`} download className="bt bs bp" style={{textDecoration:'none'}}>다운로드</a></div></div>)}</div>}
 {st.error&&<div style={{marginTop:12,padding:12,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,fontSize:12,color:'var(--red)'}}>{st.error}</div>}
 </>)}
