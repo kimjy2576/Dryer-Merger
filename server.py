@@ -401,6 +401,34 @@ def browse_files(req: BrowseRequest):
     return {"path": str(p.resolve()), "files": files}
 
 
+class ScanCasesRequest(BaseModel):
+    category_path: str
+    case_names: list[str]
+
+@app.post("/api/scan-case-csvs")
+def scan_case_csvs(req: ScanCasesRequest):
+    """선택된 케이스 폴더들에서 CSV 파일을 일괄 수집."""
+    category = Path(req.category_path)
+    if not category.exists():
+        raise HTTPException(404, f"경로 없음: {req.category_path}")
+    result = {}  # {case_name: [{name, path, size, has_merged}]}
+    total = 0
+    for case in req.case_names:
+        case_dir = category / case
+        if not case_dir.is_dir():
+            continue
+        csvs = []
+        for f in sorted(case_dir.iterdir()):
+            if f.is_file() and f.suffix.lower() == '.csv':
+                csvs.append({"name": f.name, "path": str(f.resolve()),
+                             "size": f.stat().st_size,
+                             "has_merged": "_merged" in f.name.lower(),
+                             "case": case})
+                total += 1
+        result[case] = csvs
+    return {"category": str(category.resolve()), "cases": result, "total_files": total}
+
+
 # ══════════════════════════════════════════════
 #  Calculation API (Stage 2 분리)
 # ══════════════════════════════════════════════
