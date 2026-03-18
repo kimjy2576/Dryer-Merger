@@ -1,6 +1,5 @@
 """
-server.py — FastAPI 백엔드 (v4.1 — 서버 경로 탐색 방식)
-파일 업로드 없이 서버 로컬/네트워크 경로에서 직접 데이터를 읽음.
+server.py — FastAPI 백엔드 (v5 — Merge / Calculation 분리)
 """
 import os, sys, uuid, time, traceback
 from pathlib import Path
@@ -17,7 +16,7 @@ from pydantic import BaseModel
 
 from config import load_config
 
-app = FastAPI(title="Dryer Merger", version="4.1")
+app = FastAPI(title="Dryer Merger", version="5.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/health")
@@ -25,7 +24,6 @@ def health():
     return {"status": "ok"}
 
 BASE_DIR = Path(__file__).parent
-# EXE 번들 시 results는 EXE가 있는 폴더에 생성
 if getattr(sys, "frozen", False):
     EXE_DIR = Path(sys.executable).parent
 else:
@@ -44,13 +42,19 @@ class BrowseRequest(BaseModel):
     path: str
 
 class SelectRequest(BaseModel):
-    category_path: str           # 상위 폴더 경로
-    case_names: list[str]        # 선택한 케이스 폴더명 리스트
+    category_path: str
+    case_names: list[str]
 
-class ProcessRequest(BaseModel):
+class MergeRequest(BaseModel):
     session_id: str
     config: Optional[dict] = None
-    experimental: Optional[dict] = None  # {"load_kg", "imc_kg", "fmc_kg"}
+
+class CalcRequest(BaseModel):
+    session_id: str
+    config: Optional[dict] = None
+    experimental: Optional[dict] = None    # {"load_kg", "imc_kg", "fmc_kg"}
+    source_files: Optional[list[str]] = None  # 특정 merged 파일 지정 (없으면 세션의 merge 결과 사용)
+    variable_mapping: Optional[dict] = None   # {"calc_var": "merged_col", ...}
 
 
 # ══════════════════════════════════════════════
@@ -71,87 +75,48 @@ def update_config(body: dict):
 
 
 # ══════════════════════════════════════════════
-#  경로 탐색 API (업로드 대체)
+#  경로 탐색 API
 # ══════════════════════════════════════════════
 @app.post("/api/browse")
 def browse_directory(req: BrowseRequest):
-    """
-    지정 경로 내의 폴더/파일 목록을 반환한다.
-    폴더 선택 UI용.
-    """
     p = Path(req.path)
-    if not p.exists():
-        raise HTTPException(404, f"경로를 찾을 수 없습니다: {req.path}")
-    if not p.is_dir():
-        raise HTTPException(400, f"디렉토리가 아닙니다: {req.path}")
-
+    if not p.exists(): raise HTTPException(404, f"경로 없음: {req.path}")
+    if not p.is_dir(): raise HTTPException(400, f"디렉토리 아님: {req.path}")
     items = []
     try:
         for item in sorted(p.iterdir()):
-            if item.name.startswith("."):
-                continue
-            items.append({
-                "name": item.name,
-                "is_dir": item.is_dir(),
-                "size": item.stat().st_size if item.is_file() else None,
-            })
+            if item.name.startswith("."): continue
+            items.append({"name": item.name, "is_dir": item.is_dir(),
+                          "size": item.stat().st_size if item.is_file() else None})
     except PermissionError:
-        raise HTTPException(403, f"접근 권한이 없습니다: {req.path}")
-
-    # 서브폴더(케이스) 목록
-    cases = [i["name"] for i in items if i["is_dir"]]
-
-    return {
-        "path": str(p.resolve()),
-        "items": items,
-        "cases": cases,
-    }
+        raise HTTPException(403, f"접근 권한 없음: {req.path}")
+    return {"path": str(p.resolve()), "items": items,
+            "cases": [i["name"] for i in items if i["is_dir"]]}
 
 
 @app.post("/api/select")
 def select_cases(req: SelectRequest):
-    """
-    케이스 폴더를 선택하고 세션을 생성한다.
-    각 케이스 폴더 내 BR/AMS/MX100 파일을 자동 탐지.
-    """
     category = Path(req.category_path)
-    if not category.exists():
-        raise HTTPException(404, f"경로 없음: {req.category_path}")
-
+    if not category.exists(): raise HTTPException(404, f"경로 없음: {req.category_path}")
     sid = str(uuid.uuid4())[:8]
     case_files = {}
-
     for case in req.case_names:
         case_dir = category / case
-        if not case_dir.is_dir():
-            continue
+        if not case_dir.is_dir(): continue
         case_files[case] = _classify_files(case_dir)
-
-    if not case_files:
-        raise HTTPException(400, "유효한 케이스 폴더가 없습니다.")
-
+    if not case_files: raise HTTPException(400, "유효한 케이스 없음")
     sessions[sid] = {
-        "status": "ready",
-        "progress": 0,
-        "log": [],
-        "results": [],
-        "error": None,
-        "category_path": str(category),
-        "case_files": case_files,
+        "status": "ready", "progress": 0, "log": [], "error": None,
+        "category_path": str(category), "case_files": case_files,
+        "merge_results": [], "calc_results": [],
     }
-
-    return {
-        "session_id": sid,
-        "cases": case_files,
-    }
+    return {"session_id": sid, "cases": case_files}
 
 
 def _classify_files(folder: Path) -> dict:
-    """폴더 내 파일을 BR/AMS/MX100으로 분류."""
     files = {"br": [], "ams": [], "mx100": []}
     for f in sorted(folder.iterdir()):
-        if not f.is_file():
-            continue
+        if not f.is_file(): continue
         n = f.name.lower()
         if "_br.csv" in n or (n.endswith(".csv") and "br" in n):
             files["br"].append(f.name)
@@ -159,89 +124,67 @@ def _classify_files(folder: Path) -> dict:
             files["ams"].append(f.name)
         elif n.endswith((".xls", ".xlsx")) or "_temp." in n:
             files["mx100"].append(f.name)
-        elif n.endswith(".csv") and "_merged" not in n and "_calc" not in n:
+        elif n.endswith(".csv") and "_merged" not in n and "_calc" not in n and "_result" not in n:
             files["br"].append(f.name)
     return files
 
 
 # ══════════════════════════════════════════════
-#  처리 API
+#  Merge API (Stage 1 분리)
 # ══════════════════════════════════════════════
-@app.post("/api/process")
-async def start_processing(req: ProcessRequest, background_tasks: BackgroundTasks):
+@app.post("/api/merge")
+async def start_merge(req: MergeRequest, background_tasks: BackgroundTasks):
     sid = req.session_id
-    if sid not in sessions:
-        raise HTTPException(404, "세션 없음")
+    if sid not in sessions: raise HTTPException(404, "세션 없음")
     s = sessions[sid]
-    if s["status"] == "processing":
-        raise HTTPException(409, "처리 중")
-
+    if s["status"] == "processing": raise HTTPException(409, "처리 중")
     cfg = req.config or DEFAULT_CFG
-    s.update(status="processing", progress=0, log=[], results=[], error=None)
-    background_tasks.add_task(_run, sid, cfg, req.experimental)
-    return {"status": "started"}
+    s.update(status="processing", progress=0, log=[], merge_results=[], error=None)
+    background_tasks.add_task(_run_merge, sid, cfg)
+    return {"status": "started", "mode": "merge"}
 
 
-def _run(sid: str, cfg: dict, exp: dict | None):
+def _run_merge(sid: str, cfg: dict):
     s = sessions[sid]
     category = Path(s["category_path"])
     case_files = s["case_files"]
     dt = cfg["processing"]["data_time"]
-    calc_on = cfg.get("calculation", {}).get("enabled", False)
 
     try:
-        _log(sid, "통합 파이프라인 시작...")
-        env = cfg["environment"]
-        _log(sid, f"냉매: {env['refrigerant']} / Stage 2: {'ON' if calc_on else 'OFF'}")
-
-        from properties import get_props
-        get_props(env["refrigerant"], env["patm"], env.get("backend", "HEOS"))
-
+        _log(sid, "═══ Merge 시작 ═══")
         from preprocessor import (
             preprocess_blackrose, preprocess_ams, preprocess_mx100,
             sync_and_merge, add_time_columns,
         )
         from calculator import run_stage1
         from postprocessor import run_postprocessing
-        from performance import run_stage2
         from config import get_column_mapping, get_selected_columns
         from io_handler import rename_files_in_folder
 
-        # 전체 파일 수 산정
-        total_files = sum(
-            len(cf[{"BR":"br","AMS":"ams","MX100":"mx100"}[dt]])
-            for cf in case_files.values()
-        )
-        done = 0
-        results = []
+        total = sum(len(cf[{"BR":"br","AMS":"ams","MX100":"mx100"}[dt]]) for cf in case_files.values())
+        done, results = 0, []
 
         for case_name, cf in case_files.items():
             case_dir = category / case_name
             rename_files_in_folder(str(case_dir))
-            # 파일 재분류 (rename 후)
             cf = _classify_files(case_dir)
-
-            ref_key = {"BR": "br", "AMS": "ams", "MX100": "mx100"}[dt]
+            ref_key = {"BR":"br","AMS":"ams","MX100":"mx100"}[dt]
             n = len(cf[ref_key])
 
             for i in range(n):
                 t0 = time.perf_counter()
-                _log(sid, f"[{case_name}] {i+1}/{n} 처리 중...")
+                _log(sid, f"[{case_name}] {i+1}/{n} 병합 중...")
 
-                # 경로 직접 구성 (업로드 없이 원본 경로에서 읽기)
                 bp = str(case_dir / cf["br"][i]) if i < len(cf["br"]) else None
                 ap = str(case_dir / cf["ams"][i]) if i < len(cf["ams"]) else None
                 mp = str(case_dir / cf["mx100"][i]) if i < len(cf["mx100"]) else None
 
                 df_ams, df_br, df_mx = _read(ap, bp, mp, dt)
-
                 df_br_main, df_br_add = preprocess_blackrose(
-                    df_br, get_selected_columns(cfg, "br"),
-                    get_column_mapping(cfg, "blackrose"))
+                    df_br, get_selected_columns(cfg, "br"), get_column_mapping(cfg, "blackrose"))
                 df_ams_proc = preprocess_ams(
                     df_ams, get_column_mapping(cfg, "ams"),
-                    cfg.get("ams_scale_factors", {}),
-                    cfg.get("subprocess_mapping", {}),
+                    cfg.get("ams_scale_factors", {}), cfg.get("subprocess_mapping", {}),
                     get_selected_columns(cfg, "ams"))
                 df_mx_proc = preprocess_mx100(df_mx, cfg["mx100"]["useless_columns"])
 
@@ -251,41 +194,138 @@ def _run(sid: str, cfg: dict, exp: dict | None):
                 merged = add_time_columns(merged)
                 merged = run_stage1(merged, cfg)
                 merged = run_postprocessing(merged, cfg)
-                _log(sid, f"  Stage 1: {len(merged)}행")
 
-                if calc_on:
-                    _log(sid, "  Stage 2 실행 중...")
-                    merged = run_stage2(merged, cfg, exp)
-                    _log(sid, f"  Stage 2: {len(merged.columns)}열")
-
-                # 결과 저장 (results 폴더 + 원본 폴더 양쪽)
+                # _merged.csv 저장
                 parts = case_name.split("_")[:9]
                 prefix = "_".join(parts)
-                out_name = f"{prefix}_{i+1}_result.csv"
-
-                # 서버 results 폴더
-                (RESULT_DIR / out_name).parent.mkdir(exist_ok=True)
+                out_name = f"{prefix}_{i+1}_merged.csv"
                 merged.to_csv(RESULT_DIR / out_name, index=False)
-
-                # 원본 케이스 폴더에도 저장
                 merged.to_csv(case_dir / out_name, index=False)
-
                 results.append(out_name)
+
                 el = time.perf_counter() - t0
                 _log(sid, f"  → {out_name} ({el:.1f}초, {len(merged)}행×{len(merged.columns)}열)")
-                _log(sid, f"  → 저장: {case_dir / out_name}")
-
                 done += 1
-                s["progress"] = int(done / max(total_files, 1) * 100)
+                s["progress"] = int(done / max(total, 1) * 100)
 
-        s.update(results=results, status="done", progress=100)
-        _log(sid, f"\n전체 완료: {len(results)}개 파일 생성")
+        s.update(merge_results=results, status="done", progress=100)
+        _log(sid, f"\n═══ Merge 완료: {len(results)}개 파일 ═══")
 
     except Exception as e:
         s.update(status="error", error=str(e))
         _log(sid, f"에러: {e}\n{traceback.format_exc()}")
 
 
+# ══════════════════════════════════════════════
+#  Calculation API (Stage 2 분리)
+# ══════════════════════════════════════════════
+@app.post("/api/calculate")
+async def start_calculation(req: CalcRequest, background_tasks: BackgroundTasks):
+    sid = req.session_id
+    if sid not in sessions: raise HTTPException(404, "세션 없음")
+    s = sessions[sid]
+    if s["status"] == "processing": raise HTTPException(409, "처리 중")
+
+    cfg = req.config or DEFAULT_CFG
+    # 소스 파일: 명시적 지정 or 세션의 merge 결과
+    source = req.source_files or s.get("merge_results", [])
+    if not source: raise HTTPException(400, "Merge 결과가 없습니다. Merge를 먼저 실행하세요.")
+
+    s.update(status="processing", progress=0, log=[], calc_results=[], error=None)
+    background_tasks.add_task(_run_calc, sid, cfg, source, req.experimental, req.variable_mapping)
+    return {"status": "started", "mode": "calculate", "source_count": len(source)}
+
+
+def _run_calc(sid: str, cfg: dict, source_files: list[str],
+              exp: dict | None, var_map: dict | None):
+    s = sessions[sid]
+
+    try:
+        _log(sid, "═══ Calculation 시작 ═══")
+        env = cfg["environment"]
+        _log(sid, f"냉매: {env['refrigerant']} ({env.get('backend','HEOS')})")
+
+        from properties import get_props
+        get_props(env["refrigerant"], env["patm"], env.get("backend", "HEOS"))
+        from performance import run_stage2
+
+        total = len(source_files)
+        results = []
+
+        for i, fn in enumerate(source_files):
+            t0 = time.perf_counter()
+            _log(sid, f"[{i+1}/{total}] {fn} 계산 중...")
+
+            # merged CSV 읽기
+            src_path = RESULT_DIR / fn
+            if not src_path.exists():
+                _log(sid, f"  [경고] 파일 없음: {fn}, 스킵")
+                continue
+            df = pd.read_csv(src_path)
+            _log(sid, f"  입력: {len(df)}행 × {len(df.columns)}열")
+
+            # 변수 매핑 적용 (있으면)
+            if var_map:
+                rename_dict = {}
+                for calc_var, merged_col in var_map.items():
+                    if merged_col in df.columns and calc_var != merged_col:
+                        rename_dict[merged_col] = calc_var
+                if rename_dict:
+                    df = df.rename(columns=rename_dict)
+                    _log(sid, f"  변수 매핑: {len(rename_dict)}개 적용")
+
+            # Stage 2 실행
+            df_calc = run_stage2(df, cfg, exp)
+            _log(sid, f"  계산 완료: {len(df_calc.columns)}열")
+
+            # _calc.csv 저장
+            out_name = fn.replace("_merged.csv", "_calc.csv")
+            df_calc.to_csv(RESULT_DIR / out_name, index=False)
+
+            # 원본 폴더에도 저장 (세션에 category_path가 있으면)
+            cat_path = s.get("category_path")
+            if cat_path:
+                # 케이스 폴더 추정 (파일명에서)
+                for case_name in s.get("case_files", {}):
+                    if case_name.replace(" ", "_") in fn or fn.startswith(case_name[:10]):
+                        case_dir = Path(cat_path) / case_name
+                        if case_dir.exists():
+                            df_calc.to_csv(case_dir / out_name, index=False)
+                            _log(sid, f"  → {case_dir / out_name}")
+                        break
+
+            results.append(out_name)
+            el = time.perf_counter() - t0
+            _log(sid, f"  → {out_name} ({el:.1f}초)")
+            s["progress"] = int((i + 1) / total * 100)
+
+        s.update(calc_results=results, status="done", progress=100)
+        _log(sid, f"\n═══ Calculation 완료: {len(results)}개 파일 ═══")
+
+    except Exception as e:
+        s.update(status="error", error=str(e))
+        _log(sid, f"에러: {e}\n{traceback.format_exc()}")
+
+
+# ══════════════════════════════════════════════
+#  컬럼 조회 API (변수 매핑용)
+# ══════════════════════════════════════════════
+@app.get("/api/columns/{fn}")
+def get_columns(fn: str):
+    """merged CSV의 컬럼 목록 반환 (Calc 변수 매핑 UI용)."""
+    p = RESULT_DIR / fn
+    if not p.exists(): raise HTTPException(404, f"파일 없음: {fn}")
+    df = pd.read_csv(p, nrows=1)
+    return {
+        "filename": fn,
+        "columns": df.columns.tolist(),
+        "numeric_columns": df.select_dtypes(include=[np.number]).columns.tolist(),
+    }
+
+
+# ══════════════════════════════════════════════
+#  공통 유틸
+# ══════════════════════════════════════════════
 def _read(ap, bp, mp, dt):
     df_a, df_b, df_m = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     if bp and os.path.exists(bp):
@@ -318,12 +358,14 @@ def _log(sid, msg):
 def get_status(sid: str):
     if sid not in sessions: raise HTTPException(404)
     s = sessions[sid]
-    return {k: s[k] for k in ("status","progress","log","results","error")}
+    return {k: s.get(k) for k in ("status","progress","log","merge_results","calc_results","error")}
 
 @app.get("/api/results")
 def list_results():
     files = sorted(RESULT_DIR.glob("*.csv"), key=os.path.getmtime, reverse=True)
-    return [{"name": f.name, "size": f.stat().st_size} for f in files]
+    return [{"name": f.name, "size": f.stat().st_size,
+             "type": "merged" if "_merged" in f.name else "calc" if "_calc" in f.name else "other"}
+            for f in files]
 
 @app.get("/api/results/{fn}")
 def download(fn: str):
@@ -345,6 +387,11 @@ def preview(fn: str, max_rows: int = 3000):
         "numeric_columns": df.select_dtypes(include=[np.number]).columns.tolist(),
     }
 
+@app.delete("/api/session/{sid}")
+def delete_session(sid: str):
+    sessions.pop(sid, None)
+    return {"status": "deleted"}
+
 
 # ══════════════════════════════════════════════
 #  프론트엔드 서빙
@@ -353,7 +400,7 @@ STATIC = Path(sys._MEIPASS) / "static" if getattr(sys, "frozen", False) else BAS
 @app.get("/")
 def index():
     f = STATIC / "index.html"
-    return HTMLResponse(f.read_text("utf-8")) if f.exists() else HTMLResponse("<h1>Dryer Merger v4.1</h1>")
+    return HTMLResponse(f.read_text("utf-8")) if f.exists() else HTMLResponse("<h1>Dryer Merger v5</h1>")
 
 if STATIC.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
