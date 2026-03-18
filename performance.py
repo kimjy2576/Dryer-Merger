@@ -65,16 +65,9 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
 
     skipped = {}  # {block_name: reason}
     computed = {} # 계산 결과 저장
+    has_rh = "RH_Eva_In" in df.columns
 
-    # ── 1. 응축기 공기측 ──
-    ok, reason = _check_block("condenser_air")
-    if ok:
-        computed["air_cond"] = _calc_condenser_air(df, rh_eva_out, patm)
-    else:
-        skipped["condenser_air"] = reason
-        computed["air_cond"] = _empty_air_cond(n)
-
-    # ── 2. 응축기 냉매측 ──
+    # ── 2. 응축기 냉매측 (공기 무관, 1회만) ──
     ok, reason = _check_block("condenser_ref")
     if ok:
         computed["ref_cond"] = _calc_condenser_ref(df, props)
@@ -82,7 +75,7 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
         skipped["condenser_ref"] = reason
         computed["ref_cond"] = _empty_ref(n)
 
-    # ── 3. 증발기 냉매측 ──
+    # ── 3. 증발기 냉매측 (공기 무관, 1회만) ──
     ok, reason = _check_block("evaporator_ref")
     if ok:
         computed["ref_eva"] = _calc_evaporator_ref(df, props, computed["ref_cond"])
@@ -90,7 +83,7 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
         skipped["evaporator_ref"] = reason
         computed["ref_eva"] = _empty_ref_eva(n)
 
-    # ── 4. 압축기 냉매측 ──
+    # ── 4. 압축기 냉매측 (공기 무관, 1회만) ──
     ok, reason = _check_block("compressor_ref")
     if ok:
         computed["ref_comp"] = _calc_compressor_ref(df, props)
@@ -98,24 +91,93 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
         skipped["compressor_ref"] = reason
         computed["ref_comp"] = _empty_ref_comp(n)
 
-    # ── 5. 질량유량 & 열전달 ──
-    ok, reason = _check_block("mass_flow")
-    if ok:
-        computed["flow"] = _calc_mass_flow(df, cfg, computed["air_cond"],
-                                            computed["ref_cond"], computed["ref_eva"],
-                                            computed["ref_comp"], time_interval)
-    else:
-        skipped["mass_flow"] = reason
-        computed["flow"] = _empty_flow(n)
+    # ── 1+5+6: 공기측 수렴 반복 ──
+    ok_air, reason_air = _check_block("condenser_air")
+    ok_flow, reason_flow = _check_block("mass_flow")
+    ok_perf, reason_perf = _check_block("performance")
 
-    # ── 6. 성능지표 ──
-    ok, reason = _check_block("performance")
-    if ok:
+    if ok_air and ok_flow and ok_perf and not has_rh:
+        # ━━━ RH 미측정: 수렴 반복 ━━━
+        iter_cfg = calc_cfg.get("rh_iteration", {})
+        max_iter = iter_cfg.get("max_iter", 15)
+        tol = iter_cfg.get("tolerance", 0.005)       # RH 수렴 임계값
+        damping = iter_cfg.get("damping", 0.4)        # 감쇠 계수 (안정성)
+
+        T_eva_out = df["T_Air_Eva_Out"].values.astype(float) if "T_Air_Eva_Out" in df.columns \
+            else df["Heatpump_DuctInTemp"].values.astype(float)
+
+        # 초기 가정: 스칼라 → 벡터
+        rh_guess = np.full(n, rh_eva_out)
+        converge_info = {"iterations": 0, "residual": 1.0, "converged": False}
+
+        for it in range(max_iter):
+            # 1. 응축기 공기측 (rh_guess 벡터 사용)
+            computed["air_cond"] = _calc_condenser_air(df, rh_guess, patm)
+
+            # 5. 질량유량 & 열전달
+            computed["flow"] = _calc_mass_flow(
+                df, cfg, computed["air_cond"], computed["ref_cond"],
+                computed["ref_eva"], computed["ref_comp"], time_interval)
+
+            # 6. 성능지표 (에너지 밸런스로 AH_eva_in 역산)
+            computed["perf"] = _calc_evaporator_air_and_performance(
+                df, props, patm, rh_eva_out, computed["air_cond"],
+                computed["flow"], time_interval, exp)
+
+            # ── 수렴 체크: AH_eva_in에서 AH_eva_out 역산 ──
+            AH_eva_in = computed["perf"]["AH_eva_in"]
+            AH_cond_in = computed["air_cond"]["AH_in"]
+            mdot_dair = computed["flow"]["mdot_dair"]
+            water_gs = computed["perf"]["water_gs"]
+
+            # 증발기 출구 AH = 입구 AH - 제습량/건공기유량
+            safe_mdot = np.where(mdot_dair == 0, 1.0, mdot_dair)
+            AH_eva_out_new = AH_eva_in - water_gs / 1000.0 * 3600.0 / safe_mdot
+            AH_eva_out_new = np.maximum(AH_eva_out_new, 1e-8)
+
+            # 새 RH_eva_out 계산
+            rh_new = rh_from_ah(AH_eva_out_new, T_eva_out, patm)
+            rh_new = np.clip(rh_new, 0.3, 1.0)  # 물리적 범위 제한
+
+            # 잔차
+            residual = np.nanmean(np.abs(rh_new - rh_guess))
+            converge_info["iterations"] = it + 1
+            converge_info["residual"] = float(residual)
+
+            if residual < tol:
+                converge_info["converged"] = True
+                break
+
+            # 감쇠 업데이트
+            rh_guess = damping * rh_new + (1.0 - damping) * rh_guess
+
+        # 수렴 정보 저장
+        computed["perf"]["converge_info"] = converge_info
+
+    elif ok_air and ok_flow and ok_perf and has_rh:
+        # ━━━ RH 측정 있음: 반복 불필요, 1회 계산 ━━━
+        computed["air_cond"] = _calc_condenser_air(df, rh_eva_out, patm)
+        computed["flow"] = _calc_mass_flow(
+            df, cfg, computed["air_cond"], computed["ref_cond"],
+            computed["ref_eva"], computed["ref_comp"], time_interval)
         computed["perf"] = _calc_evaporator_air_and_performance(
             df, props, patm, rh_eva_out, computed["air_cond"],
             computed["flow"], time_interval, exp)
+
     else:
-        skipped["performance"] = reason
+        # ━━━ 필수 컬럼 부족: 스킵 ━━━
+        if not ok_air:
+            skipped["condenser_air"] = reason_air
+            computed["air_cond"] = _empty_air_cond(n)
+        else:
+            computed["air_cond"] = _calc_condenser_air(df, rh_eva_out, patm)
+        if not ok_flow:
+            skipped["mass_flow"] = reason_flow
+            computed["flow"] = _empty_flow(n)
+        else:
+            computed["flow"] = _empty_flow(n)  # 의존 블록 스킵 시
+        if not ok_perf:
+            skipped["performance"] = reason_perf
         computed["perf"] = _empty_perf(n)
 
     # ── 7. 에너지 적산 ──
@@ -137,6 +199,11 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
 
     # 스킵 정보를 attrs에 저장 (서버에서 로그 출력용)
     df_calc.attrs["skipped_blocks"] = skipped
+
+    # 수렴 반복 정보
+    converge_info = computed.get("perf", {}).get("converge_info")
+    if converge_info:
+        df_calc.attrs["converge_info"] = converge_info
 
     return df_calc
 

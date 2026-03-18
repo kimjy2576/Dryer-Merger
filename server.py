@@ -379,10 +379,10 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
             # Stage 2 실행
             df_calc = run_stage2(df, cfg, exp)
             _log(sid, f"  계산 완료: {len(df_calc.columns)}열")
-            rh_mode = "측정값 사용" if "RH_Eva_In" in df.columns else "에너지밸런스 역산"
+            rh_mode = "측정값 사용" if "RH_Eva_In" in df.columns else "에너지밸런스 역산 (수렴 반복)"
             _log(sid, f"  RH 모드: {rh_mode}")
 
-            # 스킵된 블록 로그
+            # 수렴 정보 로그
             skipped = df_calc.attrs.get("skipped_blocks", {})
             if skipped:
                 _log(sid, f"  [경고] {len(skipped)}개 블록 스킵:")
@@ -392,6 +392,12 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
                 if "skipped_info" not in s:
                     s["skipped_info"] = {}
                 s["skipped_info"][fn] = skipped
+
+            # 수렴 반복 정보 로그
+            conv = df_calc.attrs.get("converge_info")
+            if conv:
+                status = "수렴" if conv["converged"] else "미수렴"
+                _log(sid, f"  수렴 반복: {conv['iterations']}회, 잔차={conv['residual']:.6f} ({status})")
 
             # _calc.csv 저장
             out_name = fn.replace("_merged.csv", "_calc.csv")

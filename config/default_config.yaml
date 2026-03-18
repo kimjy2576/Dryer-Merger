@@ -52,7 +52,13 @@ mx100:
 calculation:
   enabled: true
   compressor_volume_cc: 7.5       # 압축기 체적 [cc]
-  rh_eva_out_assumed: 0.80        # 증발기 출구 예측 RH [-]
+  rh_eva_out_assumed: 0.80        # 증발기 출구 예측 RH [-] (초기값)
+
+  # RH 미측정 시 수렴 반복 설정
+  rh_iteration:
+    max_iter: 15                   # 최대 반복 횟수
+    tolerance: 0.005               # RH 수렴 임계값 [-]
+    damping: 0.4                   # 감쇠 계수 (0.2~0.6, 높을수록 빠르지만 불안정)
 
   # 센서 오프셋 보정 [°C] — 센서별로 적용 (0이면 보정 없음)
   sensor_offsets:
