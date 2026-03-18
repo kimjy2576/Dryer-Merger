@@ -717,6 +717,55 @@ def delete_session(sid: str):
 #  프론트엔드 서빙
 # ══════════════════════════════════════════════
 STATIC = Path(sys._MEIPASS) / "static" if getattr(sys, "frozen", False) else BASE_DIR / "static"
+# ══════════════════════════════════════════════
+#  Viewer 데이터 API
+# ══════════════════════════════════════════════
+@app.get("/api/viewer-data/{fn}")
+def viewer_data(fn: str, max_rows: int = 7200):
+    """calc/merged CSV를 컬럼별 배열 JSON으로 반환 (Viewer용)."""
+    p = RESULT_DIR / fn
+    if not p.exists(): raise HTTPException(404, f"파일 없음: {fn}")
+    df = pd.read_csv(p)
+    if len(df) > max_rows:
+        step = max(1, len(df) // max_rows)
+        df = df.iloc[::step].reset_index(drop=True)
+    cols = {}
+    for c in df.columns:
+        if pd.api.types.is_numeric_dtype(df[c]):
+            cols[c] = df[c].round(4).tolist()
+    return {"filename": fn, "rows": len(df), "columns": list(cols.keys()), "data": cols}
+
+
+@app.get("/api/ref-saturation/{name}")
+def ref_saturation(name: str):
+    """냉매 포화선 데이터 반환 (P-h 선도 배경용)."""
+    try:
+        from properties import resolve_refrigerant
+        cp_name = resolve_refrigerant(name)
+        from CoolProp.CoolProp import PropsSI
+        Tc = PropsSI("Tcrit", cp_name) - 273.15
+        Pc = PropsSI("Pcrit", cp_name) / 1e5
+        hc = PropsSI("H", "T", Tc + 273.15, "P", Pc * 1e5, cp_name) / 1000
+
+        Tmin = max(-50, PropsSI("Tmin", cp_name) - 273.15 + 1)
+        temps = np.linspace(Tmin, Tc - 0.5, 200)
+        hl, hv, P = [], [], []
+        for t in temps:
+            try:
+                tk = t + 273.15
+                p = PropsSI("P", "T", tk, "Q", 0, cp_name) / 1e5
+                h_l = PropsSI("H", "T", tk, "Q", 0, cp_name) / 1000
+                h_v = PropsSI("H", "T", tk, "Q", 1, cp_name) / 1000
+                P.append(round(p, 4)); hl.append(round(h_l, 2)); hv.append(round(h_v, 2))
+            except:
+                pass
+        return {"name": name, "coolprop_name": cp_name,
+                "critical": {"T": round(Tc, 2), "P": round(Pc, 3), "h": round(hc, 2)},
+                "sat": {"P": P, "hl": hl, "hv": hv}}
+    except Exception as e:
+        raise HTTPException(400, f"냉매 포화선 생성 실패: {str(e)}")
+
+
 @app.get("/")
 def index():
     f = STATIC / "index.html"

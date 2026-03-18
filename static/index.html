@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2/plotly.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a25;--bg4:#22222f;--tx:#e8e6e0;--tx2:#9a9890;--tx3:#5a5850;--bd:rgba(255,255,255,0.06);--bd2:rgba(255,255,255,0.12);--blue:#4a9eff;--blue2:#2563eb;--green:#22c55e;--green2:#16a34a;--red:#ef4444;--amber:#f59e0b;--teal:#14b8a6;--font:'IBM Plex Sans KR',sans-serif;--mono:'JetBrains Mono',monospace;--r:10px}
@@ -52,11 +53,13 @@ return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span clas
 <div className="tabs">
   <button className={`tb ${tab==='merge'?'on':''}`} onClick={()=>setTab('merge')}>Merge</button>
   <button className={`tb ${tab==='calc'?'on':''}`} onClick={()=>setTab('calc')}>Calculation</button>
+  <button className={`tb ${tab==='viewer'?'on':''}`} onClick={()=>setTab('viewer')}>Viewer</button>
   <button className={`tb ${tab==='config'?'on':''}`} onClick={()=>setTab('config')}>설정</button>
   <button className={`tb ${tab==='preview'?'on':''}`} onClick={()=>setTab('preview')}>미리보기</button>
 </div>
 {tab==='merge'&&cfg&&<MergeTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}
 {tab==='calc'&&cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}
+{tab==='viewer'&&<ViewerTab cfg={cfg}/>}
 {tab==='config'&&cfg&&<CfgTab cfg={cfg} setCfg={setCfg}/>}
 {tab==='preview'&&<PrvTab init={pf}/>}
 </div>)}
@@ -518,6 +521,268 @@ return(<div>
 </div>)}
 
 // ═══ 설정 탭 ═══
+// ═══ Viewer 헬퍼 ═══
+const VW_COLORS=['#3b82f6','#22c55e','#ef4444','#f59e0b','#a78bfa','#ec4899','#14b8a6','#f97316'];
+const VW_ZC=['rgba(59,130,246,.08)','rgba(34,197,94,.08)','rgba(239,68,68,.08)','rgba(245,158,11,.08)'];
+const VW_ZB=['rgba(59,130,246,.3)','rgba(34,197,94,.3)','rgba(239,68,68,.3)','rgba(245,158,11,.3)'];
+function smSMA(a,w){const n=a.length,o=new Float64Array(n),h=w>>1;for(let i=0;i<n;i++){const lo=Math.max(0,i-h),hi=Math.min(n-1,i+h);let s=0;for(let j=lo;j<=hi;j++)s+=a[j];o[i]=s/(hi-lo+1)}return Array.from(o)}
+function smEMA(a,w){const al=2/(w+1),o=new Float64Array(a.length);o[0]=a[0];for(let i=1;i<a.length;i++)o[i]=al*a[i]+(1-al)*o[i-1];return Array.from(o)}
+function vSmooth(a,m,w){return m==='EMA'?smEMA(a,w):smSMA(a,w)}
+const P_ATM=101325;
+function psatW(T){return T<0?611.2*Math.exp(22.46*T/(272.62+T)):611.2*Math.exp(17.67*T/(T+243.5))}
+function wFromRH(T,RH){const pw=RH*psatW(T),pa=P_ATM-pw;return pa>0?.62198*pw/pa:0}
+function hMoist(T,W){return 1.006*T+W*(2501+1.86*T)}
+function rhFromAH(W,T){const ws=wFromRH(T,1);return ws>0?Math.min(1,W/ws):0}
+function dewPt(W){const pw=W*P_ATM/(.62198+W);if(pw<=0)return-50;return pw<611.2?272.62*Math.log(pw/611.2)/(22.46-Math.log(pw/611.2)):243.5*Math.log(pw/611.2)/(17.67-Math.log(pw/611.2))}
+function specVol(T,W){return(8.3145/28.9645*(T+273.15))*(1+1.6078*W)/P_ATM*1000}
+
+// 습공기 배경선 (한 번만 생성)
+const PSYCH_BG=(()=>{const out=[];
+  [.1,.2,.3,.4,.5,.6,.7,.8,.9,1].forEach(rh=>{const tA=[],wA=[];for(let t=-5;t<=65;t+=.5){const w=wFromRH(t,rh);if(w>=0&&w<=.035){tA.push(t);wA.push(w)}}out.push({x:tA,y:wA,mode:'lines',line:{color:'rgba(100,180,255,0.25)',width:rh===1?2.5:.8},showlegend:false,hoverinfo:'skip'})});
+  for(let h=10;h<=140;h+=10){const tA=[],wA=[];for(let t=-5;t<=70;t++){const w=(h-1.006*t)/(2501+1.86*t);if(w>=0&&w<=.035){tA.push(t);wA.push(w)}}if(tA.length>2)out.push({x:tA,y:wA,mode:'lines',line:{color:'rgba(239,68,68,0.18)',width:.7,dash:'dot'},showlegend:false,hoverinfo:'skip'})}
+  return out;
+})();
+
+const VW_CATS=[
+  {name:'압축기',vars:['P_Comp_In','P_Comp_Out','T_Comp_In','T_Comp_Out','T_Superheating','Ratio_Compression']},
+  {name:'증발기',vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_Out','T_Boiling_ref','RH_Eva_In']},
+  {name:'응축기',vars:['T_Cond_In','T_Cond_Out','T_Air_Cond_Out','T_Dew_ref','T_subcooling','RH_Cond_Out']},
+  {name:'유량',vars:['Flow_air_Cond_CMM','Flow_ref_kgH_recalc','Water_calc_gM']},
+  {name:'성능',vars:['COP_heating','COP_cooling','SMER','Factor_LFH','Factor_SFH']},
+  {name:'전력',vars:['Po_WD','Po_Comp','Po_Fan','E_WD','E_Comp']},
+  {name:'열전달',vars:['Qrefr_Eva_recalc','Qrefr_Cond_recalc','Q_Drum_Sen','Q_Drum_Lat']},
+  {name:'제어',vars:['Ctrl_Comp_Hz','RMC_calc']},
+];
+
+// ═══ Viewer 탭 ═══
+function ViewerTab({cfg}){
+const[files,setFiles]=useState([]);
+const[selFiles,setSelFiles]=useState(new Set());
+const[cases,setCases]=useState([]);  // [{name,data:{col:[...]}}]
+const[caseVis,setCaseVis]=useState({});
+const[loading,setLoading]=useState(false);
+const[sub,setSub]=useState('chart'); // chart | psych | ph
+const[lw,setLw]=useState(2);
+const[dragMode,setDragMode]=useState('xy');
+const[chartH,setChartH]=useState(580);
+const[chartW,setChartW]=useState(0);
+
+// 파일 목록 로드
+useEffect(()=>{fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged')))).catch(()=>{})},[]);
+
+// 데이터 로드
+const loadData=async()=>{if(!selFiles.size)return;setLoading(true);
+  const arr=[];
+  for(const fn of selFiles){
+    try{const r=await fetch(`${API}/api/viewer-data/${fn}`);const d=await r.json();arr.push({name:fn.replace(/_calc\.csv|_merged\.csv/,''),data:d.data,columns:d.columns})}catch(e){console.error(fn,e)}
+  }
+  setCases(arr);const v={};arr.forEach(c=>v[c.name]=true);setCaseVis(v);setLoading(false)};
+
+const togFile=n=>{setSelFiles(p=>{const s=new Set(p);s.has(n)?s.delete(n):s.add(n);return s})};
+
+return(<div>
+  {/* 파일 선택 */}
+  <div className="cd">
+    <div className="ct">데이터 파일 선택</div>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+      <span className="it">{files.length}개 — {selFiles.size}개 선택</span>
+      <div style={{display:'flex',gap:6}}>
+        <button className="bt bs" onClick={()=>setSelFiles(new Set(files.map(f=>f.name)))}>전체</button>
+        <button className="bt bs" onClick={()=>setSelFiles(new Set(files.filter(f=>f.name.includes('_calc')).map(f=>f.name)))}>calc만</button>
+        <button className="bt bs" onClick={()=>setSelFiles(new Set())}>해제</button>
+      </div>
+    </div>
+    {files.length>0?<div className="file-sel" style={{maxHeight:120}}>{files.map(f=><div key={f.name} className="file-sel-item">
+      <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>togFile(f.name)}/>
+      <span style={{flex:1}}>{f.name}</span>
+      <span className={`rt ${f.name.includes('_calc')?'rt-c':'rt-m'}`}>{f.name.includes('_calc')?'calc':'merged'}</span>
+    </div>)}</div>:<div className="it" style={{padding:16,textAlign:'center'}}>결과 파일이 없습니다.</div>}
+    <button className="bt bg" onClick={loadData} disabled={loading||!selFiles.size} style={{marginTop:8}}>{loading?'로딩 중...':'데이터 로드 ('+selFiles.size+'개)'}</button>
+  </div>
+
+  {cases.length>0&&<>
+  {/* 서브탭 */}
+  <div style={{display:'flex',gap:3,marginBottom:10}}>{[['chart','라인차트'],['psych','습공기 선도'],['ph','P-h 선도']].map(([k,lb])=>
+    <button key={k} className={`tb ${sub===k?'on':''}`} onClick={()=>setSub(k)}>{lb}</button>)}</div>
+
+  {/* 공통 컨트롤 */}
+  <div className="ctrl" style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:10,padding:'8px 12px',background:'var(--bg2,#12121a)',border:'1px solid var(--bd,rgba(255,255,255,.06))',borderRadius:8}}>
+    {cases.map((c,i)=><button key={c.name} style={{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',borderRadius:5,border:'1px solid var(--bd2,rgba(255,255,255,.1))',background:caseVis[c.name]?'var(--bg3,#1a1a25)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}><span style={{width:8,height:8,borderRadius:'50%',background:VW_COLORS[i]}}/>{c.name}</button>)}
+    <span style={{width:1,height:20,background:'var(--bd2)'}}/>
+    <span style={{fontSize:11,color:'var(--tx2)'}}>두께:</span><input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw(+e.target.value)} style={{width:50}}/><span style={{fontSize:10,color:'var(--tx2)'}}>{lw}</span>
+    <span style={{width:1,height:20,background:'var(--bd2)'}}/>
+    <span style={{fontSize:11,color:'var(--tx2)'}}>높이:</span>
+    {[[400,'S'],[580,'M'],[750,'L'],[950,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH(h)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
+    <span style={{width:1,height:20,background:'var(--bd2)'}}/>
+    <span style={{fontSize:11,color:'var(--tx2)'}}>너비:</span>
+    {[[0,'자동'],[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW(w)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
+  </div>
+
+  {sub==='chart'&&<VwChart cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/>}
+  {sub==='psych'&&<VwPsych cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/>}
+  {sub==='ph'&&<VwPh cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} cfg={cfg}/>}
+  </>}
+</div>)}
+
+// ═══ Viewer: 라인차트 ═══
+function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
+  const[catIdx,setCatIdx]=useState(0);
+  const[rows,setRows]=useState(2);const[cols,setCols]=useState(3);
+  const[smOn,setSmOn]=useState(false);const[smM,setSmM]=useState('SMA');const[smW,setSmW]=useState(10);
+  const ref=useRef(null);
+  const cat=VW_CATS[catIdx];
+  // 가용 변수만 필터
+  const avail=cat.vars.filter(k=>cases.some(c=>c.data[k]));
+  const plots=avail.slice(0,rows*cols);
+
+  useEffect(()=>{if(!ref.current||!plots.length)return;
+    const tr=[],lo={grid:{rows,columns:cols,pattern:'independent',xgap:.06,ygap:.12},height:chartH,width:chartW||undefined,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom'};
+    plots.forEach((k,pi)=>{
+      lo['xaxis'+(pi+1)]={title:Math.floor(pi/cols)+1===rows?{text:'Time [min]',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
+      lo['yaxis'+(pi+1)]={title:{text:k,font:{size:10}},gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
+      cases.forEach((cs,ci)=>{if(!caseVis[cs.name]||!cs.data[k])return;
+        let yArr=cs.data[k];if(smOn)yArr=vSmooth(yArr,smM,smW);
+        tr.push({x:cs.data.Time_min||cs.data.Time_sec,y:yArr,type:'scattergl',mode:'lines',name:cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci],width:lw},xaxis:'x'+(pi+1>1?pi+1:''),yaxis:'y'+(pi+1>1?pi+1:''),hovertemplate:'%{y:.2f}<extra>'+cs.name+'</extra>'})});
+    });
+    Plotly.react(ref.current,tr,lo,{responsive:!chartW,displaylogo:false,scrollZoom:true})
+  },[cases,caseVis,lw,chartH,chartW,catIdx,plots,rows,cols,smOn,smM,smW,dragMode]);
+
+  return(<div>
+    <div style={{display:'flex',gap:2,marginBottom:8,flexWrap:'wrap'}}>{VW_CATS.map((c,i)=><button key={c.name} className={`bt bs ${catIdx===i?'on':''}`} onClick={()=>setCatIdx(i)}>{c.name}</button>)}</div>
+    <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
+      <span className="it">행:</span><select value={rows} onChange={e=>setRows(+e.target.value)} style={{width:50}}>{[1,2,3].map(n=><option key={n}>{n}</option>)}</select>
+      <span className="it">열:</span><select value={cols} onChange={e=>setCols(+e.target.value)} style={{width:50}}>{[1,2,3].map(n=><option key={n}>{n}</option>)}</select>
+      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
+      <label style={{fontSize:12,display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>스무딩</label>
+      {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:65}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="60" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:60}}/><span className="it">{smW}</span></>}
+      <span className="it" style={{marginLeft:'auto'}}>{avail.length}개 변수 / {plots.length}개 표시</span>
+    </div>
+    <div className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
+  </div>)
+}
+
+// ═══ Viewer: 습공기 선도 ═══
+function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
+  const[timeR,setTimeR]=useState(.5);
+  const ref=useRef(null);
+  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs.data.Time_min;if(!t)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
+  const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||0;
+
+  useEffect(()=>{if(!ref.current)return;
+    const tr=[...PSYCH_BG];
+    cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;
+      if(!d.T_Air_Eva_In||!d.AH_Eva_In)return;
+      const pts=[[d.T_Air_Eva_In[i],d.AH_Eva_In?.[i],'①Eva In'],[d.T_Air_Eva_Out?.[i],d.AH_Cond_In?.[i],'②Eva Out'],[d.T_Air_Cond_Out?.[i],d.AH_Cond_Out?.[i],'③Cond Out']].filter(p=>p[0]!=null&&p[1]!=null);
+      if(pts.length){const xs=[...pts.map(p=>p[0]),pts[0][0]],ys=[...pts.map(p=>p[1]),pts[0][1]],tx=[...pts.map(p=>p[2]),''];
+        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:10,color:VW_COLORS[ci]},marker:{size:10},line:{color:VW_COLORS[ci],width:lw},name:cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
+    });
+    Plotly.react(ref.current,tr,{title:{text:'습공기 선도 (t='+curT.toFixed(1)+' min)',font:{size:14}},xaxis:{title:'건구온도 [°C]',range:[-5,70],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'절대습도 [kg/kg]',range:[0,.032],gridcolor:'rgba(255,255,255,0.04)'},height:chartH,width:chartW||undefined,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!chartW,displaylogo:false,scrollZoom:true})
+  },[cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT]);
+
+  // 상태점 테이블
+  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d.T_Air_Eva_In)return null;
+    return{name:cs.name,color:VW_COLORS[ci],pts:[
+      {lb:'①증발기입구',T:d.T_Air_Eva_In[i],W:d.AH_Eva_In?.[i]},
+      {lb:'②증발기출구',T:d.T_Air_Eva_Out?.[i],W:d.AH_Cond_In?.[i]},
+      {lb:'③응축기출구',T:d.T_Air_Cond_Out?.[i],W:d.AH_Cond_Out?.[i]}
+    ].filter(p=>p.T!=null&&p.W!=null).map(p=>({...p,h:hMoist(p.T,p.W),rh:rhFromAH(p.W,p.T),dp:dewPt(p.W),v:specVol(p.T,p.W)}))}}).filter(Boolean),[cases,caseVis,timeIdx]);
+
+  return(<div>
+    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
+      <span className="it">시점:</span><input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{flex:1,maxWidth:300}}/>
+      <span style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--teal)',padding:'3px 8px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:5}}>{curT.toFixed(1)} min</span>
+    </div>
+    <div className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
+    {stPts.length>0&&<div className="cd" style={{marginTop:10}}>
+      <div className="ct">습공기 상태점 @ t={curT.toFixed(1)} min</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:10}}>
+      {stPts.map(sp=><div key={sp.name} style={{background:'var(--bg3,#1a1a25)',border:'1px solid var(--bd2)',borderRadius:8,padding:10}}>
+        <div style={{fontSize:12,fontWeight:500,marginBottom:6,display:'flex',alignItems:'center',gap:5}}><span style={{width:8,height:8,borderRadius:'50%',background:sp.color}}/>{sp.name}</div>
+        {sp.pts.map(p=><div key={p.lb} style={{marginBottom:6}}>
+          <div style={{fontSize:11,color:'var(--teal)',marginBottom:2}}>{p.lb}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:2,fontSize:11}}>
+            <span>T: <b>{p.T.toFixed(1)}°C</b></span><span>W: <b>{p.W.toFixed(4)}</b></span><span>RH: <b>{(p.rh*100).toFixed(1)}%</b></span>
+            <span>h: <b>{p.h.toFixed(1)}</b></span><span>Td: <b>{p.dp.toFixed(1)}°C</b></span><span>v: <b>{p.v.toFixed(3)}</b></span>
+          </div>
+        </div>)}
+      </div>)}
+      </div>
+    </div>}
+  </div>)
+}
+
+// ═══ Viewer: P-h 선도 ═══
+function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
+  const[timeR,setTimeR]=useState(.5);
+  const[refName,setRefName]=useState(cfg?.environment?.refrigerant||'R290');
+  const[satData,setSatData]=useState(null);
+  const[satErr,setSatErr]=useState('');
+  const ref=useRef(null);
+
+  // 포화선 로드
+  useEffect(()=>{setSatData(null);setSatErr('');
+    fetch(`${API}/api/ref-saturation/${encodeURIComponent(refName)}`).then(r=>{if(!r.ok)throw new Error('API 오류');return r.json()}).then(d=>setSatData(d)).catch(e=>setSatErr(e.message))
+  },[refName]);
+
+  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs.data.Time_min;if(!t)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
+  const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||0;
+
+  useEffect(()=>{if(!ref.current||!satData)return;
+    const s=satData.sat,c=satData.critical;
+    const tr=[{x:s.hl,y:s.P,mode:'lines',line:{color:'#3b82f6',width:2.5},showlegend:false,hoverinfo:'skip'},{x:s.hv,y:s.P,mode:'lines',line:{color:'#ef4444',width:2.5},showlegend:false,hoverinfo:'skip'},{x:[c.h],y:[c.P],mode:'markers',marker:{size:10,color:'#fff',symbol:'diamond'},showlegend:false,hovertemplate:'임계점<br>'+c.P.toFixed(1)+'bar, '+c.T.toFixed(1)+'°C<extra></extra>'}];
+    cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;
+      if(!d.h_Comp_In_ref||!d.P_Comp_In)return;
+      const BA=1.01325;
+      const hA=[d.h_Comp_In_ref[i],d.h_Comp_Out_ref?.[i],d.h_Cond_Out_ref?.[i],d.h_Eva_In_ref?.[i],d.h_Comp_In_ref[i]];
+      const pA=[d.P_Comp_In[i]+BA,d.P_Comp_Out?.[i]+BA,(d.P_Comp_Out?.[i]||0)+BA-.3,d.P_Comp_In[i]+BA+.1,d.P_Comp_In[i]+BA];
+      tr.push({x:hA,y:pA,mode:'lines+markers+text',text:['①','②','③','④',''],textfont:{size:10,color:VW_COLORS[ci]},marker:{size:9},line:{color:VW_COLORS[ci],width:lw},name:cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})
+    });
+    const hMin=Math.min(...s.hl)*.8,hMax=Math.max(...s.hv)*1.05;
+    Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+' (t='+curT.toFixed(1)+' min)',font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:[hMin,hMax],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'압력 [bar abs]',type:'log',range:[Math.log10(.5),Math.log10(c.P*1.15)],gridcolor:'rgba(255,255,255,0.04)',dtick:.30103},height:chartH,width:chartW||undefined,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!chartW,displaylogo:false,scrollZoom:true})
+  },[satData,cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT]);
+
+  // 상태점 테이블
+  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d.h_Comp_In_ref)return null;const BA=1.01325;
+    return{name:cs.name,color:VW_COLORS[ci],pts:[
+      {lb:'①압축기입구',P:d.P_Comp_In[i]+BA,h:d.h_Comp_In_ref[i],T:d.T_Comp_In?.[i]},
+      {lb:'②압축기출구',P:(d.P_Comp_Out?.[i]||0)+BA,h:d.h_Comp_Out_ref?.[i],T:d.T_Comp_Out?.[i]},
+      {lb:'③응축기출구',P:(d.P_Comp_Out?.[i]||0)+BA-.3,h:d.h_Cond_Out_ref?.[i],T:d.T_Cond_Out?.[i]},
+      {lb:'④팽창밸브출구',P:d.P_Comp_In[i]+BA+.1,h:d.h_Eva_In_ref?.[i],T:d.T_Eva_Out?.[i]}
+    ].filter(p=>p.h!=null)}}).filter(Boolean),[cases,caseVis,timeIdx]);
+
+  return(<div>
+    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10,flexWrap:'wrap'}}>
+      <span className="it">냉매:</span>
+      <select value={refName} onChange={e=>setRefName(e.target.value)} style={{width:130}}>
+        <option value="R290">R290 (Propane)</option><option value="R134a">R134a</option>
+        <option value="R32">R32</option><option value="R410A">R410A</option>
+        <option value="R1234yf">R1234yf</option>
+      </select>
+      {satData&&<span className="it">Tc={satData.critical.T.toFixed(1)}°C / Pc={satData.critical.P.toFixed(1)}bar</span>}
+      {satErr&&<span style={{fontSize:11,color:'var(--red)'}}>{satErr}</span>}
+      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
+      <span className="it">시점:</span><input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{flex:1,maxWidth:300}}/>
+      <span style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--teal)',padding:'3px 8px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:5}}>{curT.toFixed(1)} min</span>
+    </div>
+    <div className="cd" style={{overflowX:'auto',padding:4}}>{satData?<div ref={ref}/>:<div className="it" style={{padding:30,textAlign:'center'}}>{satErr||'포화선 데이터 로딩 중...'}</div>}</div>
+    {stPts.length>0&&<div className="cd" style={{marginTop:10}}>
+      <div className="ct">냉매 상태점 — {refName} @ t={curT.toFixed(1)} min</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:10}}>
+      {stPts.map(sp=><div key={sp.name} style={{background:'var(--bg3,#1a1a25)',border:'1px solid var(--bd2)',borderRadius:8,padding:10}}>
+        <div style={{fontSize:12,fontWeight:500,marginBottom:6,display:'flex',alignItems:'center',gap:5}}><span style={{width:8,height:8,borderRadius:'50%',background:sp.color}}/>{sp.name}</div>
+        {sp.pts.map(p=><div key={p.lb} style={{marginBottom:4}}>
+          <div style={{fontSize:11,color:'var(--teal)',marginBottom:2}}>{p.lb}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,fontSize:11}}>
+            <span>P: <b>{p.P.toFixed(2)} bar</b></span><span>h: <b>{p.h?.toFixed(1)} kJ/kg</b></span>
+            {p.T!=null&&<span>T: <b>{p.T.toFixed(1)} °C</b></span>}
+          </div>
+        </div>)}
+      </div>)}
+      </div>
+    </div>}
+  </div>)
+}
+
 // ═══ 설정 필드 컴포넌트 (바깥 정의 — 리렌더 시 포커스 유지) ═══
 function CfgField({lb,p,t='text',o,u,st,cfg,onChange}){
   const k=p.split('.');let v=cfg;for(const x of k)v=v?.[x];
