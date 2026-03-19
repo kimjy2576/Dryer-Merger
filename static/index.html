@@ -57,11 +57,11 @@ return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span clas
   <button className={`tb ${tab==='config'?'on':''}`} onClick={()=>setTab('config')}>설정</button>
   <button className={`tb ${tab==='preview'?'on':''}`} onClick={()=>setTab('preview')}>미리보기</button>
 </div>
-{tab==='merge'&&cfg&&<MergeTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}
-{tab==='calc'&&cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}
-{tab==='viewer'&&<ViewerTab cfg={cfg}/>}
-{tab==='config'&&cfg&&<CfgTab cfg={cfg} setCfg={setCfg}/>}
-{tab==='preview'&&<PrvTab init={pf}/>}
+<div style={{display:tab==='merge'?'block':'none'}}>{cfg&&<MergeTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}</div>
+<div style={{display:tab==='calc'?'block':'none'}}>{cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}</div>
+<div style={{display:tab==='viewer'?'block':'none'}}><ViewerTab cfg={cfg}/></div>
+<div style={{display:tab==='config'?'block':'none'}}>{cfg&&<CfgTab cfg={cfg} setCfg={setCfg}/>}</div>
+<div style={{display:tab==='preview'?'block':'none'}}><PrvTab init={pf}/></div>
 </div>)}
 
 // ═══ 공통: 경로 탐색 + 케이스 선택 ═══
