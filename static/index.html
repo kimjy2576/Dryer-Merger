@@ -45,7 +45,7 @@ input,select{font-family:var(--font);font-size:13px;padding:7px 12px;background:
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect,useRef,useCallback}=React;const API='';
+const {useState,useEffect,useRef,useCallback,useMemo}=React;const API='';
 
 function App(){const[tab,setTab]=useState('merge');const[cfg,setCfg]=useState(null);const[sid,setSid]=useState(null);const[st,setSt]=useState(null);const[pf,setPf]=useState(null);
 useEffect(()=>{fetch(`${API}/api/config`).then(r=>r.json()).then(setCfg)},[]);
