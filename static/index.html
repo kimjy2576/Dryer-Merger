@@ -86,7 +86,7 @@ return(<div className="cd"><div className="ct">데이터 경로</div>
 </div>)}
 
 // ═══ 로컬 파일 불러오기 ═══
-function LocalImport({onImported,addSuffix=true}){
+function LocalImport({onImported,addSuffix=true,filterMergedCalc=false}){
 const[open,setOpen]=useState(false);
 const[path,setPath]=useState(localStorage.getItem('dryer_calc_path')||'');
 const[cases,setCases]=useState([]);        // 케이스 폴더 목록
@@ -116,7 +116,7 @@ const scanCsvs=async()=>{if(!selCases.size)return;setBusy(true);
   }catch(e){alert(e.message)}setBusy(false)};
 
 const togFile=p=>{setSelFiles(prev=>{const s=new Set(prev);s.has(p)?s.delete(p):s.add(p);return s})};
-const allFiles=Object.values(caseFiles).flat();
+const allFiles=Object.values(caseFiles).flat().filter(f=>!filterMergedCalc||(f.has_merged||f.has_calc));
 
 // 3단계: 가져오기
 const doImport=async()=>{if(!selFiles.size)return;setBusy(true);
@@ -601,7 +601,7 @@ const[chartH,setChartH]=useState(580);
 const[chartW,setChartW]=useState(0);
 
 // 파일 목록 로드 (모든 CSV)
-const reloadFiles=()=>fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d)).catch(()=>{});
+const reloadFiles=()=>fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged')))).catch(()=>{});
 useEffect(()=>{reloadFiles()},[]);
 
 // 데이터 로드
@@ -665,7 +665,7 @@ return(<div>
     <div className="ct">데이터 파일 선택</div>
 
     {/* 로컬 파일 불러오기 */}
-    <LocalImport onImported={reloadFiles} addSuffix={false}/>
+    <LocalImport onImported={reloadFiles} addSuffix={false} filterMergedCalc={true}/>
 
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,marginTop:10}}>
       <span className="it">{files.length}개 파일 ({fileSets.length}세트) — {selFiles.size}개 선택</span>
@@ -675,6 +675,11 @@ return(<div>
         <button className="bt bs" onClick={selMerged}>merged만</button>
         <button className="bt bs" onClick={selNone}>해제</button>
         <button className="bt bs" onClick={reloadFiles}>새로고침</button>
+        <button className="bt bs" style={{borderColor:'rgba(239,68,68,.3)',color:'var(--red)'}} onClick={async()=>{
+          if(!selFiles.size)return;if(!confirm(`선택된 ${selFiles.size}개 파일을 삭제하시겠습니까?`))return;
+          for(const fn of selFiles){try{await fetch(`${API}/api/results/${fn}`,{method:'DELETE'})}catch(e){}}
+          setSelFiles(new Set());reloadFiles();
+        }}>선택 삭제</button>
       </div>
     </div>
     <div className="it" style={{marginBottom:6}}>💡 선도 분석에는 calc 파일 필요. merged만 있으면 라인차트만 가능.</div>
@@ -834,12 +839,29 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
         {tabs.length>1&&tabIdx===i&&<button onClick={()=>removeTab(i)} style={{padding:'2px 5px',fontSize:9,border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--red)',borderRadius:'0 6px 6px 0',cursor:'pointer',fontFamily:'var(--font)'}}>×</button>}
       </div>)}
       <button className="bt bs" onClick={addCustomTab} style={{fontSize:10}}>+ 탭 추가</button>
+      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
+      <button className="bt bs" onClick={()=>{
+        const cfg={version:1,type:'viewer_chart_settings',tabs:tabs.map(t=>({name:t.name,rows:t.rows,cols:t.cols,plots:t.plots})),tabIdx,smOn,smM,smW,zones,timestamp:new Date().toISOString()};
+        const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='viewer_chart_settings.json';a.click()
+      }} style={{fontSize:10}}>💾 저장</button>
+      <button className="bt bs" onClick={()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=ev=>{
+        const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=e=>{try{
+          const c=JSON.parse(e.target.result);if(c.tabs){
+            setTabs(c.tabs.map((t,i)=>({...t,id:Date.now()+i})));setTabIdx(c.tabIdx||0);
+            if(c.smOn!=null)setSmOn(c.smOn);if(c.smM)setSmM(c.smM);if(c.smW)setSmW(c.smW);
+            if(c.zones)setZones(c.zones);
+          }}catch(er){alert('설정 파일 파싱 실패')}};rd.readAsText(f)};inp.click()
+      }} style={{fontSize:10}}>📂 불러오기</button>
     </div>
 
     {/* 컨트롤 */}
     <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:6,flexWrap:'wrap'}}>
-      <span className="it">행:</span><select value={tab.rows} onChange={e=>updateTab({rows:+e.target.value})} style={{width:45}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
-      <span className="it">열:</span><select value={tab.cols} onChange={e=>updateTab({cols:+e.target.value})} style={{width:45}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
+      <span className="it">행:</span><select value={tab.rows} onChange={e=>{const r=+e.target.value;const need=r*tab.cols;
+        if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({rows:r,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({rows:r})}
+      }} style={{width:45}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
+      <span className="it">열:</span><select value={tab.cols} onChange={e=>{const c=+e.target.value;const need=tab.rows*c;
+        if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({cols:c,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({cols:c})}
+      }} style={{width:45}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
       <span style={{width:1,height:16,background:'var(--bd2)'}}/>
       <label style={{fontSize:12,display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>스무딩</label>
       {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:65}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="120" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:100}}/><span className="it">{smW}</span></>}
