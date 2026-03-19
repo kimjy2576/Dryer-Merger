@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "type": "merge_settings",
+  "timestamp": "2026-03-19T00:00:00.000Z",
+  "variable_settings": {
+    "Time": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "Current_RPM": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "Request_RPM": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "Wash_Temp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "Dry_Temp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP_CoolingFan": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP_CompTargetHz": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP_CompCurrentHz": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "Ctrl_Comp_Hz" },
+    "HP_CompIpmTemp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP_FanSpeed": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP_EEV_Position": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP_F_Temp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP_FanIpmTemp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP Fan Q Current": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP Comp Current": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "Heatpump_DuctInTemp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "T_Air_Eva_In" },
+    "Heatpump_DuctOutTemp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "T_Air_Cond_Out" },
+    "Heatpump_EvaInTemp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "T_Eva_In" },
+    "Heatpump_EvaOutTemp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "T_Eva_Out" },
+    "Heatpump_CompTemp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "T_Comp_Body" },
+    "d_currentABS_IqeRef": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP_EEV_State": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "HP_SuperHeatDegree": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "Heatpump_DryMotionInfo": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "Ctrl_DryMotion" },
+    "Heatpump_PressSwitch": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" }
+  }
+}

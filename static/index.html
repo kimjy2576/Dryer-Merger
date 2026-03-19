@@ -220,8 +220,15 @@ const scanVars=async()=>{if(!sid)return;setScanning(true);
   try{const r=await fetch(`${API}/api/scan-columns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:sid})});
   const d=await r.json();if(!r.ok){alert(d.detail);setScanning(false);return}
   setVarCols(d.columns);
-  // 기본 설정 초기화 (전부 include, weight=1, bias=0)
-  const init={};Object.keys(d.columns).forEach(c=>{init[c]={include:true,weight:1.0,bias:0.0}});
+  // 기본 설정: 전부 include=false로 시작
+  const init={};Object.keys(d.columns).forEach(c=>{init[c]={include:false,weight:1.0,bias:0.0,rename:''}});
+  // 기본 merge_settings 로드하여 매칭되는 변수만 include=true + rename/W&B 적용
+  try{const dr=await fetch(`${API}/api/default-merge-settings`);const ds=await dr.json();
+    if(ds.variable_settings){Object.entries(ds.variable_settings).forEach(([col,s])=>{
+      if(init[col]){init[col]={...init[col],...s,include:true}}
+    })}
+  }catch(e){/* 기본 설정 없으면 전부 include로 폴백 */
+    Object.keys(init).forEach(c=>{init[c].include=true})}
   setVarSet(init);setVarOpen(true);
   }catch(e){alert(e.message)}setScanning(false)};
 
@@ -648,34 +655,42 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   const[rows,setRows]=useState(2);const[cols,setCols]=useState(3);
   const[smOn,setSmOn]=useState(false);const[smM,setSmM]=useState('SMA');const[smW,setSmW]=useState(10);
   const ref=useRef(null);
-  const cat=VW_CATS[catIdx];
-  // 가용 변수만 필터
+
+  // 전체 가용 변수 목록 (Time 제외)
+  const allVars=useMemo(()=>{const s=new Set();cases.forEach(c=>Object.keys(c.data).forEach(k=>{if(!k.startsWith('Time'))s.add(k)}));return[...s].sort()},[cases]);
+
+  // "전체" 카테고리를 동적으로 추가
+  const cats=useMemo(()=>[{name:'전체',vars:allVars},...VW_CATS],[allVars]);
+
+  const cat=cats[catIdx]||cats[0];
   const avail=cat.vars.filter(k=>cases.some(c=>c.data[k]));
   const plots=avail.slice(0,rows*cols);
 
   useEffect(()=>{if(!ref.current||!plots.length)return;
-    const tr=[],lo={grid:{rows,columns:cols,pattern:'independent',xgap:.06,ygap:.12},height:chartH,width:chartW||undefined,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom'};
+    const tr=[],lo={grid:{rows:Math.min(rows,Math.ceil(plots.length/cols)),columns:Math.min(cols,plots.length),pattern:'independent',xgap:.06,ygap:.12},height:chartH,width:chartW||undefined,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom'};
     plots.forEach((k,pi)=>{
       lo['xaxis'+(pi+1)]={title:Math.floor(pi/cols)+1===rows?{text:'Time [min]',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
       lo['yaxis'+(pi+1)]={title:{text:k,font:{size:10}},gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
       cases.forEach((cs,ci)=>{if(!caseVis[cs.name]||!cs.data[k])return;
+        const xArr=cs.data.Time_min||cs.data.Time_sec||cs.data.Time||Object.values(cs.data)[0]?.map((_,i)=>i);
         let yArr=cs.data[k];if(smOn)yArr=vSmooth(yArr,smM,smW);
-        tr.push({x:cs.data.Time_min||cs.data.Time_sec,y:yArr,type:'scattergl',mode:'lines',name:cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci],width:lw},xaxis:'x'+(pi+1>1?pi+1:''),yaxis:'y'+(pi+1>1?pi+1:''),hovertemplate:'%{y:.2f}<extra>'+cs.name+'</extra>'})});
+        tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci],width:lw},xaxis:'x'+(pi+1>1?pi+1:''),yaxis:'y'+(pi+1>1?pi+1:''),hovertemplate:'%{y:.2f}<extra>'+cs.name+'</extra>'})});
     });
     Plotly.react(ref.current,tr,lo,{responsive:!chartW,displaylogo:false,scrollZoom:true})
   },[cases,caseVis,lw,chartH,chartW,catIdx,plots,rows,cols,smOn,smM,smW,dragMode]);
 
   return(<div>
-    <div style={{display:'flex',gap:2,marginBottom:8,flexWrap:'wrap'}}>{VW_CATS.map((c,i)=><button key={c.name} className={`bt bs ${catIdx===i?'on':''}`} onClick={()=>setCatIdx(i)}>{c.name}</button>)}</div>
+    <div style={{display:'flex',gap:2,marginBottom:8,flexWrap:'wrap'}}>{cats.map((c,i)=><button key={c.name} className={`bt bs ${catIdx===i?'on':''}`} onClick={()=>setCatIdx(i)}>{c.name}{i===0?' ('+allVars.length+')':''}</button>)}</div>
     <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
-      <span className="it">행:</span><select value={rows} onChange={e=>setRows(+e.target.value)} style={{width:50}}>{[1,2,3].map(n=><option key={n}>{n}</option>)}</select>
-      <span className="it">열:</span><select value={cols} onChange={e=>setCols(+e.target.value)} style={{width:50}}>{[1,2,3].map(n=><option key={n}>{n}</option>)}</select>
+      <span className="it">행:</span><select value={rows} onChange={e=>setRows(+e.target.value)} style={{width:50}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
+      <span className="it">열:</span><select value={cols} onChange={e=>setCols(+e.target.value)} style={{width:50}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
       <span style={{width:1,height:16,background:'var(--bd2)'}}/>
       <label style={{fontSize:12,display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>스무딩</label>
       {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:65}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="60" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:60}}/><span className="it">{smW}</span></>}
       <span className="it" style={{marginLeft:'auto'}}>{avail.length}개 변수 / {plots.length}개 표시</span>
     </div>
-    <div className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
+    {plots.length>0?<div className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
+    :<div className="cd"><div className="it" style={{padding:20,textAlign:'center'}}>이 카테고리에 해당하는 변수가 없습니다. [전체] 카테고리를 선택하세요.</div></div>}
   </div>)
 }
 
@@ -869,6 +884,7 @@ return(<div><div className="fg"><div>
 <CfgField lb="기준 시간축" p="processing.data_time" o={['BR','AMS','MX100']} {...fp}/><CfgField lb="필터 모드" p="processing.filter_mode" o={['Dry_Only','Wash_and_Dry']} {...fp}/><CfgField lb="리샘플링" p="processing.time_interval" t="number" u="초" {...fp}/></div>
 </div><div>
 <div className="cd"><div className="ct">후처리 필터</div><CfgField lb="LPF τ" p="filtering.lpf_tau" t="number" st="0.1" {...fp}/><CfgField lb="노이즈 윈도우" p="filtering.noise_window" t="number" {...fp}/><CfgField lb="노이즈 임계값" p="filtering.noise_threshold" t="number" st="0.1" {...fp}/><CfgField lb="최소 Hz" p="filtering.min_hz" t="number" u="Hz" {...fp}/><CfgField lb="종료 탐색" p="filtering.last_min" t="number" st="0.5" u="분" {...fp}/></div>
+<div className="cd"><div className="ct">RH 수렴 계산</div><CfgField lb="증발기 출구 RH" p="calculation.rh_eva_out_assumed" t="number" st="0.01" {...fp}/><CfgField lb="최대 반복" p="calculation.rh_iteration.max_iter" t="number" {...fp}/><CfgField lb="수렴 임계값" p="calculation.rh_iteration.tolerance" t="number" st="0.001" {...fp}/><CfgField lb="감쇠 계수" p="calculation.rh_iteration.damping" t="number" st="0.05" {...fp}/></div>
 <div className="cd"><div className="ct">센서 보정 [°C]</div><CfgField lb="T_Cond_In" p="calculation.sensor_offsets.T_Cond_In" t="number" st="0.1" {...fp}/><CfgField lb="T_Cond_Out" p="calculation.sensor_offsets.T_Cond_Out" t="number" st="0.1" {...fp}/><CfgField lb="T_Cond_M1" p="calculation.sensor_offsets.T_Cond_M1" t="number" st="0.1" {...fp}/><CfgField lb="T_Air_Eva_Out" p="calculation.sensor_offsets.T_Air_Eva_Out" t="number" st="0.1" {...fp}/><CfgField lb="T_Comp_In" p="calculation.sensor_offsets.T_Comp_In" t="number" st="0.1" {...fp}/><CfgField lb="T_Comp_Out" p="calculation.sensor_offsets.T_Comp_Out" t="number" st="0.1" {...fp}/></div>
 </div></div><div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:4}}><button className="bt" onClick={()=>sL(JSON.parse(JSON.stringify(cfg)))}>초기화</button><button className="bt bp" onClick={save} disabled={sv}>{sv?'저장 중...':'설정 저장'}</button></div></div>)}
 

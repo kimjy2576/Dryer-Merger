@@ -75,6 +75,17 @@ def update_config(body: dict):
     return {"status": "ok"}
 
 
+@app.get("/api/default-merge-settings")
+def get_default_merge_settings():
+    """기본 Merge 변수 설정 반환."""
+    p = BASE_DIR / "config" / "merge_settings_BR.json"
+    if not p.exists():
+        return {"variable_settings": {}}
+    import json
+    with open(p, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 @app.get("/api/validate-refrigerant/{name}")
 def validate_ref(name: str, backend: str = "HEOS"):
     """냉매명이 CoolProp/REFPROP에서 유효한지 검증."""

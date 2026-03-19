@@ -18,6 +18,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('config/default_config.yaml', 'config'),
+        ('config/merge_settings_BR.json', 'config'),
         ('static/index.html', 'static'),
     ] + coolprop_datas,
     hiddenimports=[
