@@ -697,12 +697,6 @@ return(<div>
 
 // ═══ Viewer: 라인차트 ═══
 function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
-  const[catIdx,setCatIdx]=useState(0);
-  const[rows,setRows]=useState(2);const[cols,setCols]=useState(3);
-  const[smOn,setSmOn]=useState(false);const[smM,setSmM]=useState('SMA');const[smW,setSmW]=useState(10);
-  const[err,setErr]=useState('');
-  const ref=useRef(null);
-
   const allVars=useMemo(()=>{
     if(!cases||!cases.length)return[];
     const s=new Set();
@@ -711,56 +705,153 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   },[cases]);
 
   const cats=useMemo(()=>[{name:'전체',vars:allVars},...VW_CATS],[allVars]);
-  const safeIdx=catIdx<cats.length?catIdx:0;
-  const cat=cats[safeIdx];
-  const avail=cat.vars.filter(k=>cases.some(c=>c&&c.data&&c.data[k]));
-  const plots=avail.slice(0,rows*cols);
+
+  // 페이지 관리: [{id, rows, cols, plots:[varKey,...]}]
+  const defPage=(catI)=>{const c=cats[catI]||cats[0];const av=c.vars.filter(k=>cases.some(cs=>cs?.data?.[k]));return{id:Date.now(),catIdx:catI,rows:2,cols:3,plots:av.slice(0,6)}};
+  const[pages,setPages]=useState([defPage(0)]);
+  const[pageIdx,setPageIdx]=useState(0);
+  const addPage=(catI)=>{const p=defPage(catI||0);setPages(ps=>[...ps,p]);setPageIdx(pages.length)};
+  const removePage=(i)=>{if(pages.length<=1)return;setPages(ps=>ps.filter((_,j)=>j!==i));setPageIdx(pi=>Math.min(pi,pages.length-2))};
+  const updatePage=(i,upd)=>setPages(ps=>ps.map((p,j)=>j===i?{...p,...upd}:p));
+
+  const pg=pages[pageIdx]||pages[0];
+  const[smOn,setSmOn]=useState(false);const[smM,setSmM]=useState('SMA');const[smW,setSmW]=useState(10);
+  const[err,setErr]=useState('');
+  const[hScale,setHScale]=useState(100);const[wScale,setWScale]=useState(100);
+  const ref=useRef(null);
+
+  // 구간 하이라이트
+  const[zones,setZones]=useState([]);const[zs,setZs]=useState('');const[ze,setZe]=useState('');
+  const addZone=()=>{const a=parseFloat(zs),b=parseFloat(ze);if(isNaN(a)||isNaN(b)||a>=b)return;setZones(p=>[...p,{id:Date.now(),start:a,end:b}]);setZs('');setZe('')};
+
+  // 서브플롯 변수 변경
+  const setPlotVar=(si,v)=>{const np=[...pg.plots];np[si]=v;updatePage(pageIdx,{plots:np})};
+  const addPlot=()=>{const rest=allVars.filter(k=>!pg.plots.includes(k));if(rest.length)updatePage(pageIdx,{plots:[...pg.plots,rest[0]]})};
+  const removePlot=(i)=>{if(pg.plots.length<=1)return;updatePage(pageIdx,{plots:pg.plots.filter((_,j)=>j!==i)})};
+
+  // Fit / Reset
+  const fitAll=()=>{if(ref.current)try{Plotly.relayout(ref.current,{'xaxis.autorange':true,'yaxis.autorange':true})}catch(e){}};
+  const resetZoom=()=>{if(ref.current)try{Plotly.relayout(ref.current,Object.fromEntries(pg.plots.flatMap((_,i)=>[['xaxis'+(i+1)+'.autorange',true],['yaxis'+(i+1)+'.autorange',true]])))}catch(e){}};
+
+  // 렌더
+  const finalH=Math.round(chartH*hScale/100);
+  const finalW=chartW?Math.round(chartW*wScale/100):undefined;
 
   useEffect(()=>{
-    if(!ref.current||!plots.length){return}
-    setErr('');
+    if(!ref.current||!pg.plots.length)return;setErr('');
     try{
-      const nRows=Math.max(1,Math.min(rows,Math.ceil(plots.length/cols)));
-      const nCols=Math.max(1,Math.min(cols,plots.length));
-      const tr=[];
-      const lo={grid:{rows:nRows,columns:nCols,pattern:'independent',xgap:.06,ygap:.12},height:chartH,width:chartW||undefined,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom'};
-      plots.forEach((k,pi)=>{
-        lo['xaxis'+(pi+1)]={title:Math.floor(pi/nCols)+1===nRows?{text:'Time',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
+      const nR=pg.rows,nC=pg.cols,nPlots=pg.plots.slice(0,nR*nC);
+      const actR=Math.max(1,Math.min(nR,Math.ceil(nPlots.length/nC)));
+      const actC=Math.max(1,Math.min(nC,nPlots.length));
+      const tr=[];const shapes=[];
+      const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.06,ygap:.12},height:finalH,width:finalW,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
+      nPlots.forEach((k,pi)=>{
+        const xk='x'+(pi+1>1?pi+1:''),yk='y'+(pi+1>1?pi+1:'');
+        lo['xaxis'+(pi+1)]={title:Math.floor(pi/actC)+1===actR?{text:'Time',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
         lo['yaxis'+(pi+1)]={title:{text:k,font:{size:10}},gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
+        // 구간 하이라이트
+        zones.forEach((z,zi)=>{shapes.push({type:'rect',xref:xk.replace('x','x'),yref:yk+' domain',x0:z.start,x1:z.end,y0:0,y1:1,fillcolor:VW_ZC[zi%VW_ZC.length],line:{color:VW_ZB[zi%VW_ZB.length],width:1,dash:'dot'},layer:'below'})});
         cases.forEach((cs,ci)=>{
-          if(!cs||!cs.data||!caseVis[cs.name]||!cs.data[k])return;
+          if(!cs?.data||!caseVis[cs.name]||!cs.data[k])return;
           const xArr=cs.data.Time_min||cs.data.Time_sec||cs.data.Time;
-          if(!xArr||!xArr.length)return;
-          let yArr=cs.data[k];
-          if(!yArr||!yArr.length)return;
+          if(!xArr?.length)return;
+          let yArr=cs.data[k];if(!yArr?.length)return;
           if(smOn&&yArr.length>3)try{yArr=vSmooth(yArr,smM,smW)}catch(e){}
-          tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},xaxis:'x'+(pi+1>1?pi+1:''),yaxis:'y'+(pi+1>1?pi+1:''),hovertemplate:'%{y:.2f}<extra>'+cs.name+'</extra>'});
+          tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},xaxis:xk,yaxis:yk,hovertemplate:'%{y:.2f}<extra>'+cs.name+'</extra>'});
         });
       });
-      if(tr.length){
-        Plotly.react(ref.current,tr,lo,{responsive:!chartW,displaylogo:false,scrollZoom:true});
-      }else{
-        setErr('표시할 trace가 없습니다. Time 컬럼(Time_min/Time_sec/Time)이 있는지 확인하세요.');
-      }
-    }catch(e){
-      console.error('VwChart 에러:',e);
-      setErr('차트 렌더링 오류: '+e.message);
-    }
-  },[cases,caseVis,lw,chartH,chartW,safeIdx,plots,rows,cols,smOn,smM,smW,dragMode]);
+      if(tr.length)Plotly.react(ref.current,tr,lo,{responsive:!finalW,displaylogo:false,scrollZoom:true});
+      else setErr('표시할 데이터 없음. Time 컬럼을 확인하세요.');
+    }catch(e){console.error('VwChart:',e);setErr('렌더링 오류: '+e.message)}
+  },[cases,caseVis,lw,finalH,finalW,pg,smOn,smM,smW,dragMode,zones]);
+
+  // 구간 통계
+  const zoneStats=useMemo(()=>zones.map(z=>{
+    const stats=pg.plots.slice(0,pg.rows*pg.cols).map(k=>{
+      const r={key:k};cases.forEach(cs=>{if(!caseVis[cs.name]||!cs?.data?.[k])return;
+        const t=cs.data.Time_min||cs.data.Time_sec||cs.data.Time;if(!t)return;
+        const vals=[];t.forEach((tv,i)=>{if(tv>=z.start&&tv<=z.end&&cs.data[k][i]!=null)vals.push(cs.data[k][i])});
+        if(vals.length)r[cs.name]={min:Math.min(...vals).toFixed(2),avg:(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2),max:Math.max(...vals).toFixed(2)}});
+      return r});
+    return{...z,stats}}),[zones,pg,cases,caseVis]);
+
+  const visCase=cases.filter(c=>caseVis[c.name]);
 
   return(<div>
-    <div style={{display:'flex',gap:2,marginBottom:8,flexWrap:'wrap'}}>{cats.map((c,i)=><button key={c.name} className={`bt bs ${safeIdx===i?'on':''}`} onClick={()=>setCatIdx(i)}>{c.name}{i===0?' ('+allVars.length+')':''}</button>)}</div>
+    {/* 페이지 탭 */}
+    <div style={{display:'flex',gap:4,marginBottom:8,alignItems:'center',flexWrap:'wrap'}}>
+      {pages.map((p,i)=><div key={p.id} style={{display:'flex',alignItems:'center',gap:0}}>
+        <button className={`bt bs ${pageIdx===i?'on':''}`} onClick={()=>setPageIdx(i)} style={{borderRadius:pageIdx===i?'6px 0 0 6px':'6px'}}>#{i+1}</button>
+        {pages.length>1&&<button onClick={()=>removePage(i)} style={{padding:'2px 6px',fontSize:10,border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--red)',borderRadius:'0 6px 6px 0',cursor:'pointer',fontFamily:'var(--font)'}}>×</button>}
+      </div>)}
+      <button className="bt bs" onClick={()=>addPage(0)} style={{fontSize:11}}>+ 페이지 추가</button>
+      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
+      {/* 카테고리 프리셋 */}
+      {cats.map((c,i)=><button key={c.name} className="bt bs" onClick={()=>{const av=c.vars.filter(k=>cases.some(cs=>cs?.data?.[k]));updatePage(pageIdx,{catIdx:i,plots:av.slice(0,pg.rows*pg.cols)})}} style={{padding:'2px 6px',fontSize:10}}>{c.name}</button>)}
+    </div>
+
+    {/* 컨트롤 */}
     <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
-      <span className="it">행:</span><select value={rows} onChange={e=>setRows(+e.target.value)} style={{width:50}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
-      <span className="it">열:</span><select value={cols} onChange={e=>setCols(+e.target.value)} style={{width:50}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
+      <span className="it">행:</span><select value={pg.rows} onChange={e=>updatePage(pageIdx,{rows:+e.target.value})} style={{width:45}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
+      <span className="it">열:</span><select value={pg.cols} onChange={e=>updatePage(pageIdx,{cols:+e.target.value})} style={{width:45}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
       <span style={{width:1,height:16,background:'var(--bd2)'}}/>
       <label style={{fontSize:12,display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>스무딩</label>
       {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:65}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="60" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:60}}/><span className="it">{smW}</span></>}
-      <span className="it" style={{marginLeft:'auto'}}>{avail.length}개 변수 / {plots.length}개 표시</span>
+      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
+      <button className="bt bs" onClick={fitAll}>📐 Fit</button>
+      <button className="bt bs" onClick={resetZoom}>🔄 리셋</button>
+      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
+      <span className="it">높이:</span><input type="range" min="50" max="200" value={hScale} onChange={e=>setHScale(+e.target.value)} style={{width:60}}/><span className="it">{hScale}%</span>
+      <span className="it">너비:</span><input type="range" min="50" max="200" value={wScale} onChange={e=>setWScale(+e.target.value)} style={{width:60}}/><span className="it">{wScale}%</span>
     </div>
-    {err&&<div style={{padding:12,margin:'8px 0',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,fontSize:12,color:'var(--red)'}}>{err}</div>}
-    {plots.length>0?<div className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
-    :<div className="cd"><div className="it" style={{padding:20,textAlign:'center'}}>이 카테고리에 해당하는 변수가 없습니다. [전체] 탭을 선택하세요.<br/><span style={{fontSize:11,color:'var(--tx3)'}}>가용 컬럼: {allVars.slice(0,10).join(', ')}{allVars.length>10?'...':''}</span></div></div>}
+
+    {/* 서브플롯 변수 선택 */}
+    <div style={{display:'flex',gap:4,marginBottom:8,flexWrap:'wrap',alignItems:'center'}}>
+      {pg.plots.slice(0,pg.rows*pg.cols).map((k,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:2}}>
+        <span style={{fontSize:10,color:'var(--tx3)',minWidth:16}}>#{i+1}</span>
+        <select value={k} onChange={e=>setPlotVar(i,e.target.value)} style={{fontSize:10,padding:'2px 4px',width:130}}>
+          {allVars.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
+        <button onClick={()=>removePlot(i)} style={{fontSize:9,padding:'1px 4px',border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--tx3)',borderRadius:4,cursor:'pointer'}}>×</button>
+      </div>)}
+      <button className="bt bs" onClick={addPlot} style={{fontSize:10}}>+ 변수</button>
+    </div>
+
+    {err&&<div style={{padding:10,margin:'6px 0',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,fontSize:12,color:'var(--red)'}}>{err}</div>}
+    {pg.plots.length>0?<div className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
+    :<div className="cd"><div className="it" style={{padding:20,textAlign:'center'}}>변수를 추가하세요.</div></div>}
+
+    {/* 구간 하이라이트 */}
+    <div style={{display:'flex',gap:6,alignItems:'center',marginTop:8,padding:'8px 12px',background:'var(--bg2,#12121a)',border:'1px solid var(--bd)',borderRadius:8,flexWrap:'wrap'}}>
+      <span style={{fontSize:11,color:'var(--tx2)'}}>구간:</span>
+      <input value={zs} onChange={e=>setZs(e.target.value)} placeholder="시작(min)" style={{width:80,fontSize:11,padding:'3px 6px'}}/>
+      <span style={{color:'var(--tx3)'}}>~</span>
+      <input value={ze} onChange={e=>setZe(e.target.value)} placeholder="종료(min)" style={{width:80,fontSize:11,padding:'3px 6px'}}/>
+      <button className="bt bs" onClick={addZone}>추가</button>
+      {zones.map((z,i)=><span key={z.id} style={{fontSize:10,padding:'2px 8px',background:VW_ZC[i%VW_ZC.length],border:'1px solid '+VW_ZB[i%VW_ZB.length],borderRadius:12,display:'flex',alignItems:'center',gap:4}}>
+        {z.start}~{z.end}<button onClick={()=>setZones(p=>p.filter(x=>x.id!==z.id))} style={{border:0,background:'none',color:'var(--red)',cursor:'pointer',fontSize:10,padding:0}}>×</button>
+      </span>)}
+      {zones.length>0&&<button className="bt bs" onClick={()=>setZones([])} style={{fontSize:10}}>전체 삭제</button>}
+    </div>
+
+    {/* 구간 통계 테이블 */}
+    {zoneStats.length>0&&<div style={{marginTop:8,border:'1px solid var(--bd)',borderRadius:8,overflow:'auto',maxHeight:250}}>
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:11,fontFamily:'var(--mono)'}}>
+        <thead><tr style={{background:'var(--bg3)'}}>
+          <th style={{padding:'5px 8px',textAlign:'left',color:'var(--tx2)',position:'sticky',top:0,background:'var(--bg3)'}}>구간</th>
+          <th style={{padding:'5px 8px',textAlign:'left',color:'var(--tx2)',position:'sticky',top:0,background:'var(--bg3)'}}>변수</th>
+          {visCase.map(c=><th key={c.name} colSpan={3} style={{padding:'5px 8px',textAlign:'center',color:'var(--tx2)',position:'sticky',top:0,background:'var(--bg3)'}}>{c.name}</th>)}
+        </tr><tr style={{background:'var(--bg3)'}}>
+          <th/><th/>
+          {visCase.map(c=><React.Fragment key={c.name}><th style={{padding:'3px 6px',textAlign:'right',fontSize:9,color:'var(--tx3)',position:'sticky',top:28,background:'var(--bg3)'}}>Min</th><th style={{padding:'3px 6px',textAlign:'right',fontSize:9,color:'var(--teal)',position:'sticky',top:28,background:'var(--bg3)'}}>Avg</th><th style={{padding:'3px 6px',textAlign:'right',fontSize:9,color:'var(--tx3)',position:'sticky',top:28,background:'var(--bg3)'}}>Max</th></React.Fragment>)}
+        </tr></thead>
+        <tbody>{zoneStats.map(z=>z.stats.map((st,si)=><tr key={z.id+'-'+si} style={{borderTop:'1px solid var(--bd)'}}>
+          {si===0&&<td rowSpan={z.stats.length} style={{padding:'4px 8px',color:'var(--teal)',verticalAlign:'top'}}>{z.start}~{z.end}</td>}
+          <td style={{padding:'4px 8px'}}>{st.key}</td>
+          {visCase.map(c=>{const d=st[c.name];return d?<React.Fragment key={c.name}><td style={{padding:'3px 6px',textAlign:'right'}}>{d.min}</td><td style={{padding:'3px 6px',textAlign:'right',color:'var(--teal)'}}>{d.avg}</td><td style={{padding:'3px 6px',textAlign:'right'}}>{d.max}</td></React.Fragment>:<React.Fragment key={c.name}><td style={{textAlign:'center'}}>-</td><td style={{textAlign:'center'}}>-</td><td style={{textAlign:'center'}}>-</td></React.Fragment>})}
+        </tr>))}</tbody>
+      </table>
+    </div>}
   </div>)
 }
 
