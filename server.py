@@ -721,6 +721,15 @@ def download(fn: str):
     if not p.exists(): raise HTTPException(404)
     return FileResponse(p, media_type="text/csv", filename=fn)
 
+
+@app.delete("/api/results/{fn}")
+def delete_result(fn: str):
+    """결과 파일 삭제."""
+    p = RESULT_DIR / fn
+    if not p.exists(): raise HTTPException(404, f"파일 없음: {fn}")
+    p.unlink()
+    return {"deleted": fn}
+
 @app.get("/api/preview/{fn}")
 def preview(fn: str, max_rows: int = 3000):
     p = RESULT_DIR / fn
