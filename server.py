@@ -385,10 +385,17 @@ class ImportRequest(BaseModel):
 
 @app.post("/api/import-merged")
 def import_merged(req: ImportRequest):
-    """로컬 경로의 CSV 파일을 results 폴더로 복사."""
-    import shutil
+    """로컬 경로의 CSV 파일을 results 폴더로 복사 + 출처 폴더 기록."""
+    import shutil, json
     imported = []
     errors = []
+    # 출처 메타데이터 로드/생성
+    meta_path = RESULT_DIR / "_sources.json"
+    sources = {}
+    if meta_path.exists():
+        try: sources = json.loads(meta_path.read_text("utf-8"))
+        except: pass
+
     for fp in req.file_paths:
         p = Path(fp)
         if not p.exists():
@@ -404,8 +411,15 @@ def import_merged(req: ImportRequest):
         try:
             shutil.copy2(str(p), str(dest))
             imported.append(dest_name)
+            # 출처 폴더 기록
+            sources[dest_name] = str(p.parent.resolve())
         except Exception as e:
             errors.append(f"{p.name}: {str(e)}")
+
+    # 메타데이터 저장
+    try: meta_path.write_text(json.dumps(sources, ensure_ascii=False, indent=2), "utf-8")
+    except: pass
+
     return {"imported": imported, "errors": errors, "count": len(imported)}
 
 
@@ -710,9 +724,17 @@ def get_status(sid: str):
 
 @app.get("/api/results")
 def list_results():
+    import json
     files = sorted(RESULT_DIR.glob("*.csv"), key=os.path.getmtime, reverse=True)
+    # 출처 메타데이터
+    meta_path = RESULT_DIR / "_sources.json"
+    sources = {}
+    if meta_path.exists():
+        try: sources = json.loads(meta_path.read_text("utf-8"))
+        except: pass
     return [{"name": f.name, "size": f.stat().st_size,
-             "type": "merged" if "_merged" in f.name else "calc" if "_calc" in f.name else "other"}
+             "type": "merged" if "_merged" in f.name else "calc" if "_calc" in f.name else "other",
+             "source_dir": sources.get(f.name, "")}
             for f in files]
 
 @app.get("/api/results/{fn}")
@@ -724,10 +746,19 @@ def download(fn: str):
 
 @app.delete("/api/results/{fn}")
 def delete_result(fn: str):
-    """결과 파일 삭제."""
+    """결과 파일 삭제 + 출처 메타데이터 정리."""
+    import json
     p = RESULT_DIR / fn
     if not p.exists(): raise HTTPException(404, f"파일 없음: {fn}")
     p.unlink()
+    # 메타데이터에서도 제거
+    meta_path = RESULT_DIR / "_sources.json"
+    if meta_path.exists():
+        try:
+            sources = json.loads(meta_path.read_text("utf-8"))
+            sources.pop(fn, None)
+            meta_path.write_text(json.dumps(sources, ensure_ascii=False, indent=2), "utf-8")
+        except: pass
     return {"deleted": fn}
 
 @app.get("/api/preview/{fn}")

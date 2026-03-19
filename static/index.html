@@ -604,7 +604,7 @@ const[chartW,setChartW]=useState(0);
 const reloadFiles=()=>fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged')))).catch(()=>{});
 useEffect(()=>{reloadFiles()},[]);
 
-const[mergeMode,setMergeMode]=useState(true); // 선택 파일 전부 하나의 케이스로 병합
+const[mergeMode,setMergeMode]=useState('auto'); // 'auto' | 'all' | 'each'
 
 // 데이터 로드
 const[loadMsg,setLoadMsg]=useState('');
@@ -612,23 +612,39 @@ const[dbg,setDbg]=useState('');
 const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg('');setDbg('');
   const logs=[];const errs=[];
 
-  // ── 그룹핑: mergeMode면 전부 한 케이스, 아니면 파일별 개별 케이스 ──
+  // ── 그룹핑 ──
   const groups=new Map(); // groupName → [fn, fn, ...]
-  if(mergeMode){
-    // 모든 선택 파일을 하나로 병합
-    const names=[...selFiles];
-    const groupName=names.length===1?names[0].replace(/\.csv$/,''):'Merged_'+names.length+'files';
-    groups.set(groupName,names);
-  }else{
-    // 파일별 개별 케이스
+  if(mergeMode==='all'){
+    // 전부 한 케이스
+    groups.set('All_merged',[...selFiles]);
+  }else if(mergeMode==='each'){
+    // 파일별 개별
     for(const fn of selFiles)groups.set(fn.replace(/\.csv$/,''),[fn]);
+  }else{
+    // auto: 같은 source_dir끼리 묶음
+    const dirMap=new Map(); // source_dir → [fn]
+    const fileInfo=new Map();files.forEach(f=>fileInfo.set(f.name,f));
+    for(const fn of selFiles){
+      const f=fileInfo.get(fn);
+      const dir=f?.source_dir||fn; // source_dir 없으면 파일명 단독
+      if(!dirMap.has(dir))dirMap.set(dir,[]);
+      dirMap.get(dir).push(fn);
+    }
+    let gi=0;
+    for(const[dir,fns] of dirMap){
+      // 그룹명: 폴더명 사용 (또는 파일명)
+      const dirName=dir.includes('/')||dir.includes('\\')?dir.split(/[\\/]/).pop():fns[0].replace(/\.csv$/,'');
+      const gn=dirMap.size>1?dirName+'_'+(++gi):dirName;
+      groups.set(gn,fns);
+    }
   }
+  logs.push(`모드: ${mergeMode}, ${groups.size}그룹`);
 
   const arr=[];
   for(const[groupName,fileList] of groups){
-    logs.push(`[${groupName}] 파일 ${fileList.length}개`);
+    logs.push(`\n[${groupName}] 파일 ${fileList.length}개`);
     const merged={};let totalRows=0;const allCols=new Set();
-    // calc 파일 우선 로드 (calc 컬럼이 merged보다 우선)
+    // calc 먼저 (계산 결과 우선)
     const sorted=[...fileList].sort((a,b)=>(b.includes('_calc')?1:0)-(a.includes('_calc')?1:0));
     for(const fn of sorted){
       try{
@@ -637,17 +653,15 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
         const txt=await r.text();
         let d;try{d=JSON.parse(txt)}catch(pe){errs.push(`${fn}: JSON파싱실패`);continue}
         if(!d.data||!d.columns?.length)continue;
-        let newCount=0;
-        for(const col of d.columns){
-          if(!merged[col]){merged[col]=d.data[col];allCols.add(col);newCount++}
-        }
+        let nc=0;
+        for(const col of d.columns){if(!merged[col]){merged[col]=d.data[col];allCols.add(col);nc++}}
         totalRows=Math.max(totalRows,d.rows);
-        logs.push(`  + ${fn}: ${d.columns.length}col (${newCount}신규), ${d.rows}rows`);
+        logs.push(`  + ${fn}: ${d.columns.length}col (${nc}신규), ${d.rows}rows`);
       }catch(e){errs.push(`${fn}: ${e.message}`)}
     }
     if(!Object.keys(merged).length){errs.push(`${groupName}: 데이터 없음`);continue}
 
-    // ── 후처리: 누락 컬럼 자동 계산 ──
+    // ── 후처리 ──
     const D=merged;const added=[];
     if(!D.AH_Eva_In&&D.T_Air_Eva_In&&D.RH_Eva_In){
       D.AH_Eva_In=D.T_Air_Eva_In.map((t,i)=>t!=null&&D.RH_Eva_In[i]!=null?+wFromRH(t,D.RH_Eva_In[i]).toFixed(5):null);added.push('AH_Eva_In');
@@ -667,14 +681,17 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
           if(hd.h_Comp_Out){D.h_Comp_Out_ref=hd.h_Comp_Out;added.push('h_Comp_Out_ref')}
           if(hd.h_Cond_Out){D.h_Cond_Out_ref=hd.h_Cond_Out;D.h_Eva_In_ref=hd.h_Cond_Out;added.push('h_Cond_Out_ref','h_Eva_In_ref')}
         }
-      }catch(e){logs.push(`  P-h 자동계산 실패: ${e.message}`)}
+      }catch(e){logs.push(`  P-h 실패: ${e.message}`)}
     }
     added.forEach(k=>allCols.add(k));
     if(added.length)logs.push(`  자동계산: ${added.join(', ')}`);
+    // 주요 선도 컬럼 체크
+    const psychCk=['T_Air_Eva_In','AH_Eva_In','AH_Cond_In','T_Air_Cond_Out','AH_Cond_Out'].map(k=>allCols.has(k)?'✓':'✗');
+    logs.push(`  습공기: ${psychCk.join(' ')}`);
     logs.push(`  → ${groupName}: ${allCols.size}col, ${totalRows}rows`);
     arr.push({name:groupName,data:D,columns:[...allCols],rows:totalRows});
   }
-  logs.push(`\n총 ${arr.length}건 로드`);setDbg(logs.join('\n'));
+  logs.push(`\n총 ${arr.length}건`);setDbg(logs.join('\n'));
   setCases(arr);const v={};arr.forEach(c=>v[c.name]=true);setCaseVis(v);setLoading(false);
   if(arr.length)setLoadMsg(`✅ ${arr.length}개 케이스 (${arr.reduce((s,c)=>s+c.rows,0)}행)`);
   if(errs.length)setLoadMsg(m=>(m?m+' / ':'')+'❌ '+errs.join(', '));
@@ -708,24 +725,25 @@ return(<div>
         }}>선택 삭제</button>
       </div>
     </div>
-    <div className="it" style={{marginBottom:6}}>💡 같은 폴더의 merged+calc를 함께 선택 후 "선택 파일 하나로 병합" 체크하면 한 케이스로 합쳐집니다.</div>
+    <div className="it" style={{marginBottom:6}}>💡 "자동" 모드: 같은 폴더에서 온 merged+calc를 자동으로 하나의 케이스로 병합합니다.</div>
     {files.length>0?<div className="file-sel" style={{maxHeight:200}}>
       {files.map(f=><div key={f.name} className="file-sel-item" style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px',borderBottom:'1px solid var(--bd)'}}>
         <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>{setSelFiles(p=>{const s=new Set(p);s.has(f.name)?s.delete(f.name):s.add(f.name);return s})}} style={{accentColor:'var(--teal)'}}/>
         <span style={{flex:1,fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
         {f.name.includes('_calc')&&<span className="rt rt-c">calc</span>}
         {f.name.includes('_merged')&&<span className="rt rt-m">merged</span>}
+        {f.source_dir&&<span className="it" title={f.source_dir} style={{fontSize:9,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>📁{f.source_dir.split(/[\\/]/).pop()}</span>}
         <span className="it">{(f.size/1024).toFixed(0)}KB</span>
         <button onClick={async()=>{if(!confirm(`${f.name} 삭제?`))return;await fetch(`${API}/api/results/${f.name}`,{method:'DELETE'});setSelFiles(p=>{const s=new Set(p);s.delete(f.name);return s});reloadFiles()}} style={{fontSize:9,padding:'1px 5px',border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.05)',color:'var(--red)',borderRadius:3,cursor:'pointer'}}>×</button>
       </div>)}
     </div>:<div className="it" style={{padding:16,textAlign:'center'}}>결과 파일이 없습니다.</div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8,flexWrap:'wrap'}}>
       <button className="bt bg" onClick={loadData} disabled={loading||!selFiles.size}>{loading?'로딩 중...':'데이터 로드 ('+selFiles.size+'개)'}</button>
-      <label style={{fontSize:12,display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}>
-        <input type="checkbox" checked={mergeMode} onChange={e=>setMergeMode(e.target.checked)} style={{accentColor:'var(--teal)'}}/>
-        <span style={{color:mergeMode?'var(--teal)':'var(--tx2)'}}>선택 파일 하나로 병합</span>
-      </label>
-      <span className="it" style={{fontSize:10}}>{mergeMode?'✓ 모든 선택 파일을 1개 케이스로 합침':'각 파일을 별도 케이스로 로드'}</span>
+      <span style={{fontSize:11,color:'var(--tx2)'}}>병합:</span>
+      {[['auto','자동 (같은 폴더)'],['all','전부 합침'],['each','개별 케이스']].map(([v,lb])=>
+        <label key={v} style={{fontSize:11,display:'flex',alignItems:'center',gap:3,cursor:'pointer',color:mergeMode===v?'var(--teal)':'var(--tx2)'}}>
+          <input type="radio" name="mm" checked={mergeMode===v} onChange={()=>setMergeMode(v)} style={{accentColor:'var(--teal)'}}/>{lb}
+        </label>)}
       {loadMsg&&<span className="it">{loadMsg}</span>}
     </div>
     {dbg&&<div style={{marginTop:8,padding:10,background:'var(--bg3,#1a1a25)',border:'1px solid var(--bd)',borderRadius:8,fontFamily:'var(--mono)',fontSize:10,whiteSpace:'pre-wrap',maxHeight:200,overflowY:'auto',color:'var(--tx2)'}}>{dbg}</div>}
@@ -991,10 +1009,21 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
     return pts.length?{name:cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
   }).filter(Boolean),[cases,caseVis,timeIdx]);
 
+  // 디버그: 첫 케이스의 실제 값
+  const psychDbg=useMemo(()=>{
+    const c=cases.find(cs=>caseVis[cs.name]);if(!c?.data)return'활성 케이스 없음';
+    const d=c.data,i=timeIdx[cases.indexOf(c)];
+    const v=k=>{if(!d[k])return'없음';const val=d[k][i];return val!=null?(typeof val==='number'?val.toFixed(3):String(val)):'null'};
+    return`[${c.name}] idx=${i}\n①T_Air_Eva_In=${v('T_Air_Eva_In')} AH_Eva_In=${v('AH_Eva_In')}\n②T_Air_Eva_Out=${v('T_Air_Eva_Out')} T_Eva_Out=${v('T_Eva_Out')} AH_Cond_In=${v('AH_Cond_In')}\n③T_Air_Cond_Out=${v('T_Air_Cond_Out')} AH_Cond_Out=${v('AH_Cond_Out')}`;
+  },[cases,caseVis,timeIdx]);
+
   return(<div>
     {!dataStatus.anyPt&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
-      ⚠️ 습공기 선도: T_Air_Eva_In + RH_Eva_In이 있으면 자동 계산됩니다. 현재 데이터에 온도/습도 컬럼이 없습니다.
+      ⚠️ 습공기 선도: T_Air_Eva_In + AH_Eva_In 등이 필요합니다.
     </div>}
+    <div style={{padding:8,margin:'0 0 8px',background:'var(--bg3)',borderRadius:6,fontFamily:'var(--mono)',fontSize:10,whiteSpace:'pre-wrap',color:'var(--tx2)'}}>
+      상태: Pt1={dataStatus.hasPt1?'✓':'✗'} Pt2={dataStatus.hasPt2?'✓':'✗'} Pt3={dataStatus.hasPt3?'✓':'✗'}{'\n'}{psychDbg}
+    </div>
     <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
       <span className="it">시점:</span><input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{flex:1,maxWidth:300}}/>
       <span style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--teal)',padding:'3px 8px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:5}}>{curT.toFixed(1)} min</span>
