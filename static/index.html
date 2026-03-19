@@ -588,16 +588,27 @@ const[dragMode,setDragMode]=useState('xy');
 const[chartH,setChartH]=useState(580);
 const[chartW,setChartW]=useState(0);
 
-// 파일 목록 로드
-useEffect(()=>{fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged')))).catch(()=>{})},[]);
+// 파일 목록 로드 (모든 CSV)
+const reloadFiles=()=>fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d)).catch(()=>{});
+useEffect(()=>{reloadFiles()},[]);
 
 // 데이터 로드
-const loadData=async()=>{if(!selFiles.size)return;setLoading(true);
-  const arr=[];
+const[loadMsg,setLoadMsg]=useState('');
+const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg('');
+  const arr=[];const errs=[];
   for(const fn of selFiles){
-    try{const r=await fetch(`${API}/api/viewer-data/${fn}`);const d=await r.json();arr.push({name:fn.replace(/_calc\.csv|_merged\.csv/,''),data:d.data,columns:d.columns})}catch(e){console.error(fn,e)}
+    try{
+      const r=await fetch(`${API}/api/viewer-data/${fn}`);
+      if(!r.ok){errs.push(`${fn}: ${r.status}`);continue}
+      const d=await r.json();
+      if(!d.data||!d.columns?.length){errs.push(`${fn}: 데이터 없음`);continue}
+      arr.push({name:fn.replace(/\.csv$/,''),data:d.data,columns:d.columns,rows:d.rows});
+    }catch(e){errs.push(`${fn}: ${e.message}`)}
   }
-  setCases(arr);const v={};arr.forEach(c=>v[c.name]=true);setCaseVis(v);setLoading(false)};
+  setCases(arr);const v={};arr.forEach(c=>v[c.name]=true);setCaseVis(v);setLoading(false);
+  if(arr.length)setLoadMsg(`${arr.length}개 파일 로드 완료 (${arr.reduce((s,c)=>s+c.rows,0)}행)`);
+  if(errs.length)setLoadMsg(m=>(m?m+' / ':'')+`오류: ${errs.join(', ')}`)
+};
 
 const togFile=n=>{setSelFiles(p=>{const s=new Set(p);s.has(n)?s.delete(n):s.add(n);return s})};
 
@@ -607,22 +618,29 @@ return(<div>
     <div className="ct">데이터 파일 선택</div>
 
     {/* 로컬 파일 불러오기 */}
-    <LocalImport onImported={()=>fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged'))))} addSuffix={false}/>
+    <LocalImport onImported={reloadFiles} addSuffix={false}/>
 
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,marginTop:10}}>
       <span className="it">{files.length}개 — {selFiles.size}개 선택</span>
       <div style={{display:'flex',gap:6}}>
         <button className="bt bs" onClick={()=>setSelFiles(new Set(files.map(f=>f.name)))}>전체</button>
         <button className="bt bs" onClick={()=>setSelFiles(new Set(files.filter(f=>f.name.includes('_calc')).map(f=>f.name)))}>calc만</button>
+        <button className="bt bs" onClick={()=>setSelFiles(new Set(files.filter(f=>f.name.includes('_merged')).map(f=>f.name)))}>merged만</button>
         <button className="bt bs" onClick={()=>setSelFiles(new Set())}>해제</button>
+        <button className="bt bs" onClick={reloadFiles}>새로고침</button>
       </div>
     </div>
     {files.length>0?<div className="file-sel" style={{maxHeight:120}}>{files.map(f=><div key={f.name} className="file-sel-item">
       <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>togFile(f.name)}/>
       <span style={{flex:1}}>{f.name}</span>
-      <span className={`rt ${f.name.includes('_calc')?'rt-c':'rt-m'}`}>{f.name.includes('_calc')?'calc':'merged'}</span>
-    </div>)}</div>:<div className="it" style={{padding:16,textAlign:'center'}}>결과 파일이 없습니다.</div>}
-    <button className="bt bg" onClick={loadData} disabled={loading||!selFiles.size} style={{marginTop:8}}>{loading?'로딩 중...':'데이터 로드 ('+selFiles.size+'개)'}</button>
+      {f.name.includes('_calc')&&<span className="rt rt-c">calc</span>}
+      {f.name.includes('_merged')&&<span className="rt rt-m">merged</span>}
+      <span className="it">{(f.size/1024).toFixed(0)} KB</span>
+    </div>)}</div>:<div className="it" style={{padding:16,textAlign:'center'}}>결과 파일이 없습니다. 로컬 파일을 불러오거나 Merge/Calc을 먼저 실행하세요.</div>}
+    <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8}}>
+      <button className="bt bg" onClick={loadData} disabled={loading||!selFiles.size}>{loading?'로딩 중...':'데이터 로드 ('+selFiles.size+'개)'}</button>
+      {loadMsg&&<span className="it">{loadMsg}</span>}
+    </div>
   </div>
 
   {cases.length>0&&<>

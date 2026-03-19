@@ -753,14 +753,19 @@ def viewer_data(fn: str, max_rows: int = 7200):
     """calc/merged CSV를 컬럼별 배열 JSON으로 반환 (Viewer용)."""
     p = RESULT_DIR / fn
     if not p.exists(): raise HTTPException(404, f"파일 없음: {fn}")
-    df = pd.read_csv(p)
+    try:
+        df = pd.read_csv(p)
+    except Exception as e:
+        raise HTTPException(400, f"CSV 읽기 실패: {str(e)}")
     if len(df) > max_rows:
         step = max(1, len(df) // max_rows)
         df = df.iloc[::step].reset_index(drop=True)
+    # NaN → None 처리 + 숫자 컬럼만
     cols = {}
     for c in df.columns:
         if pd.api.types.is_numeric_dtype(df[c]):
-            cols[c] = df[c].round(4).tolist()
+            s = df[c].round(4)
+            cols[c] = [None if pd.isna(v) else float(v) for v in s]
     return {"filename": fn, "rows": len(df), "columns": list(cols.keys()), "data": cols}
 
 
