@@ -808,6 +808,57 @@ def ref_saturation(name: str):
         raise HTTPException(400, f"냉매 포화선 생성 실패: {str(e)}")
 
 
+@app.post("/api/compute-enthalpy")
+def compute_enthalpy(req: dict):
+    """
+    T + P 배열로부터 냉매 엔탈피 일괄 계산 (P-h 선도용).
+    merged CSV에 h 컬럼이 없을 때 프론트엔드에서 호출.
+    입력: {T_Comp_In:[], T_Comp_Out:[], T_Cond_Out:[], P_Comp_In:[], P_Comp_Out:[], refrigerant, patm}
+    출력: {h_Comp_In:[], h_Comp_Out:[], h_Cond_Out:[]}
+    """
+    try:
+        from properties import resolve_refrigerant
+        from CoolProp.CoolProp import PropsSI
+
+        ref = resolve_refrigerant(req.get("refrigerant", "R290"))
+        patm = req.get("patm", 101.325)  # kPa
+
+        def calc_h(T_arr, P_arr_barg):
+            """T[°C] + P[barg] → h[kJ/kg] 배열."""
+            if not T_arr or not P_arr_barg:
+                return None
+            result = []
+            for t, p in zip(T_arr, P_arr_barg):
+                if t is None or p is None:
+                    result.append(None)
+                    continue
+                try:
+                    p_pa = (p + patm / 100) * 1e5  # barg → Pa
+                    h = PropsSI("H", "T", t + 273.15, "P", p_pa, ref) / 1000  # J/kg → kJ/kg
+                    result.append(round(h, 2))
+                except:
+                    result.append(None)
+            return result
+
+        out = {}
+        T_ci = req.get("T_Comp_In")
+        T_co = req.get("T_Comp_Out")
+        T_cd = req.get("T_Cond_Out")
+        P_in = req.get("P_Comp_In")
+        P_out = req.get("P_Comp_Out")
+
+        if T_ci and P_in:
+            out["h_Comp_In"] = calc_h(T_ci, P_in)
+        if T_co and P_out:
+            out["h_Comp_Out"] = calc_h(T_co, P_out)
+        if T_cd and P_out:
+            out["h_Cond_Out"] = calc_h(T_cd, P_out)
+
+        return out
+    except Exception as e:
+        raise HTTPException(400, f"엔탈피 계산 실패: {str(e)}")
+
+
 @app.get("/")
 def index():
     f = STATIC / "index.html"

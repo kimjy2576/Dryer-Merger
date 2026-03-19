@@ -624,8 +624,38 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
       const txt=await r.text();
       let d;try{d=JSON.parse(txt)}catch(pe){errs.push(`${fn}: JSON파싱실패`);continue}
       if(!d.data||!d.columns?.length){errs.push(`${fn}: 데이터없음`);continue}
-      logs.push(`  ${d.columns.length}col, ${d.rows}rows, Time: ${['Time_min','Time_sec','Time'].filter(k=>d.data[k]).join(',')}`);
-      arr.push({name:base,data:d.data,columns:d.columns,rows:d.rows});
+      // ── 후처리: 누락 컬럼 자동 계산 (merged→선도 지원) ──
+      const D=d.data;const added=[];
+
+      // 습공기: T + RH → AH 계산
+      if(!D.AH_Eva_In&&D.T_Air_Eva_In&&D.RH_Eva_In){
+        D.AH_Eva_In=D.T_Air_Eva_In.map((t,i)=>t!=null&&D.RH_Eva_In[i]!=null?+wFromRH(t,D.RH_Eva_In[i]).toFixed(5):null);
+        added.push('AH_Eva_In');
+      }
+      const tEO=D.T_Air_Eva_Out||D.T_Eva_Out;
+      if(!D.AH_Cond_In&&tEO){
+        D.AH_Cond_In=tEO.map((t,i)=>{if(t==null)return null;const rh=D.RH_Eva_Out?.[i]??0.95;return+wFromRH(t,rh).toFixed(5)});
+        added.push('AH_Cond_In');
+        if(!D.T_Air_Eva_Out&&D.T_Eva_Out){D.T_Air_Eva_Out=[...D.T_Eva_Out];added.push('T_Air_Eva_Out')}
+      }
+      if(!D.AH_Cond_Out&&D.AH_Cond_In){D.AH_Cond_Out=[...D.AH_Cond_In];added.push('AH_Cond_Out')}
+
+      // P-h: T + P → h 서버 일괄 계산
+      if(!D.h_Comp_In_ref&&D.P_Comp_In&&(D.T_Comp_In||D.T_Eva_Out)){
+        try{
+          const body={T_Comp_In:D.T_Comp_In||D.T_Eva_Out,T_Comp_Out:D.T_Comp_Out||D.T_Cond_In,T_Cond_Out:D.T_Cond_Out,P_Comp_In:D.P_Comp_In,P_Comp_Out:D.P_Comp_Out,refrigerant:cfg?.environment?.refrigerant||'R290',patm:cfg?.environment?.patm||101.325};
+          const hr=await fetch(`${API}/api/compute-enthalpy`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+          if(hr.ok){const hd=await hr.json();
+            if(hd.h_Comp_In){D.h_Comp_In_ref=hd.h_Comp_In;added.push('h_Comp_In_ref')}
+            if(hd.h_Comp_Out){D.h_Comp_Out_ref=hd.h_Comp_Out;added.push('h_Comp_Out_ref')}
+            if(hd.h_Cond_Out){D.h_Cond_Out_ref=hd.h_Cond_Out;D.h_Eva_In_ref=hd.h_Cond_Out;added.push('h_Cond_Out_ref','h_Eva_In_ref')}
+          }
+        }catch(e){logs.push(`  P-h 자동계산 실패: ${e.message}`)}
+      }
+
+      if(added.length)logs.push(`  자동계산: ${added.join(', ')}`);
+      logs.push(`  ${d.columns.length}col(+${added.length}), ${d.rows}rows`);
+      arr.push({name:base,data:D,columns:[...new Set([...d.columns,...added])],rows:d.rows});
     }catch(e){errs.push(`${fn}: ${e.message}`)}
   }
   logs.push(`→ ${arr.length}건 로드`);setDbg(logs.join('\n'));
@@ -967,7 +997,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
 
   return(<div>
     {!dataStatus.anyPt&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
-      ⚠️ 습공기 선도 데이터가 없습니다. <b>_calc.csv</b>를 로드하세요. (필요: AH_Eva_In, AH_Cond_In, AH_Cond_Out 등)
+      ⚠️ 습공기 선도: T_Air_Eva_In + RH_Eva_In이 있으면 자동 계산됩니다. 현재 데이터에 온도/습도 컬럼이 없습니다.
     </div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
       <span className="it">시점:</span><input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{flex:1,maxWidth:300}}/>
@@ -1040,7 +1070,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
 
   return(<div>
     {!hasRefData&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
-      ⚠️ P-h 선도 데이터가 없습니다. <b>_calc.csv</b>를 로드하세요. (필요: h_Comp_In_ref, P_Comp_In 등)
+      ⚠️ P-h 선도: T_Comp_In + P_Comp_In이 있으면 서버에서 엔탈피를 자동 계산합니다. 현재 데이터에 압력/온도 컬럼이 없습니다.
     </div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10,flexWrap:'wrap'}}>
       <span className="it">냉매:</span>
