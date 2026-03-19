@@ -608,59 +608,71 @@ useEffect(()=>{reloadFiles()},[]);
 const[loadMsg,setLoadMsg]=useState('');
 const[dbg,setDbg]=useState('');
 const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg('');setDbg('');
-  // 세트별로 calc 우선, merged 폴백
-  const toLoad=new Map(); // base → filename
+  // ── 1단계: 선택된 파일을 base별 그룹핑 ──
+  const groups=new Map(); // base → {merged:fn, calc:fn, others:[fn]}
   for(const fn of selFiles){
     const base=fn.replace(/_calc\.csv$/,'').replace(/_merged\.csv$/,'').replace(/\.csv$/,'');
-    const isCalc=fn.includes('_calc');
-    if(!toLoad.has(base)||isCalc)toLoad.set(base,fn); // calc가 있으면 덮어씀
+    if(!groups.has(base))groups.set(base,{merged:null,calc:null,others:[]});
+    const g=groups.get(base);
+    if(fn.includes('_calc'))g.calc=fn;
+    else if(fn.includes('_merged'))g.merged=fn;
+    else g.others.push(fn);
   }
+  // ── 2단계: 각 그룹별로 파일 로드 + 병합 ──
   const arr=[];const errs=[];const logs=[];
-  for(const[base,fn] of toLoad){
-    logs.push(`[${base}] → ${fn}`);
-    try{
-      const r=await fetch(`${API}/api/viewer-data/${fn}`);
-      if(!r.ok){errs.push(`${fn}: ${r.status}`);continue}
-      const txt=await r.text();
-      let d;try{d=JSON.parse(txt)}catch(pe){errs.push(`${fn}: JSON파싱실패`);continue}
-      if(!d.data||!d.columns?.length){errs.push(`${fn}: 데이터없음`);continue}
-      // ── 후처리: 누락 컬럼 자동 계산 (merged→선도 지원) ──
-      const D=d.data;const added=[];
+  for(const[base,g] of groups){
+    const filesToLoad=[g.calc,g.merged,...g.others].filter(Boolean);
+    logs.push(`[${base}] 파일: ${filesToLoad.join(', ')}`);
+    const merged={};let totalRows=0;const allCols=new Set();
+    for(const fn of filesToLoad){
+      try{
+        const r=await fetch(`${API}/api/viewer-data/${fn}`);
+        if(!r.ok){errs.push(`${fn}: ${r.status}`);continue}
+        const txt=await r.text();
+        let d;try{d=JSON.parse(txt)}catch(pe){errs.push(`${fn}: JSON파싱실패`);continue}
+        if(!d.data||!d.columns?.length)continue;
+        // 병합: 이미 있는 컬럼은 덮어쓰지 않음 (먼저 로드된 게 우선 = calc 우선)
+        for(const col of d.columns){
+          if(!merged[col]){merged[col]=d.data[col];allCols.add(col)}
+        }
+        totalRows=Math.max(totalRows,d.rows);
+        logs.push(`  + ${fn}: ${d.columns.length}col, ${d.rows}rows`);
+      }catch(e){errs.push(`${fn}: ${e.message}`)}
+    }
+    if(!Object.keys(merged).length){errs.push(`${base}: 데이터 없음`);continue}
 
-      // 습공기: T + RH → AH 계산
-      if(!D.AH_Eva_In&&D.T_Air_Eva_In&&D.RH_Eva_In){
-        D.AH_Eva_In=D.T_Air_Eva_In.map((t,i)=>t!=null&&D.RH_Eva_In[i]!=null?+wFromRH(t,D.RH_Eva_In[i]).toFixed(5):null);
-        added.push('AH_Eva_In');
-      }
-      const tEO=D.T_Air_Eva_Out||D.T_Eva_Out;
-      if(!D.AH_Cond_In&&tEO){
-        D.AH_Cond_In=tEO.map((t,i)=>{if(t==null)return null;const rh=D.RH_Eva_Out?.[i]??0.95;return+wFromRH(t,rh).toFixed(5)});
-        added.push('AH_Cond_In');
-        if(!D.T_Air_Eva_Out&&D.T_Eva_Out){D.T_Air_Eva_Out=[...D.T_Eva_Out];added.push('T_Air_Eva_Out')}
-      }
-      if(!D.AH_Cond_Out&&D.AH_Cond_In){D.AH_Cond_Out=[...D.AH_Cond_In];added.push('AH_Cond_Out')}
-
-      // P-h: T + P → h 서버 일괄 계산
-      if(!D.h_Comp_In_ref&&D.P_Comp_In&&(D.T_Comp_In||D.T_Eva_Out)){
-        try{
-          const body={T_Comp_In:D.T_Comp_In||D.T_Eva_Out,T_Comp_Out:D.T_Comp_Out||D.T_Cond_In,T_Cond_Out:D.T_Cond_Out,P_Comp_In:D.P_Comp_In,P_Comp_Out:D.P_Comp_Out,refrigerant:cfg?.environment?.refrigerant||'R290',patm:cfg?.environment?.patm||101.325};
-          const hr=await fetch(`${API}/api/compute-enthalpy`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-          if(hr.ok){const hd=await hr.json();
-            if(hd.h_Comp_In){D.h_Comp_In_ref=hd.h_Comp_In;added.push('h_Comp_In_ref')}
-            if(hd.h_Comp_Out){D.h_Comp_Out_ref=hd.h_Comp_Out;added.push('h_Comp_Out_ref')}
-            if(hd.h_Cond_Out){D.h_Cond_Out_ref=hd.h_Cond_Out;D.h_Eva_In_ref=hd.h_Cond_Out;added.push('h_Cond_Out_ref','h_Eva_In_ref')}
-          }
-        }catch(e){logs.push(`  P-h 자동계산 실패: ${e.message}`)}
-      }
-
-      if(added.length)logs.push(`  자동계산: ${added.join(', ')}`);
-      logs.push(`  ${d.columns.length}col(+${added.length}), ${d.rows}rows`);
-      arr.push({name:base,data:D,columns:[...new Set([...d.columns,...added])],rows:d.rows});
-    }catch(e){errs.push(`${fn}: ${e.message}`)}
+    // ── 3단계: 후처리 — 누락 컬럼 자동 계산 ──
+    const D=merged;const added=[];
+    // 습공기: T + RH → AH
+    if(!D.AH_Eva_In&&D.T_Air_Eva_In&&D.RH_Eva_In){
+      D.AH_Eva_In=D.T_Air_Eva_In.map((t,i)=>t!=null&&D.RH_Eva_In[i]!=null?+wFromRH(t,D.RH_Eva_In[i]).toFixed(5):null);added.push('AH_Eva_In');
+    }
+    const tEO=D.T_Air_Eva_Out||D.T_Eva_Out;
+    if(!D.AH_Cond_In&&tEO){
+      D.AH_Cond_In=tEO.map((t,i)=>{if(t==null)return null;const rh=D.RH_Eva_Out?.[i]??0.95;return+wFromRH(t,rh).toFixed(5)});added.push('AH_Cond_In');
+      if(!D.T_Air_Eva_Out&&D.T_Eva_Out){D.T_Air_Eva_Out=[...D.T_Eva_Out];added.push('T_Air_Eva_Out')}
+    }
+    if(!D.AH_Cond_Out&&D.AH_Cond_In){D.AH_Cond_Out=[...D.AH_Cond_In];added.push('AH_Cond_Out')}
+    // P-h: T + P → h 서버 계산
+    if(!D.h_Comp_In_ref&&D.P_Comp_In&&(D.T_Comp_In||D.T_Eva_Out)){
+      try{
+        const body={T_Comp_In:D.T_Comp_In||D.T_Eva_Out,T_Comp_Out:D.T_Comp_Out||D.T_Cond_In,T_Cond_Out:D.T_Cond_Out,P_Comp_In:D.P_Comp_In,P_Comp_Out:D.P_Comp_Out,refrigerant:cfg?.environment?.refrigerant||'R290',patm:cfg?.environment?.patm||101.325};
+        const hr=await fetch(`${API}/api/compute-enthalpy`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        if(hr.ok){const hd=await hr.json();
+          if(hd.h_Comp_In){D.h_Comp_In_ref=hd.h_Comp_In;added.push('h_Comp_In_ref')}
+          if(hd.h_Comp_Out){D.h_Comp_Out_ref=hd.h_Comp_Out;added.push('h_Comp_Out_ref')}
+          if(hd.h_Cond_Out){D.h_Cond_Out_ref=hd.h_Cond_Out;D.h_Eva_In_ref=hd.h_Cond_Out;added.push('h_Cond_Out_ref','h_Eva_In_ref')}
+        }
+      }catch(e){logs.push(`  P-h 자동계산 실패: ${e.message}`)}
+    }
+    added.forEach(k=>allCols.add(k));
+    if(added.length)logs.push(`  자동계산: ${added.join(', ')}`);
+    logs.push(`  → ${base}: ${allCols.size}col, ${totalRows}rows`);
+    arr.push({name:base,data:D,columns:[...allCols],rows:totalRows});
   }
-  logs.push(`→ ${arr.length}건 로드`);setDbg(logs.join('\n'));
+  logs.push(`\n총 ${arr.length}건 로드 (${groups.size}세트)`);setDbg(logs.join('\n'));
   setCases(arr);const v={};arr.forEach(c=>v[c.name]=true);setCaseVis(v);setLoading(false);
-  if(arr.length)setLoadMsg(`✅ ${arr.length}개 로드 (${arr.reduce((s,c)=>s+c.rows,0)}행)`);
+  if(arr.length)setLoadMsg(`✅ ${arr.length}개 케이스 로드 (${arr.reduce((s,c)=>s+c.rows,0)}행)`);
   if(errs.length)setLoadMsg(m=>(m?m+' / ':'')+'❌ '+errs.join(', '));
 };
 
