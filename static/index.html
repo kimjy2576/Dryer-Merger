@@ -672,33 +672,56 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   const[catIdx,setCatIdx]=useState(0);
   const[rows,setRows]=useState(2);const[cols,setCols]=useState(3);
   const[smOn,setSmOn]=useState(false);const[smM,setSmM]=useState('SMA');const[smW,setSmW]=useState(10);
+  const[err,setErr]=useState('');
   const ref=useRef(null);
 
-  // 전체 가용 변수 목록 (Time 제외)
-  const allVars=useMemo(()=>{const s=new Set();cases.forEach(c=>Object.keys(c.data).forEach(k=>{if(!k.startsWith('Time'))s.add(k)}));return[...s].sort()},[cases]);
+  const allVars=useMemo(()=>{
+    if(!cases||!cases.length)return[];
+    const s=new Set();
+    cases.forEach(c=>{if(c&&c.data)Object.keys(c.data).forEach(k=>{if(!/^Time/i.test(k))s.add(k)})});
+    return[...s].sort();
+  },[cases]);
 
-  // "전체" 카테고리를 동적으로 추가
   const cats=useMemo(()=>[{name:'전체',vars:allVars},...VW_CATS],[allVars]);
-
-  const cat=cats[catIdx]||cats[0];
-  const avail=cat.vars.filter(k=>cases.some(c=>c.data[k]));
+  const safeIdx=catIdx<cats.length?catIdx:0;
+  const cat=cats[safeIdx];
+  const avail=cat.vars.filter(k=>cases.some(c=>c&&c.data&&c.data[k]));
   const plots=avail.slice(0,rows*cols);
 
-  useEffect(()=>{if(!ref.current||!plots.length)return;
-    const tr=[],lo={grid:{rows:Math.min(rows,Math.ceil(plots.length/cols)),columns:Math.min(cols,plots.length),pattern:'independent',xgap:.06,ygap:.12},height:chartH,width:chartW||undefined,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom'};
-    plots.forEach((k,pi)=>{
-      lo['xaxis'+(pi+1)]={title:Math.floor(pi/cols)+1===rows?{text:'Time [min]',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
-      lo['yaxis'+(pi+1)]={title:{text:k,font:{size:10}},gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
-      cases.forEach((cs,ci)=>{if(!caseVis[cs.name]||!cs.data[k])return;
-        const xArr=cs.data.Time_min||cs.data.Time_sec||cs.data.Time||Object.values(cs.data)[0]?.map((_,i)=>i);
-        let yArr=cs.data[k];if(smOn)yArr=vSmooth(yArr,smM,smW);
-        tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci],width:lw},xaxis:'x'+(pi+1>1?pi+1:''),yaxis:'y'+(pi+1>1?pi+1:''),hovertemplate:'%{y:.2f}<extra>'+cs.name+'</extra>'})});
-    });
-    Plotly.react(ref.current,tr,lo,{responsive:!chartW,displaylogo:false,scrollZoom:true})
-  },[cases,caseVis,lw,chartH,chartW,catIdx,plots,rows,cols,smOn,smM,smW,dragMode]);
+  useEffect(()=>{
+    if(!ref.current||!plots.length){return}
+    setErr('');
+    try{
+      const nRows=Math.max(1,Math.min(rows,Math.ceil(plots.length/cols)));
+      const nCols=Math.max(1,Math.min(cols,plots.length));
+      const tr=[];
+      const lo={grid:{rows:nRows,columns:nCols,pattern:'independent',xgap:.06,ygap:.12},height:chartH,width:chartW||undefined,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom'};
+      plots.forEach((k,pi)=>{
+        lo['xaxis'+(pi+1)]={title:Math.floor(pi/nCols)+1===nRows?{text:'Time',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
+        lo['yaxis'+(pi+1)]={title:{text:k,font:{size:10}},gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
+        cases.forEach((cs,ci)=>{
+          if(!cs||!cs.data||!caseVis[cs.name]||!cs.data[k])return;
+          const xArr=cs.data.Time_min||cs.data.Time_sec||cs.data.Time;
+          if(!xArr||!xArr.length)return;
+          let yArr=cs.data[k];
+          if(!yArr||!yArr.length)return;
+          if(smOn&&yArr.length>3)try{yArr=vSmooth(yArr,smM,smW)}catch(e){}
+          tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},xaxis:'x'+(pi+1>1?pi+1:''),yaxis:'y'+(pi+1>1?pi+1:''),hovertemplate:'%{y:.2f}<extra>'+cs.name+'</extra>'});
+        });
+      });
+      if(tr.length){
+        Plotly.react(ref.current,tr,lo,{responsive:!chartW,displaylogo:false,scrollZoom:true});
+      }else{
+        setErr('표시할 trace가 없습니다. Time 컬럼(Time_min/Time_sec/Time)이 있는지 확인하세요.');
+      }
+    }catch(e){
+      console.error('VwChart 에러:',e);
+      setErr('차트 렌더링 오류: '+e.message);
+    }
+  },[cases,caseVis,lw,chartH,chartW,safeIdx,plots,rows,cols,smOn,smM,smW,dragMode]);
 
   return(<div>
-    <div style={{display:'flex',gap:2,marginBottom:8,flexWrap:'wrap'}}>{cats.map((c,i)=><button key={c.name} className={`bt bs ${catIdx===i?'on':''}`} onClick={()=>setCatIdx(i)}>{c.name}{i===0?' ('+allVars.length+')':''}</button>)}</div>
+    <div style={{display:'flex',gap:2,marginBottom:8,flexWrap:'wrap'}}>{cats.map((c,i)=><button key={c.name} className={`bt bs ${safeIdx===i?'on':''}`} onClick={()=>setCatIdx(i)}>{c.name}{i===0?' ('+allVars.length+')':''}</button>)}</div>
     <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
       <span className="it">행:</span><select value={rows} onChange={e=>setRows(+e.target.value)} style={{width:50}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
       <span className="it">열:</span><select value={cols} onChange={e=>setCols(+e.target.value)} style={{width:50}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
@@ -707,8 +730,9 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:65}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="60" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:60}}/><span className="it">{smW}</span></>}
       <span className="it" style={{marginLeft:'auto'}}>{avail.length}개 변수 / {plots.length}개 표시</span>
     </div>
+    {err&&<div style={{padding:12,margin:'8px 0',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,fontSize:12,color:'var(--red)'}}>{err}</div>}
     {plots.length>0?<div className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
-    :<div className="cd"><div className="it" style={{padding:20,textAlign:'center'}}>이 카테고리에 해당하는 변수가 없습니다. [전체] 카테고리를 선택하세요.</div></div>}
+    :<div className="cd"><div className="it" style={{padding:20,textAlign:'center'}}>이 카테고리에 해당하는 변수가 없습니다. [전체] 탭을 선택하세요.<br/><span style={{fontSize:11,color:'var(--tx3)'}}>가용 컬럼: {allVars.slice(0,10).join(', ')}{allVars.length>10?'...':''}</span></div></div>}
   </div>)
 }
 
@@ -716,23 +740,23 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
 function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
   const[timeR,setTimeR]=useState(.5);
   const ref=useRef(null);
-  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs.data.Time_min;if(!t)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
+  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs?.data?.Time_min;if(!t||!t.length)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
   const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||0;
 
   useEffect(()=>{if(!ref.current)return;
     const tr=[...PSYCH_BG];
     cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;
-      if(!d.T_Air_Eva_In||!d.AH_Eva_In)return;
+      if(!d||!d.T_Air_Eva_In||!d.AH_Eva_In)return;
       const pts=[[d.T_Air_Eva_In[i],d.AH_Eva_In?.[i],'①Eva In'],[d.T_Air_Eva_Out?.[i],d.AH_Cond_In?.[i],'②Eva Out'],[d.T_Air_Cond_Out?.[i],d.AH_Cond_Out?.[i],'③Cond Out']].filter(p=>p[0]!=null&&p[1]!=null);
       if(pts.length){const xs=[...pts.map(p=>p[0]),pts[0][0]],ys=[...pts.map(p=>p[1]),pts[0][1]],tx=[...pts.map(p=>p[2]),''];
-        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:10,color:VW_COLORS[ci]},marker:{size:10},line:{color:VW_COLORS[ci],width:lw},name:cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
+        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:10},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
     });
-    Plotly.react(ref.current,tr,{title:{text:'습공기 선도 (t='+curT.toFixed(1)+' min)',font:{size:14}},xaxis:{title:'건구온도 [°C]',range:[-5,70],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'절대습도 [kg/kg]',range:[0,.032],gridcolor:'rgba(255,255,255,0.04)'},height:chartH,width:chartW||undefined,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!chartW,displaylogo:false,scrollZoom:true})
+    try{Plotly.react(ref.current,tr,{title:{text:'습공기 선도 (t='+curT.toFixed(1)+' min)',font:{size:14}},xaxis:{title:'건구온도 [°C]',range:[-5,70],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'절대습도 [kg/kg]',range:[0,.032],gridcolor:'rgba(255,255,255,0.04)'},height:chartH,width:chartW||undefined,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!chartW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
   },[cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT]);
 
   // 상태점 테이블
-  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d.T_Air_Eva_In)return null;
-    return{name:cs.name,color:VW_COLORS[ci],pts:[
+  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d||!d.T_Air_Eva_In)return null;
+    return{name:cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts:[
       {lb:'①증발기입구',T:d.T_Air_Eva_In[i],W:d.AH_Eva_In?.[i]},
       {lb:'②증발기출구',T:d.T_Air_Eva_Out?.[i],W:d.AH_Cond_In?.[i]},
       {lb:'③응축기출구',T:d.T_Air_Cond_Out?.[i],W:d.AH_Cond_Out?.[i]}
@@ -775,26 +799,26 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
     fetch(`${API}/api/ref-saturation/${encodeURIComponent(refName)}`).then(r=>{if(!r.ok)throw new Error('API 오류');return r.json()}).then(d=>setSatData(d)).catch(e=>setSatErr(e.message))
   },[refName]);
 
-  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs.data.Time_min;if(!t)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
+  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs?.data?.Time_min;if(!t||!t.length)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
   const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||0;
 
   useEffect(()=>{if(!ref.current||!satData)return;
     const s=satData.sat,c=satData.critical;
     const tr=[{x:s.hl,y:s.P,mode:'lines',line:{color:'#3b82f6',width:2.5},showlegend:false,hoverinfo:'skip'},{x:s.hv,y:s.P,mode:'lines',line:{color:'#ef4444',width:2.5},showlegend:false,hoverinfo:'skip'},{x:[c.h],y:[c.P],mode:'markers',marker:{size:10,color:'#fff',symbol:'diamond'},showlegend:false,hovertemplate:'임계점<br>'+c.P.toFixed(1)+'bar, '+c.T.toFixed(1)+'°C<extra></extra>'}];
     cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;
-      if(!d.h_Comp_In_ref||!d.P_Comp_In)return;
+      if(!d||!d.h_Comp_In_ref||!d.P_Comp_In)return;
       const BA=1.01325;
       const hA=[d.h_Comp_In_ref[i],d.h_Comp_Out_ref?.[i],d.h_Cond_Out_ref?.[i],d.h_Eva_In_ref?.[i],d.h_Comp_In_ref[i]];
       const pA=[d.P_Comp_In[i]+BA,d.P_Comp_Out?.[i]+BA,(d.P_Comp_Out?.[i]||0)+BA-.3,d.P_Comp_In[i]+BA+.1,d.P_Comp_In[i]+BA];
-      tr.push({x:hA,y:pA,mode:'lines+markers+text',text:['①','②','③','④',''],textfont:{size:10,color:VW_COLORS[ci]},marker:{size:9},line:{color:VW_COLORS[ci],width:lw},name:cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})
+      tr.push({x:hA,y:pA,mode:'lines+markers+text',text:['①','②','③','④',''],textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:9},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})
     });
     const hMin=Math.min(...s.hl)*.8,hMax=Math.max(...s.hv)*1.05;
-    Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+' (t='+curT.toFixed(1)+' min)',font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:[hMin,hMax],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'압력 [bar abs]',type:'log',range:[Math.log10(.5),Math.log10(c.P*1.15)],gridcolor:'rgba(255,255,255,0.04)',dtick:.30103},height:chartH,width:chartW||undefined,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!chartW,displaylogo:false,scrollZoom:true})
+    try{Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+' (t='+curT.toFixed(1)+' min)',font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:[hMin,hMax],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'압력 [bar abs]',type:'log',range:[Math.log10(.5),Math.log10(c.P*1.15)],gridcolor:'rgba(255,255,255,0.04)',dtick:.30103},height:chartH,width:chartW||undefined,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!chartW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
   },[satData,cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT]);
 
   // 상태점 테이블
-  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d.h_Comp_In_ref)return null;const BA=1.01325;
-    return{name:cs.name,color:VW_COLORS[ci],pts:[
+  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d||!d.h_Comp_In_ref||!d.P_Comp_In)return null;const BA=1.01325;
+    return{name:cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts:[
       {lb:'①압축기입구',P:d.P_Comp_In[i]+BA,h:d.h_Comp_In_ref[i],T:d.T_Comp_In?.[i]},
       {lb:'②압축기출구',P:(d.P_Comp_Out?.[i]||0)+BA,h:d.h_Comp_Out_ref?.[i],T:d.T_Comp_Out?.[i]},
       {lb:'③응축기출구',P:(d.P_Comp_Out?.[i]||0)+BA-.3,h:d.h_Cond_Out_ref?.[i],T:d.T_Cond_Out?.[i]},
