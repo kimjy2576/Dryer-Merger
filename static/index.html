@@ -608,30 +608,30 @@ useEffect(()=>{reloadFiles()},[]);
 const[loadMsg,setLoadMsg]=useState('');
 const[dbg,setDbg]=useState('');
 const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg('');setDbg('');
-  const arr=[];const errs=[];const logs=[];
+  // 세트별로 calc 우선, merged 폴백
+  const toLoad=new Map(); // base → filename
   for(const fn of selFiles){
-    logs.push(`[${fn}] 요청...`);
+    const base=fn.replace(/_calc\.csv$/,'').replace(/_merged\.csv$/,'').replace(/\.csv$/,'');
+    const isCalc=fn.includes('_calc');
+    if(!toLoad.has(base)||isCalc)toLoad.set(base,fn); // calc가 있으면 덮어씀
+  }
+  const arr=[];const errs=[];const logs=[];
+  for(const[base,fn] of toLoad){
+    logs.push(`[${base}] → ${fn}`);
     try{
       const r=await fetch(`${API}/api/viewer-data/${fn}`);
-      logs.push(`  응답: ${r.status}`);
       if(!r.ok){errs.push(`${fn}: ${r.status}`);continue}
       const txt=await r.text();
-      logs.push(`  크기: ${txt.length}B`);
-      let d;
-      try{d=JSON.parse(txt)}catch(pe){errs.push(`${fn}: JSON파싱실패`);logs.push(`  JSON에러: ${pe.message}, 앞100: ${txt.slice(0,100)}`);continue}
-      logs.push(`  rows=${d.rows}, cols=${d.columns?.length}, dataKeys=${d.data?Object.keys(d.data).length:0}`);
+      let d;try{d=JSON.parse(txt)}catch(pe){errs.push(`${fn}: JSON파싱실패`);continue}
       if(!d.data||!d.columns?.length){errs.push(`${fn}: 데이터없음`);continue}
-      const timeKeys=['Time_min','Time_sec','Time'].filter(k=>d.data[k]);
-      logs.push(`  시간컬럼: ${timeKeys.join(',')}`);
-      arr.push({name:fn.replace(/\.csv$/,''),data:d.data,columns:d.columns,rows:d.rows});
-    }catch(e){errs.push(`${fn}: ${e.message}`);logs.push(`  예외: ${e.message}`)}
+      logs.push(`  ${d.columns.length}col, ${d.rows}rows, Time: ${['Time_min','Time_sec','Time'].filter(k=>d.data[k]).join(',')}`);
+      arr.push({name:base,data:d.data,columns:d.columns,rows:d.rows});
+    }catch(e){errs.push(`${fn}: ${e.message}`)}
   }
-  logs.push(`결과: ${arr.length}건 성공, ${errs.length}건 오류`);
-  setDbg(logs.join('\n'));
+  logs.push(`→ ${arr.length}건 로드`);setDbg(logs.join('\n'));
   setCases(arr);const v={};arr.forEach(c=>v[c.name]=true);setCaseVis(v);setLoading(false);
   if(arr.length)setLoadMsg(`✅ ${arr.length}개 로드 (${arr.reduce((s,c)=>s+c.rows,0)}행)`);
   if(errs.length)setLoadMsg(m=>(m?m+' / ':'')+'❌ '+errs.join(', '));
-  if(!arr.length&&!errs.length)setLoadMsg('⚠️ 데이터 없음');
 };
 
 // 세트 토글: base 기준으로 calc+merged 함께 선택/해제
@@ -757,8 +757,9 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   const updateTab=(upd)=>setTabs(ts=>ts.map((t,i)=>i===tabIdx?{...t,...upd}:t));
   const removeTab=(i)=>{if(tabs.length<=1)return;setTabs(ts=>ts.filter((_,j)=>j!==i));setTabIdx(ti=>Math.min(ti,tabs.length-2))};
   const addCustomTab=()=>{
-    const name=prompt('새 탭 이름:');if(!name)return;
-    setTabs(ts=>[...ts,{id:Date.now(),name,rows:2,cols:3,plots:allVars.slice(0,6)}]);
+    const name=prompt('새 탭 이름:','커스텀');if(!name)return;
+    // 현재 탭의 변수/행열을 복제
+    setTabs(ts=>[...ts,{id:Date.now(),name,rows:tab.rows,cols:tab.cols,plots:[...tab.plots]}]);
     setTabIdx(tabs.length);
   };
 
@@ -773,8 +774,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   // 변수 조작
   const setPlotVar=(si,v)=>{const np=[...tab.plots];np[si]=v;updateTab({plots:np})};
   const addPlot=()=>{const rest=allVars.filter(k=>!tab.plots.includes(k));if(rest.length)updateTab({plots:[...tab.plots,rest[0]]})};
-  const removePlot=(i)=>{if(tab.plots.length<=1)return;updateTab({plots:tab.plots.filter((_,j)=>j!==i)})};
-  // 변수 순서 변경 (#10)
+  const removePlot=(i)=>updateTab({plots:tab.plots.filter((_,j)=>j!==i)});
   const movePlot=(from,to)=>{if(from===to)return;const np=[...tab.plots];const[m]=np.splice(from,1);np.splice(to,0,m);updateTab({plots:np})};
 
   // Fit
@@ -901,43 +901,51 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
 
 // ═══ Viewer: 습공기 선도 ═══
 function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
-  const reqCols=['T_Air_Eva_In','AH_Eva_In','T_Air_Eva_Out','AH_Cond_In','T_Air_Cond_Out','AH_Cond_Out'];
-  const colCheck=useMemo(()=>{
-    const found=new Set();cases.forEach(c=>{if(c?.data)Object.keys(c.data).forEach(k=>found.add(k))});
-    return{found:[...found],missing:reqCols.filter(k=>!found.has(k)),hasAll:reqCols.every(k=>found.has(k))};
-  },[cases]);
-
+  // calc 변수명 또는 원본 변수명 자동 탐지
+  const findCol=(d,names)=>{for(const n of names){if(d[n])return d[n]}return null};
   const[timeR,setTimeR]=useState(.5);
   const ref=useRef(null);
   const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs?.data?.Time_min||cs?.data?.Time_sec||cs?.data?.Time;if(!t||!t.length)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
   const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||cases[0]?.data?.Time_sec?.[timeIdx[0]]||0;
 
+  // 누락 체크
+  const dataStatus=useMemo(()=>{
+    const found=new Set();cases.forEach(c=>{if(c?.data)Object.keys(c.data).forEach(k=>found.add(k))});
+    const has=k=>found.has(k);
+    const hasPt1=has('T_Air_Eva_In')&&has('AH_Eva_In');
+    const hasPt2=(has('T_Air_Eva_Out')||has('T_Eva_Out'))&&has('AH_Cond_In');
+    const hasPt3=has('T_Air_Cond_Out')&&has('AH_Cond_Out');
+    return{hasPt1,hasPt2,hasPt3,anyPt:hasPt1||hasPt2||hasPt3,found:[...found]};
+  },[cases]);
+
   useEffect(()=>{if(!ref.current)return;
     const fW=chartW>0?chartW:undefined;
     const tr=[...PSYCH_BG];
-    if(colCheck.hasAll){
-      cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;
-        if(!d?.T_Air_Eva_In?.[i])return;
-        const pts=[[d.T_Air_Eva_In[i],d.AH_Eva_In?.[i],'①Eva In'],[d.T_Air_Eva_Out?.[i],d.AH_Cond_In?.[i],'②Eva Out'],[d.T_Air_Cond_Out?.[i],d.AH_Cond_Out?.[i],'③Cond Out']].filter(p=>p[0]!=null&&p[1]!=null);
-        if(pts.length){const xs=[...pts.map(p=>p[0]),pts[0][0]],ys=[...pts.map(p=>p[1]),pts[0][1]],tx=[...pts.map(p=>p[2]),''];
-          tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:10},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
-      });
-    }
-    try{Plotly.react(ref.current,tr,{title:{text:'습공기 선도'+(colCheck.hasAll?' (t='+curT.toFixed(1)+' min)':' — 배경만 표시'),font:{size:14}},xaxis:{title:'건구온도 [°C]',range:[-5,70],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'절대습도 [kg/kg]',range:[0,.032],gridcolor:'rgba(255,255,255,0.04)'},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
-  },[cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,colCheck.hasAll]);
+    cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;if(!d)return;
+      const pts=[];
+      if(d.T_Air_Eva_In?.[i]!=null&&d.AH_Eva_In?.[i]!=null)pts.push([d.T_Air_Eva_In[i],d.AH_Eva_In[i],'①Eva In']);
+      const tEvaOut=d.T_Air_Eva_Out?.[i]??d.T_Eva_Out?.[i];
+      if(tEvaOut!=null&&d.AH_Cond_In?.[i]!=null)pts.push([tEvaOut,d.AH_Cond_In[i],'②Eva Out']);
+      if(d.T_Air_Cond_Out?.[i]!=null&&d.AH_Cond_Out?.[i]!=null)pts.push([d.T_Air_Cond_Out[i],d.AH_Cond_Out[i],'③Cond Out']);
+      if(pts.length){
+        const xs=[...pts.map(p=>p[0]),pts[0][0]],ys=[...pts.map(p=>p[1]),pts[0][1]],tx=[...pts.map(p=>p[2]),''];
+        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:10},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
+    });
+    try{Plotly.react(ref.current,tr,{title:{text:'습공기 선도'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':' — 배경만'),font:{size:14}},xaxis:{title:'건구온도 [°C]',range:[-5,70],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'절대습도 [kg/kg]',range:[0,.032],gridcolor:'rgba(255,255,255,0.04)'},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
+  },[cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,dataStatus.anyPt]);
 
-  // 상태점 테이블
-  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d||!d.T_Air_Eva_In)return null;
-    return{name:cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts:[
-      {lb:'①증발기입구',T:d.T_Air_Eva_In[i],W:d.AH_Eva_In?.[i]},
-      {lb:'②증발기출구',T:d.T_Air_Eva_Out?.[i],W:d.AH_Cond_In?.[i]},
-      {lb:'③응축기출구',T:d.T_Air_Cond_Out?.[i],W:d.AH_Cond_Out?.[i]}
-    ].filter(p=>p.T!=null&&p.W!=null).map(p=>({...p,h:hMoist(p.T,p.W),rh:rhFromAH(p.W,p.T),dp:dewPt(p.W),v:specVol(p.T,p.W)}))}}).filter(Boolean),[cases,caseVis,timeIdx]);
+  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d)return null;
+    const pts=[];
+    if(d.T_Air_Eva_In?.[i]!=null&&d.AH_Eva_In?.[i]!=null){const T=d.T_Air_Eva_In[i],W=d.AH_Eva_In[i];pts.push({lb:'①증발기입구',T,W,h:hMoist(T,W),rh:rhFromAH(W,T),dp:dewPt(W),v:specVol(T,W)})}
+    const tEO=d.T_Air_Eva_Out?.[i]??d.T_Eva_Out?.[i];
+    if(tEO!=null&&d.AH_Cond_In?.[i]!=null){const T=tEO,W=d.AH_Cond_In[i];pts.push({lb:'②증발기출구',T,W,h:hMoist(T,W),rh:rhFromAH(W,T),dp:dewPt(W),v:specVol(T,W)})}
+    if(d.T_Air_Cond_Out?.[i]!=null&&d.AH_Cond_Out?.[i]!=null){const T=d.T_Air_Cond_Out[i],W=d.AH_Cond_Out[i];pts.push({lb:'③응축기출구',T,W,h:hMoist(T,W),rh:rhFromAH(W,T),dp:dewPt(W),v:specVol(T,W)})}
+    return pts.length?{name:cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
+  }).filter(Boolean),[cases,caseVis,timeIdx]);
 
   return(<div>
-    {!colCheck.hasAll&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
-      ⚠️ 습공기 선도에 필요한 컬럼 누락: <b>{colCheck.missing.join(', ')}</b><br/>
-      <span style={{fontSize:11}}>Calculation 실행 후 _calc.csv를 로드하세요. 배경선만 표시됩니다.</span>
+    {!dataStatus.anyPt&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
+      ⚠️ 습공기 선도 데이터가 없습니다. <b>_calc.csv</b>를 로드하세요. (필요: AH_Eva_In, AH_Cond_In, AH_Cond_Out 등)
     </div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
       <span className="it">시점:</span><input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{flex:1,maxWidth:300}}/>
@@ -964,12 +972,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
 
 // ═══ Viewer: P-h 선도 ═══
 function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
-  const reqCols=['h_Comp_In_ref','h_Comp_Out_ref','h_Cond_Out_ref','h_Eva_In_ref','P_Comp_In','P_Comp_Out'];
-  const colCheck=useMemo(()=>{
-    const found=new Set();cases.forEach(c=>{if(c?.data)Object.keys(c.data).forEach(k=>found.add(k))});
-    return{missing:reqCols.filter(k=>!found.has(k)),hasAll:reqCols.every(k=>found.has(k))};
-  },[cases]);
-
+  const hasRefData=useMemo(()=>cases.some(c=>c?.data?.h_Comp_In_ref||c?.data?.P_Comp_In),[cases]);
   const[timeR,setTimeR]=useState(.5);
   const[refName,setRefName]=useState(cfg?.environment?.refrigerant||'R290');
   const[satData,setSatData]=useState(null);
@@ -987,31 +990,35 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
     const fW=chartW>0?chartW:undefined;
     const s=satData.sat,c=satData.critical;
     const tr=[{x:s.hl,y:s.P,mode:'lines',line:{color:'#3b82f6',width:2.5},showlegend:false,hoverinfo:'skip'},{x:s.hv,y:s.P,mode:'lines',line:{color:'#ef4444',width:2.5},showlegend:false,hoverinfo:'skip'},{x:[c.h],y:[c.P],mode:'markers',marker:{size:10,color:'#fff',symbol:'diamond'},showlegend:false,hovertemplate:'임계점<br>'+c.P.toFixed(1)+'bar, '+c.T.toFixed(1)+'°C<extra></extra>'}];
-    if(colCheck.hasAll){
-      cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;
-        if(!d?.h_Comp_In_ref?.[i]||!d?.P_Comp_In?.[i])return;
-        const BA=1.01325;
-        const hA=[d.h_Comp_In_ref[i],d.h_Comp_Out_ref?.[i],d.h_Cond_Out_ref?.[i],d.h_Eva_In_ref?.[i],d.h_Comp_In_ref[i]];
-        const pA=[d.P_Comp_In[i]+BA,d.P_Comp_Out?.[i]+BA,(d.P_Comp_Out?.[i]||0)+BA-.3,d.P_Comp_In[i]+BA+.1,d.P_Comp_In[i]+BA];
-        tr.push({x:hA,y:pA,mode:'lines+markers+text',text:['①','②','③','④',''],textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:9},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})
-      });
-    }
+    let hasOverlay=false;
+    cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;if(!d)return;
+      // 최소 h_Comp_In_ref와 P_Comp_In만 있으면 부분 오버레이
+      if(!d.h_Comp_In_ref?.[i]||!d.P_Comp_In?.[i])return;
+      const BA=1.01325;
+      const pts=[];
+      pts.push({h:d.h_Comp_In_ref[i],P:d.P_Comp_In[i]+BA,lb:'①'});
+      if(d.h_Comp_Out_ref?.[i]!=null&&d.P_Comp_Out?.[i]!=null)pts.push({h:d.h_Comp_Out_ref[i],P:d.P_Comp_Out[i]+BA,lb:'②'});
+      if(d.h_Cond_Out_ref?.[i]!=null)pts.push({h:d.h_Cond_Out_ref[i],P:(d.P_Comp_Out?.[i]||d.P_Comp_In[i])+BA-.3,lb:'③'});
+      if(d.h_Eva_In_ref?.[i]!=null)pts.push({h:d.h_Eva_In_ref[i],P:d.P_Comp_In[i]+BA+.1,lb:'④'});
+      if(pts.length>1){pts.push(pts[0]);hasOverlay=true;
+        tr.push({x:pts.map(p=>p.h),y:pts.map(p=>p.P),mode:'lines+markers+text',text:pts.map(p=>p.lb),textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:9},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})}
+    });
     const hMin=Math.min(...s.hl)*.8,hMax=Math.max(...s.hv)*1.05;
-    try{Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+(colCheck.hasAll?' (t='+curT.toFixed(1)+' min)':' — 포화선만 표시'),font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:[hMin,hMax],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'압력 [bar abs]',type:'log',range:[Math.log10(.5),Math.log10(c.P*1.15)],gridcolor:'rgba(255,255,255,0.04)',dtick:.30103},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
-  },[satData,cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,colCheck.hasAll]);
+    try{Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':' — 포화선만'),font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:[hMin,hMax],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'압력 [bar abs]',type:'log',range:[Math.log10(.5),Math.log10(c.P*1.15)],gridcolor:'rgba(255,255,255,0.04)',dtick:.30103},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
+  },[satData,cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT]);
 
-  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d||!d.h_Comp_In_ref||!d.P_Comp_In)return null;const BA=1.01325;
-    return{name:cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts:[
-      {lb:'①압축기입구',P:d.P_Comp_In[i]+BA,h:d.h_Comp_In_ref[i],T:d.T_Comp_In?.[i]},
-      {lb:'②압축기출구',P:(d.P_Comp_Out?.[i]||0)+BA,h:d.h_Comp_Out_ref?.[i],T:d.T_Comp_Out?.[i]},
-      {lb:'③응축기출구',P:(d.P_Comp_Out?.[i]||0)+BA-.3,h:d.h_Cond_Out_ref?.[i],T:d.T_Cond_Out?.[i]},
-      {lb:'④팽창밸브출구',P:d.P_Comp_In[i]+BA+.1,h:d.h_Eva_In_ref?.[i],T:d.T_Eva_Out?.[i]}
-    ].filter(p=>p.h!=null)}}).filter(Boolean),[cases,caseVis,timeIdx]);
+  const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d?.h_Comp_In_ref?.[i]||!d?.P_Comp_In?.[i])return null;const BA=1.01325;
+    const pts=[];
+    pts.push({lb:'①압축기입구',P:d.P_Comp_In[i]+BA,h:d.h_Comp_In_ref[i],T:d.T_Comp_In?.[i]});
+    if(d.h_Comp_Out_ref?.[i]!=null)pts.push({lb:'②압축기출구',P:(d.P_Comp_Out?.[i]||0)+BA,h:d.h_Comp_Out_ref[i],T:d.T_Comp_Out?.[i]});
+    if(d.h_Cond_Out_ref?.[i]!=null)pts.push({lb:'③응축기출구',P:(d.P_Comp_Out?.[i]||0)+BA-.3,h:d.h_Cond_Out_ref[i],T:d.T_Cond_Out?.[i]});
+    if(d.h_Eva_In_ref?.[i]!=null)pts.push({lb:'④팽창밸브출구',P:d.P_Comp_In[i]+BA+.1,h:d.h_Eva_In_ref[i],T:d.T_Eva_Out?.[i]});
+    return pts.length?{name:cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
+  }).filter(Boolean),[cases,caseVis,timeIdx]);
 
   return(<div>
-    {!colCheck.hasAll&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
-      ⚠️ P-h 선도에 필요한 컬럼 누락: <b>{colCheck.missing.join(', ')}</b><br/>
-      <span style={{fontSize:11}}>Calculation 실행 후 _calc.csv를 로드하세요. 포화선만 표시됩니다.</span>
+    {!hasRefData&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
+      ⚠️ P-h 선도 데이터가 없습니다. <b>_calc.csv</b>를 로드하세요. (필요: h_Comp_In_ref, P_Comp_In 등)
     </div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10,flexWrap:'wrap'}}>
       <span className="it">냉매:</span>
