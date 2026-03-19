@@ -682,9 +682,13 @@ return(<div>
     <span style={{width:1,height:20,background:'var(--bd2)'}}/>
     <span style={{fontSize:11,color:'var(--tx2)'}}>높이:</span>
     {[[400,'S'],[580,'M'],[750,'L'],[950,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH(h)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
+    <input type="range" min="300" max="1200" step="10" value={chartH} onChange={e=>setChartH(+e.target.value)} style={{width:80}}/>
+    <span style={{fontSize:10,color:'var(--tx3)',fontFamily:'var(--mono)'}}>{chartH}px</span>
     <span style={{width:1,height:20,background:'var(--bd2)'}}/>
     <span style={{fontSize:11,color:'var(--tx2)'}}>너비:</span>
     {[[0,'자동'],[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW(w)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
+    <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW(+e.target.value)} style={{width:80}}/>
+    <span style={{fontSize:10,color:'var(--tx3)',fontFamily:'var(--mono)'}}>{chartW?chartW+'px':'자동'}</span>
   </div>
 
   <ErrorBound>
@@ -717,7 +721,6 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   const pg=pages[pageIdx]||pages[0];
   const[smOn,setSmOn]=useState(false);const[smM,setSmM]=useState('SMA');const[smW,setSmW]=useState(10);
   const[err,setErr]=useState('');
-  const[hScale,setHScale]=useState(100);const[wScale,setWScale]=useState(100);
   const ref=useRef(null);
 
   // 구간 하이라이트
@@ -729,13 +732,15 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   const addPlot=()=>{const rest=allVars.filter(k=>!pg.plots.includes(k));if(rest.length)updatePage(pageIdx,{plots:[...pg.plots,rest[0]]})};
   const removePlot=(i)=>{if(pg.plots.length<=1)return;updatePage(pageIdx,{plots:pg.plots.filter((_,j)=>j!==i)})};
 
-  // Fit / Reset
-  const fitAll=()=>{if(ref.current)try{Plotly.relayout(ref.current,{'xaxis.autorange':true,'yaxis.autorange':true})}catch(e){}};
-  const resetZoom=()=>{if(ref.current)try{Plotly.relayout(ref.current,Object.fromEntries(pg.plots.flatMap((_,i)=>[['xaxis'+(i+1)+'.autorange',true],['yaxis'+(i+1)+'.autorange',true]])))}catch(e){}};
+  // Fit / Reset — 모든 서브플롯 축 리셋
+  const fitAll=()=>{if(!ref.current)return;try{
+    const upd={};pg.plots.slice(0,pg.rows*pg.cols).forEach((_,i)=>{
+      const ax=i===0?'':''.concat(i+1);
+      upd['xaxis'+ax+'.autorange']=true;upd['yaxis'+ax+'.autorange']=true});
+    Plotly.relayout(ref.current,upd)}catch(e){console.error(e)}};
+  const resetZoom=()=>fitAll();
 
-  // 렌더
-  const finalH=Math.round(chartH*hScale/100);
-  const finalW=chartW?Math.round(chartW*wScale/100):undefined;
+  const finalW=chartW>0?chartW:undefined; // 0=자동(undefined)
 
   useEffect(()=>{
     if(!ref.current||!pg.plots.length)return;setErr('');
@@ -744,7 +749,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       const actR=Math.max(1,Math.min(nR,Math.ceil(nPlots.length/nC)));
       const actC=Math.max(1,Math.min(nC,nPlots.length));
       const tr=[];const shapes=[];
-      const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.06,ygap:.12},height:finalH,width:finalW,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
+      const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.06,ygap:.12},height:chartH,width:finalW,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
       nPlots.forEach((k,pi)=>{
         const xk='x'+(pi+1>1?pi+1:''),yk='y'+(pi+1>1?pi+1:'');
         lo['xaxis'+(pi+1)]={title:Math.floor(pi/actC)+1===actR?{text:'Time',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
@@ -763,7 +768,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       if(tr.length)Plotly.react(ref.current,tr,lo,{responsive:!finalW,displaylogo:false,scrollZoom:true});
       else setErr('표시할 데이터 없음. Time 컬럼을 확인하세요.');
     }catch(e){console.error('VwChart:',e);setErr('렌더링 오류: '+e.message)}
-  },[cases,caseVis,lw,finalH,finalW,pg,smOn,smM,smW,dragMode,zones]);
+  },[cases,caseVis,lw,chartH,finalW,pg,smOn,smM,smW,dragMode,zones]);
 
   // 구간 통계
   const zoneStats=useMemo(()=>zones.map(z=>{
@@ -796,13 +801,10 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       <span className="it">열:</span><select value={pg.cols} onChange={e=>updatePage(pageIdx,{cols:+e.target.value})} style={{width:45}}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select>
       <span style={{width:1,height:16,background:'var(--bd2)'}}/>
       <label style={{fontSize:12,display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>스무딩</label>
-      {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:65}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="60" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:60}}/><span className="it">{smW}</span></>}
+      {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:65}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="120" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:100}}/><span className="it">{smW}</span></>}
       <span style={{width:1,height:16,background:'var(--bd2)'}}/>
       <button className="bt bs" onClick={fitAll}>📐 Fit</button>
       <button className="bt bs" onClick={resetZoom}>🔄 리셋</button>
-      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-      <span className="it">높이:</span><input type="range" min="50" max="200" value={hScale} onChange={e=>setHScale(+e.target.value)} style={{width:60}}/><span className="it">{hScale}%</span>
-      <span className="it">너비:</span><input type="range" min="50" max="200" value={wScale} onChange={e=>setWScale(+e.target.value)} style={{width:60}}/><span className="it">{wScale}%</span>
     </div>
 
     {/* 서브플롯 변수 선택 */}
