@@ -635,6 +635,8 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
 };
 
 const togFile=n=>{setSelFiles(p=>{const s=new Set(p);s.has(n)?s.delete(n):s.add(n);return s})};
+// 파일 세트 그룹핑
+const fileSets=useMemo(()=>{const map={};files.forEach(f=>{const base=f.name.replace(/_calc\.csv$/,'').replace(/_merged\.csv$/,'').replace(/\.csv$/,'');if(!map[base])map[base]={base,merged:null,calc:null,other:[]};if(f.name.includes('_calc'))map[base].calc=f;else if(f.name.includes('_merged'))map[base].merged=f;else map[base].other.push(f)});return Object.values(map)},[files]);
 
 return(<div>
   {/* 파일 선택 */}
@@ -644,23 +646,24 @@ return(<div>
     {/* 로컬 파일 불러오기 */}
     <LocalImport onImported={reloadFiles} addSuffix={false}/>
 
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,marginTop:10}}>
-      <span className="it">{files.length}개 — {selFiles.size}개 선택</span>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,marginTop:10}}>
+      <span className="it">{files.length}개 파일 ({fileSets.length}세트) — {selFiles.size}개 선택</span>
       <div style={{display:'flex',gap:6}}>
         <button className="bt bs" onClick={()=>setSelFiles(new Set(files.map(f=>f.name)))}>전체</button>
-        <button className="bt bs" onClick={()=>setSelFiles(new Set(files.filter(f=>f.name.includes('_calc')).map(f=>f.name)))}>calc만</button>
+        <button className="bt bs" style={{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}} onClick={()=>setSelFiles(new Set(files.filter(f=>f.name.includes('_calc')).map(f=>f.name)))}>calc만 ★</button>
         <button className="bt bs" onClick={()=>setSelFiles(new Set(files.filter(f=>f.name.includes('_merged')).map(f=>f.name)))}>merged만</button>
         <button className="bt bs" onClick={()=>setSelFiles(new Set())}>해제</button>
         <button className="bt bs" onClick={reloadFiles}>새로고침</button>
       </div>
     </div>
-    {files.length>0?<div className="file-sel" style={{maxHeight:120}}>{files.map(f=><div key={f.name} className="file-sel-item">
-      <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>togFile(f.name)}/>
-      <span style={{flex:1}}>{f.name}</span>
-      {f.name.includes('_calc')&&<span className="rt rt-c">calc</span>}
-      {f.name.includes('_merged')&&<span className="rt rt-m">merged</span>}
-      <span className="it">{(f.size/1024).toFixed(0)} KB</span>
-    </div>)}</div>:<div className="it" style={{padding:16,textAlign:'center'}}>결과 파일이 없습니다. 로컬 파일을 불러오거나 Merge/Calc을 먼저 실행하세요.</div>}
+    <div className="it" style={{marginBottom:6}}>💡 선도 분석에는 calc 파일 필요. merged만 있으면 라인차트만 가능.</div>
+    {fileSets.length>0?<div className="file-sel" style={{maxHeight:180}}>
+      {fileSets.map(st=><div key={st.base} style={{borderBottom:'2px solid var(--bd)',padding:'2px 0'}}>
+        {st.calc&&<div className="file-sel-item"><input type="checkbox" checked={selFiles.has(st.calc.name)} onChange={()=>togFile(st.calc.name)}/><span style={{flex:1}}>{st.calc.name}</span><span className="rt rt-c">calc</span><span className="it">{(st.calc.size/1024).toFixed(0)}KB</span></div>}
+        {st.merged&&<div className="file-sel-item" style={{opacity:st.calc&&selFiles.has(st.calc.name)?.5:1}}><input type="checkbox" checked={selFiles.has(st.merged.name)} onChange={()=>togFile(st.merged.name)}/><span style={{flex:1}}>{st.merged.name}</span><span className="rt rt-m">merged</span><span className="it">{(st.merged.size/1024).toFixed(0)}KB</span></div>}
+        {st.other.map(f=><div key={f.name} className="file-sel-item"><input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>togFile(f.name)}/><span style={{flex:1}}>{f.name}</span><span className="it">{(f.size/1024).toFixed(0)}KB</span></div>)}
+      </div>)}
+    </div>:<div className="it" style={{padding:16,textAlign:'center'}}>결과 파일이 없습니다.</div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8}}>
       <button className="bt bg" onClick={loadData} disabled={loading||!selFiles.size}>{loading?'로딩 중...':'데이터 로드 ('+selFiles.size+'개)'}</button>
       {loadMsg&&<span className="it">{loadMsg}</span>}
@@ -761,7 +764,9 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       const actR=Math.max(1,Math.min(tab.rows,Math.ceil(nPlots.length/tab.cols)));
       const actC=Math.max(1,Math.min(tab.cols,nPlots.length));
       const tr=[];const shapes=[];
-      const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.06,ygap:.12},height:chartH,width:finalW,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
+      const perRowH=Math.round(chartH/2); // chartH는 기준 2행 높이, 행당 높이 = chartH/2
+      const totalH=actR*perRowH;
+      const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.06,ygap:.12},height:totalH,width:finalW,margin:{t:30,b:40,l:55,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
       nPlots.forEach((k,pi)=>{
         const xk='x'+(pi+1>1?pi+1:''),yk='y'+(pi+1>1?pi+1:'');
         lo['xaxis'+(pi+1)]={title:Math.floor(pi/actC)+1===actR?{text:'Time',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
@@ -867,10 +872,11 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
 
 // ═══ Viewer: 습공기 선도 ═══
 function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
+  const hasCalcData=cases.some(c=>c?.data?.AH_Eva_In);
   const[timeR,setTimeR]=useState(.5);
   const ref=useRef(null);
-  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs?.data?.Time_min;if(!t||!t.length)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
-  const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||0;
+  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs?.data?.Time_min||cs?.data?.Time_sec||cs?.data?.Time;if(!t||!t.length)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
+  const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||cases[0]?.data?.Time_sec?.[timeIdx[0]]||0;
 
   useEffect(()=>{if(!ref.current)return;
     const tr=[...PSYCH_BG];
@@ -892,6 +898,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
     ].filter(p=>p.T!=null&&p.W!=null).map(p=>({...p,h:hMoist(p.T,p.W),rh:rhFromAH(p.W,p.T),dp:dewPt(p.W),v:specVol(p.T,p.W)}))}}).filter(Boolean),[cases,caseVis,timeIdx]);
 
   return(<div>
+    {!hasCalcData&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>⚠️ 습공기 선도에는 <b>_calc.csv</b> 파일이 필요합니다 (AH_Eva_In, AH_Cond_In 등). Calculation을 실행한 후 calc 파일을 로드하세요.</div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
       <span className="it">시점:</span><input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{flex:1,maxWidth:300}}/>
       <span style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--teal)',padding:'3px 8px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:5}}>{curT.toFixed(1)} min</span>
@@ -917,6 +924,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
 
 // ═══ Viewer: P-h 선도 ═══
 function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
+  const hasCalcData=cases.some(c=>c?.data?.h_Comp_In_ref);
   const[timeR,setTimeR]=useState(.5);
   const[refName,setRefName]=useState(cfg?.environment?.refrigerant||'R290');
   const[satData,setSatData]=useState(null);
@@ -928,8 +936,8 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
     fetch(`${API}/api/ref-saturation/${encodeURIComponent(refName)}`).then(r=>{if(!r.ok)throw new Error('API 오류');return r.json()}).then(d=>setSatData(d)).catch(e=>setSatErr(e.message))
   },[refName]);
 
-  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs?.data?.Time_min;if(!t||!t.length)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
-  const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||0;
+  const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs?.data?.Time_min||cs?.data?.Time_sec||cs?.data?.Time;if(!t||!t.length)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
+  const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||cases[0]?.data?.Time_sec?.[timeIdx[0]]||0;
 
   useEffect(()=>{if(!ref.current||!satData)return;
     const s=satData.sat,c=satData.critical;
@@ -955,6 +963,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
     ].filter(p=>p.h!=null)}}).filter(Boolean),[cases,caseVis,timeIdx]);
 
   return(<div>
+    {!hasCalcData&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>⚠️ P-h 선도에는 <b>_calc.csv</b> 파일이 필요합니다 (h_Comp_In_ref, P_Comp_In 등). Calculation을 실행한 후 calc 파일을 로드하세요.</div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10,flexWrap:'wrap'}}>
       <span className="it">냉매:</span>
       <select value={refName} onChange={e=>setRefName(e.target.value)} style={{width:130}}>
