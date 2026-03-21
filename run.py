@@ -19,7 +19,6 @@ PORT = 8000
 
 
 def open_browser():
-    """서버 시작 후 1.5초 뒤 브라우저 열기."""
     time.sleep(1.5)
     webbrowser.open(f"http://localhost:{PORT}")
 
@@ -35,9 +34,13 @@ if __name__ == "__main__":
         print(f"  Dryer Merger v5 — http://localhost:{PORT}")
         print(f"{'='*40}\n")
 
-        import uvicorn
-        uvicorn.run("server:app", host="127.0.0.1", port=PORT, log_level="info")
+        # uvicorn을 자식 프로세스로 실행
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "server:app",
+             "--host", "127.0.0.1", "--port", str(PORT), "--log-level", "info"],
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        proc.wait()  # 서버 종료 대기
 
-        # 서버가 종료되면 (업데이트 등) 재시작
         print("\n🔄 서버 재시작 중...\n")
-        time.sleep(1)
+        time.sleep(2)
