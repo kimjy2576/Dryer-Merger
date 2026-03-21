@@ -306,6 +306,18 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                 else:
                     df_mx_proc = pd.DataFrame()
 
+                # ── 변수 rename을 merge 전에 적용 (Time 등 필수 컬럼) ──
+                if var_settings:
+                    pre_rename = {col: s["rename"] for col, s in var_settings.items()
+                                  if s.get("rename") and s["rename"] != col}
+                    if pre_rename:
+                        for target_df in [df_br_main, df_br_add, df_mx_proc, df_ams_proc]:
+                            if not target_df.empty:
+                                rmap = {k: v for k, v in pre_rename.items() if k in target_df.columns and v not in target_df.columns}
+                                if rmap:
+                                    target_df.rename(columns=rmap, inplace=True)
+                                    _log(sid, f"  사전 rename: {rmap}")
+
                 merged = sync_and_merge(
                     [df_br_main, df_br_add, df_mx_proc, df_ams_proc],
                     dt, df_br_main, df_ams_proc, df_mx_proc)
