@@ -94,6 +94,7 @@ function SaveSlots({category,getData,onLoad,label}){
   const[slots,setSlots]=useState([]);
   const[newName,setNewName]=useState('');
   const[open,setOpen]=useState(false);
+  const fileRef=useRef(null);
   const reload=()=>fetch(`${API}/api/saves/${category}`).then(r=>r.json()).then(d=>setSlots(d.slots||[])).catch(()=>{});
   useEffect(()=>{reload()},[]);
   const save=async()=>{if(!newName.trim())return;
@@ -107,17 +108,30 @@ function SaveSlots({category,getData,onLoad,label}){
   const del=async(name)=>{if(!confirm(`"${name}" 슬롯을 삭제하시겠습니까?`))return;
     try{await fetch(`${API}/api/saves/${category}/${encodeURIComponent(name)}`,{method:'DELETE'});reload();
     }catch(e){alert('삭제 실패')}};
+  // JSON 내보내기
+  const exportJson=()=>{const data=getData();data.category=category;data.timestamp=new Date().toISOString();
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${category}_settings.json`;a.click()};
+  // JSON 가져오기
+  const importJson=e=>{const f=e.target.files[0];if(!f)return;
+    const rd=new FileReader();rd.onload=ev=>{try{const d=JSON.parse(ev.target.result);onLoad(d);alert('JSON 불러오기 완료')}catch(er){alert('JSON 파싱 실패')}};rd.readAsText(f);e.target.value=''};
   return(<div style={{display:'inline-block',position:'relative'}}>
     <button className="bt bs" onClick={()=>{setOpen(!open);if(!open)reload()}} style={{borderColor:'var(--teal)',color:'var(--teal)'}}>💾 {label||'세이브'}</button>
-    {open&&<div style={{position:'absolute',right:0,top:'100%',marginTop:4,zIndex:999,width:320,background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:10,boxShadow:'0 8px 32px rgba(0,0,0,.5)',padding:12}}>
+    {open&&<div style={{position:'absolute',right:0,top:'100%',marginTop:4,zIndex:999,width:340,background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:10,boxShadow:'0 8px 32px rgba(0,0,0,.5)',padding:12}}>
       <div style={{fontSize:12,fontWeight:500,marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <span>세이브 슬롯</span>
         <button onClick={()=>setOpen(false)} style={{border:0,background:0,color:'var(--tx2)',cursor:'pointer',fontSize:14}}>×</button>
       </div>
       {/* 새 저장 */}
-      <div style={{display:'flex',gap:4,marginBottom:8}}>
+      <div style={{display:'flex',gap:4,marginBottom:6}}>
         <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&save()} placeholder="새 세이브 이름" style={{flex:1,fontSize:11,padding:'4px 8px',background:'var(--bg2)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)',fontFamily:'var(--font)'}}/>
         <button className="bt bs" onClick={save} disabled={!newName.trim()} style={{fontSize:10,padding:'4px 10px',background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}}>저장</button>
+      </div>
+      {/* JSON 내보내기/가져오기 */}
+      <div style={{display:'flex',gap:4,marginBottom:8}}>
+        <button className="bt bs" onClick={exportJson} style={{fontSize:10,flex:1}}>📤 JSON 내보내기</button>
+        <button className="bt bs" onClick={()=>fileRef.current?.click()} style={{fontSize:10,flex:1}}>📥 JSON 가져오기</button>
+        <input ref={fileRef} type="file" accept=".json" style={{display:'none'}} onChange={importJson}/>
       </div>
       {/* 슬롯 목록 */}
       <div style={{maxHeight:200,overflowY:'auto'}}>
@@ -1085,7 +1099,7 @@ return(<div>
 
   {/* 공통 컨트롤 */}
   <div className="ctrl" style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:10,padding:'8px 12px',background:'var(--bg2,#12121a)',border:'1px solid var(--bd,rgba(255,255,255,.06))',borderRadius:8}}>
-    {cases.map((c,i)=><button key={c.name} style={{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',borderRadius:5,border:'1px solid var(--bd2,rgba(255,255,255,.1))',background:caseVis[c.name]?'var(--bg3,#1a1a25)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}><span style={{width:8,height:8,borderRadius:'50%',background:VW_COLORS[i]}}/>{c.name}</button>)}
+    {cases.map((c,i)=><button key={c.name} style={{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',borderRadius:5,border:'1px solid var(--bd2,rgba(255,255,255,.1))',background:caseVis[c.name]?'var(--bg3,#1a1a25)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))} onDoubleClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n){setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}}}><span style={{width:8,height:8,borderRadius:'50%',background:VW_COLORS[i]}}/>{c.label||c.name}</button>)}
     <span style={{width:1,height:20,background:'var(--bd2)'}}/>
     <span style={{fontSize:11,color:'var(--tx2)'}}>두께:</span><input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw(+e.target.value)} style={{width:50}}/><span style={{fontSize:10,color:'var(--tx2)'}}>{lw}</span>
     <span style={{width:1,height:20,background:'var(--bd2)'}}/>
@@ -1136,7 +1150,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   const addCustomTab=()=>{
     const name=prompt('새 탭 이름:','커스텀');if(!name)return;
     // 현재 탭의 변수/행열을 복제
-    setTabs(ts=>[...ts,{id:Date.now(),name,rows:tab.rows,cols:tab.cols,plots:[...tab.plots]}]);
+    setTabs(ts=>[...ts,{id:Date.now(),name,rows:tab.rows,cols:tab.cols,plots:[...tab.plots],yranges:{...(tab.yranges||{})}}]);
     setTabIdx(tabs.length);
   };
 
@@ -1153,6 +1167,8 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   const addPlot=()=>{const rest=allVars.filter(k=>!tab.plots.includes(k));if(rest.length)updateTab({plots:[...tab.plots,rest[0]]})};
   const removePlot=(i)=>updateTab({plots:tab.plots.filter((_,j)=>j!==i)});
   const movePlot=(from,to)=>{if(from===to)return;const np=[...tab.plots];const[m]=np.splice(from,1);np.splice(to,0,m);updateTab({plots:np})};
+  const setYRange=(k,idx,val)=>{const yr={...(tab.yranges||{})};if(!yr[k])yr[k]=[null,null];yr[k][idx]=val===''?null:+val;updateTab({yranges:yr})};
+  const clearYRange=(k)=>{const yr={...(tab.yranges||{})};delete yr[k];updateTab({yranges:yr})};
 
   // Fit
   const fitAll=()=>{if(!ref.current)return;try{
@@ -1176,7 +1192,8 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       nPlots.forEach((k,pi)=>{
         const xk='x'+(pi+1>1?pi+1:''),yk='y'+(pi+1>1?pi+1:'');
         lo['xaxis'+(pi+1)]={title:Math.floor(pi/actC)+1===actR?{text:'Time',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
-        lo['yaxis'+(pi+1)]={title:{text:k,font:{size:10}},gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
+        lo['yaxis'+(pi+1)]={title:{text:k,font:{size:10}},gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10},
+          ...(tab.yranges?.[k]?.length===2&&tab.yranges[k][0]!=null&&tab.yranges[k][1]!=null?{range:tab.yranges[k],autorange:false}:{})};
         zones.forEach((z,zi)=>{shapes.push({type:'rect',xref:xk,yref:yk+' domain',x0:z.start,x1:z.end,y0:0,y1:1,fillcolor:VW_ZC[zi%VW_ZC.length],line:{color:VW_ZB[zi%VW_ZB.length],width:1,dash:'dot'},layer:'below'})});
         cases.forEach((cs,ci)=>{
           if(!cs?.data||!caseVis[cs.name]||!cs.data[k])return;
@@ -1184,7 +1201,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
           if(!xArr?.length)return;
           let yArr=cs.data[k];if(!yArr?.length)return;
           if(smOn&&yArr.length>3)try{yArr=vSmooth(yArr,smM,smW)}catch(e){}
-          tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},xaxis:xk,yaxis:yk,hovertemplate:'%{y:.2f}<extra>'+cs.name+'</extra>'});
+          tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.label||cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},xaxis:xk,yaxis:yk,hovertemplate:'%{y:.2f}<extra>'+(cs.label||cs.name)+'</extra>'});
         });
       });
       if(tr.length)Plotly.react(ref.current,tr,lo,{responsive:!finalW,displaylogo:false,scrollZoom:true});
@@ -1213,7 +1230,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       <button className="bt bs" onClick={addCustomTab} style={{fontSize:10}}>+ 탭 추가</button>
       <span style={{width:1,height:16,background:'var(--bd2)'}}/>
       <button className="bt bs" onClick={()=>{
-        const cfg={version:1,type:'viewer_chart_settings',tabs:tabs.map(t=>({name:t.name,rows:t.rows,cols:t.cols,plots:t.plots})),tabIdx,smOn,smM,smW,zones,timestamp:new Date().toISOString()};
+        const cfg={version:1,type:'viewer_chart_settings',tabs:tabs.map(t=>({name:t.name,rows:t.rows,cols:t.cols,plots:t.plots,yranges:t.yranges||{}})),tabIdx,smOn,smM,smW,zones,timestamp:new Date().toISOString()};
         const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='viewer_chart_settings.json';a.click()
       }} style={{fontSize:10}}>💾 저장</button>
       <button className="bt bs" onClick={()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=ev=>{
@@ -1244,14 +1261,18 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
 
     {/* 변수 선택 + 순서 변경 */}
     <div style={{display:'flex',gap:4,marginBottom:6,flexWrap:'wrap',alignItems:'center'}}>
-      {tab.plots.slice(0,tab.rows*tab.cols).map((k,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:2,padding:'2px 4px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:5}}>
+      {tab.plots.slice(0,tab.rows*tab.cols).map((k,i)=>{const yr=tab.yranges?.[k];const hasR=yr&&(yr[0]!=null||yr[1]!=null);
+        return(<div key={i} style={{display:'flex',alignItems:'center',gap:2,padding:'2px 4px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:5}}>
         {i>0&&<button onClick={()=>movePlot(i,i-1)} style={{fontSize:9,border:0,background:0,color:'var(--tx3)',cursor:'pointer',padding:0}}>◀</button>}
         <select value={k} onChange={e=>setPlotVar(i,e.target.value)} style={{fontSize:10,padding:'2px 3px',width:110,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
           {allVars.map(v=><option key={v} value={v}>{v}</option>)}
         </select>
+        <input value={yr?.[0]??''} onChange={e=>setYRange(k,0,e.target.value)} placeholder="min" title="Y축 최소" style={{width:40,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
+        <input value={yr?.[1]??''} onChange={e=>setYRange(k,1,e.target.value)} placeholder="max" title="Y축 최대" style={{width:40,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
+        {hasR&&<button onClick={()=>clearYRange(k)} title="Y축 자동" style={{fontSize:8,border:0,background:0,color:'var(--blue)',cursor:'pointer',padding:0}}>↺</button>}
         {i<tab.plots.length-1&&<button onClick={()=>movePlot(i,i+1)} style={{fontSize:9,border:0,background:0,color:'var(--tx3)',cursor:'pointer',padding:0}}>▶</button>}
         <button onClick={()=>removePlot(i)} style={{fontSize:9,border:0,background:0,color:'var(--red)',cursor:'pointer',padding:'0 2px'}}>×</button>
-      </div>)}
+      </div>)})}
       <button className="bt bs" onClick={addPlot} style={{fontSize:10}}>+ 변수</button>
     </div>
 
@@ -1323,7 +1344,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
       if(d.T_Air_Cond_Out?.[i]!=null&&d.AH_Cond_Out?.[i]!=null)pts.push([d.T_Air_Cond_Out[i],d.AH_Cond_Out[i],'③Cond Out']);
       if(pts.length){
         const xs=[...pts.map(p=>p[0]),pts[0][0]],ys=[...pts.map(p=>p[1]),pts[0][1]],tx=[...pts.map(p=>p[2]),''];
-        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:10},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
+        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:10},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.label||cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
     });
     try{Plotly.react(ref.current,tr,{title:{text:'습공기 선도'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':' — 배경만'),font:{size:14}},xaxis:{title:'건구온도 [°C]',range:[-5,70],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'절대습도 [kg/kg]',range:[0,.032],gridcolor:'rgba(255,255,255,0.04)'},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
   },[cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,dataStatus.anyPt]);
@@ -1334,7 +1355,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
     const tEO=d.T_Air_Eva_Out?.[i]??d.T_Eva_Out?.[i];
     if(tEO!=null&&d.AH_Cond_In?.[i]!=null){const T=tEO,W=d.AH_Cond_In[i];pts.push({lb:'②증발기출구',T,W,h:hMoist(T,W),rh:rhFromAH(W,T),dp:dewPt(W),v:specVol(T,W)})}
     if(d.T_Air_Cond_Out?.[i]!=null&&d.AH_Cond_Out?.[i]!=null){const T=d.T_Air_Cond_Out[i],W=d.AH_Cond_Out[i];pts.push({lb:'③응축기출구',T,W,h:hMoist(T,W),rh:rhFromAH(W,T),dp:dewPt(W),v:specVol(T,W)})}
-    return pts.length?{name:cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
+    return pts.length?{name:cs.label||cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
   }).filter(Boolean),[cases,caseVis,timeIdx]);
 
   // 디버그: 첫 케이스의 실제 값
@@ -1406,7 +1427,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
       if(d.h_Cond_Out_ref?.[i]!=null)pts.push({h:d.h_Cond_Out_ref[i],P:(d.P_Comp_Out?.[i]||d.P_Comp_In[i])+BA-.3,lb:'③'});
       if(d.h_Eva_In_ref?.[i]!=null)pts.push({h:d.h_Eva_In_ref[i],P:d.P_Comp_In[i]+BA+.1,lb:'④'});
       if(pts.length>1){pts.push(pts[0]);hasOverlay=true;
-        tr.push({x:pts.map(p=>p.h),y:pts.map(p=>p.P),mode:'lines+markers+text',text:pts.map(p=>p.lb),textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:9},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})}
+        tr.push({x:pts.map(p=>p.h),y:pts.map(p=>p.P),mode:'lines+markers+text',text:pts.map(p=>p.lb),textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:9},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.label||cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})}
     });
     const hMin=Math.min(...s.hl)*.8,hMax=Math.max(...s.hv)*1.05;
     try{Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':' — 포화선만'),font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:[hMin,hMax],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'압력 [bar abs]',type:'log',range:[Math.log10(.5),Math.log10(c.P*1.15)],gridcolor:'rgba(255,255,255,0.04)',dtick:.30103},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
@@ -1418,7 +1439,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
     if(d.h_Comp_Out_ref?.[i]!=null)pts.push({lb:'②압축기출구',P:(d.P_Comp_Out?.[i]||0)+BA,h:d.h_Comp_Out_ref[i],T:d.T_Comp_Out?.[i]});
     if(d.h_Cond_Out_ref?.[i]!=null)pts.push({lb:'③응축기출구',P:(d.P_Comp_Out?.[i]||0)+BA-.3,h:d.h_Cond_Out_ref[i],T:d.T_Cond_Out?.[i]});
     if(d.h_Eva_In_ref?.[i]!=null)pts.push({lb:'④팽창밸브출구',P:d.P_Comp_In[i]+BA+.1,h:d.h_Eva_In_ref[i],T:d.T_Eva_Out?.[i]});
-    return pts.length?{name:cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
+    return pts.length?{name:cs.label||cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
   }).filter(Boolean),[cases,caseVis,timeIdx]);
 
   return(<div>
