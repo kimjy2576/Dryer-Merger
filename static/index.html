@@ -397,6 +397,7 @@ return(<div>
         <button className="bt bs" onClick={deselectAll}>전체 해제</button>
         <span className="it">{filteredVars.length}개 표시</span>
         <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+          <button className="bt bs" onClick={saveAsDefault} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:10}}>⭐ 디폴트 저장</button>
           <SaveSlots category="merge" label="세이브 슬롯"
             getData={()=>({type:'merge_settings',variable_settings:varSet})}
             onLoad={d=>{if(d.variable_settings){
@@ -607,6 +608,8 @@ return(<div>
         {firstSel&&<button className="bt bs bp" onClick={()=>autoMap(firstSel)}>자동 매핑</button>}
         <span className="it">merged: {mergedCols.length}개 컬럼</span>
         <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+          <button className="bt bs" onClick={saveMappingDefault} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:10}}>⭐ 디폴트 저장</button>
+          <button className="bt bs" onClick={loadMappingDefault} style={{color:'var(--teal)',fontSize:10}}>⭐ 디폴트 불러오기</button>
           <SaveSlots category="calc" label="세이브 슬롯"
             getData={()=>({type:'calc_mapping',mapping})}
             onLoad={d=>{if(d.mapping){setMapping(d.mapping);
@@ -801,6 +804,7 @@ function FormulaTab(){
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <div className="ct" style={{margin:0}}>수식 편집기 — Calculation 변수 정의</div>
         <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          <button className="bt bs" onClick={saveFormulaDefault} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:10}}>⭐ 디폴트 저장</button>
           <SaveSlots category="formula" label="세이브 슬롯"
             getData={()=>({type:'formula_settings',overrides:editOverrides,custom:customFormulas})}
             onLoad={d=>{if(d.overrides)setEditOverrides(d.overrides);
@@ -1115,7 +1119,12 @@ return(<div>
 
   {/* 공통 컨트롤 */}
   <div className="ctrl" style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:10,padding:'8px 12px',background:'var(--bg2,#12121a)',border:'1px solid var(--bd,rgba(255,255,255,.06))',borderRadius:8}}>
-    {cases.map((c,i)=><button key={c.name} style={{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',borderRadius:5,border:'1px solid var(--bd2,rgba(255,255,255,.1))',background:caseVis[c.name]?'var(--bg3,#1a1a25)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))} onDoubleClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n){setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}}}><span style={{width:8,height:8,borderRadius:'50%',background:VW_COLORS[i]}}/>{c.label||c.name}</button>)}
+    {cases.map((c,i)=><div key={c.name} style={{display:'flex',alignItems:'center',gap:2}}>
+      <button style={{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',borderRadius:'5px 0 0 5px',border:'1px solid var(--bd2,rgba(255,255,255,.1))',borderRight:0,background:caseVis[c.name]?'var(--bg3,#1a1a25)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}>
+        <span style={{width:8,height:8,borderRadius:'50%',background:VW_COLORS[i]}}/>{c.label||c.name}
+      </button>
+      <button onClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n)setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}} title="이름 변경" style={{padding:'3px 5px',borderRadius:'0 5px 5px 0',border:'1px solid var(--bd2)',background:'var(--bg2)',color:'var(--tx3)',cursor:'pointer',fontSize:9}}>✏️</button>
+    </div>)}
     <span style={{width:1,height:20,background:'var(--bd2)'}}/>
     <span style={{fontSize:11,color:'var(--tx2)'}}>두께:</span><input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw(+e.target.value)} style={{width:50}}/><span style={{fontSize:10,color:'var(--tx2)'}}>{lw}</span>
     <span style={{width:1,height:20,background:'var(--bd2)'}}/>
@@ -1352,17 +1361,27 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
   useEffect(()=>{if(!ref.current)return;
     const fW=chartW>0?chartW:undefined;
     const tr=[...PSYCH_BG];
+    const allT=[],allW=[];
     cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;if(!d)return;
       const pts=[];
       if(d.T_Air_Eva_In?.[i]!=null&&d.AH_Eva_In?.[i]!=null)pts.push([d.T_Air_Eva_In[i],d.AH_Eva_In[i],'①Eva In']);
       const tEvaOut=d.T_Air_Eva_Out?.[i]??d.T_Eva_Out?.[i];
       if(tEvaOut!=null&&d.AH_Cond_In?.[i]!=null)pts.push([tEvaOut,d.AH_Cond_In[i],'②Eva Out']);
       if(d.T_Air_Cond_Out?.[i]!=null&&d.AH_Cond_Out?.[i]!=null)pts.push([d.T_Air_Cond_Out[i],d.AH_Cond_Out[i],'③Cond Out']);
+      pts.forEach(p=>{allT.push(p[0]);allW.push(p[1])});
       if(pts.length){
         const xs=[...pts.map(p=>p[0]),pts[0][0]],ys=[...pts.map(p=>p[1]),pts[0][1]],tx=[...pts.map(p=>p[2]),''];
         tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:10},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.label||cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
     });
-    try{Plotly.react(ref.current,tr,{title:{text:'습공기 선도'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':' — 배경만'),font:{size:14}},xaxis:{title:'건구온도 [°C]',range:[-5,70],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'절대습도 [kg/kg]',range:[0,.032],gridcolor:'rgba(255,255,255,0.04)'},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
+    // 데이터 기반 축 범위 (여유 20%)
+    let xRange=[-5,70],yRange=[0,.032];
+    if(allT.length>0){
+      const tMin=Math.min(...allT),tMax=Math.max(...allT),tPad=Math.max((tMax-tMin)*.3,5);
+      const wMin=Math.min(...allW),wMax=Math.max(...allW),wPad=Math.max((wMax-wMin)*.3,.002);
+      xRange=[Math.max(-5,tMin-tPad),Math.min(70,tMax+tPad)];
+      yRange=[Math.max(0,wMin-wPad),wMax+wPad];
+    }
+    try{Plotly.react(ref.current,tr,{title:{text:'습공기 선도'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':' — 배경만'),font:{size:14}},xaxis:{title:'건구온도 [°C]',range:xRange,gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'절대습도 [kg/kg]',range:yRange,gridcolor:'rgba(255,255,255,0.04)'},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
   },[cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,dataStatus.anyPt]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d)return null;
@@ -1433,8 +1452,8 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
     const s=satData.sat,c=satData.critical;
     const tr=[{x:s.hl,y:s.P,mode:'lines',line:{color:'#3b82f6',width:2.5},showlegend:false,hoverinfo:'skip'},{x:s.hv,y:s.P,mode:'lines',line:{color:'#ef4444',width:2.5},showlegend:false,hoverinfo:'skip'},{x:[c.h],y:[c.P],mode:'markers',marker:{size:10,color:'#fff',symbol:'diamond'},showlegend:false,hovertemplate:'임계점<br>'+c.P.toFixed(1)+'bar, '+c.T.toFixed(1)+'°C<extra></extra>'}];
     let hasOverlay=false;
+    const cycleH=[],cycleP=[];
     cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;if(!d)return;
-      // 최소 h_Comp_In_ref와 P_Comp_In만 있으면 부분 오버레이
       if(!d.h_Comp_In_ref?.[i]||!d.P_Comp_In?.[i])return;
       const BA=1.01325;
       const pts=[];
@@ -1442,11 +1461,22 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
       if(d.h_Comp_Out_ref?.[i]!=null&&d.P_Comp_Out?.[i]!=null)pts.push({h:d.h_Comp_Out_ref[i],P:d.P_Comp_Out[i]+BA,lb:'②'});
       if(d.h_Cond_Out_ref?.[i]!=null)pts.push({h:d.h_Cond_Out_ref[i],P:(d.P_Comp_Out?.[i]||d.P_Comp_In[i])+BA-.3,lb:'③'});
       if(d.h_Eva_In_ref?.[i]!=null)pts.push({h:d.h_Eva_In_ref[i],P:d.P_Comp_In[i]+BA+.1,lb:'④'});
+      pts.forEach(p=>{cycleH.push(p.h);cycleP.push(p.P)});
       if(pts.length>1){pts.push(pts[0]);hasOverlay=true;
         tr.push({x:pts.map(p=>p.h),y:pts.map(p=>p.P),mode:'lines+markers+text',text:pts.map(p=>p.lb),textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:9},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.label||cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})}
     });
-    const hMin=Math.min(...s.hl)*.8,hMax=Math.max(...s.hv)*1.05;
-    try{Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':' — 포화선만'),font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:[hMin,hMax],gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'압력 [bar abs]',type:'log',range:[Math.log10(.5),Math.log10(c.P*1.15)],gridcolor:'rgba(255,255,255,0.04)',dtick:.30103},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
+    // 축 범위: 사이클 데이터 있으면 데이터에 맞춤, 없으면 포화선 전체
+    let hRange,pRange;
+    if(cycleH.length>0){
+      const hPad=Math.max((Math.max(...cycleH)-Math.min(...cycleH))*.25,20);
+      const pMin=Math.min(...cycleP),pMax=Math.max(...cycleP);
+      hRange=[Math.min(...cycleH)-hPad,Math.max(...cycleH)+hPad];
+      pRange=[Math.log10(Math.max(.3,pMin*.6)),Math.log10(pMax*1.4)];
+    }else{
+      hRange=[Math.min(...s.hl)*.8,Math.max(...s.hv)*1.05];
+      pRange=[Math.log10(.5),Math.log10(c.P*1.15)];
+    }
+    try{Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':' — 포화선만'),font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:hRange,gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'압력 [bar abs]',type:'log',range:pRange,gridcolor:'rgba(255,255,255,0.04)',dtick:.30103},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
   },[satData,cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d?.h_Comp_In_ref?.[i]||!d?.P_Comp_In?.[i])return null;const BA=1.01325;
