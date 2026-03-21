@@ -12,7 +12,7 @@ from properties import get_props
 
 def run_stage1(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Stage 1 계산 실행."""
-    setup = cfg["processing"]["setup_type"]
+    setup = cfg["processing"].get("setup_type", "BR")
     env = cfg["environment"]
     props = get_props(env["refrigerant"], env["patm"], env.get("backend", "HEOS"))
 

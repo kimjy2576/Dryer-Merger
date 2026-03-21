@@ -14,6 +14,7 @@ environment:
 processing:
   filter_mode: "Dry_Only"
   time_interval: 1
+  setup_type: "BR"                     # 실험 소스 타입: "BR" | "MX100"
   data_time: "BR"                      # 시간 동기화 기준 소스
   data_sources: ["BR", "AMS", "MX100"] # 사용할 소스 (체크박스)
 
