@@ -49,7 +49,7 @@ select option{background:#1a1a25;color:#e4e2dc}
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;const API='';
 
-function App(){const[tab,setTab]=useState('merge');const[cfg,setCfg]=useState(null);const[sid,setSid]=useState(null);const[mergeSt,setMergeSt]=useState(null);const[calcSt,setCalcSt]=useState(null);const[pf,setPf]=useState(null);const[viewerAutoLoad,setViewerAutoLoad]=useState(null);const[calcAutoFiles,setCalcAutoFiles]=useState(null);
+function App(){const[tab,setTab]=useState('merge');const[cfg,setCfg]=useState(null);const[sid,setSid]=useState(null);const[mergeSt,setMergeSt]=useState(null);const[calcSt,setCalcSt]=useState(null);const[viewerAutoLoad,setViewerAutoLoad]=useState(null);const[calcAutoFiles,setCalcAutoFiles]=useState(null);
 useEffect(()=>{fetch(`${API}/api/config`).then(r=>r.json()).then(setCfg)},[]);
 return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span className="bdg">v5 — Merge / Calc 분리</span></div>
 <div className="tabs">
@@ -58,14 +58,12 @@ return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span clas
   <button className={`tb ${tab==='formula'?'on':''}`} onClick={()=>setTab('formula')}>Formula</button>
   <button className={`tb ${tab==='viewer'?'on':''}`} onClick={()=>setTab('viewer')}>Viewer</button>
   <button className={`tb ${tab==='config'?'on':''}`} onClick={()=>setTab('config')}>설정</button>
-  <button className={`tb ${tab==='preview'?'on':''}`} onClick={()=>setTab('preview')}>미리보기</button>
 </div>
 <div style={{display:tab==='merge'?'block':'none'}}>{cfg&&<MergeTab cfg={cfg} sid={sid} setSid={setSid} st={mergeSt} setSt={setMergeSt} setTab={setTab} setCalcAutoFiles={setCalcAutoFiles}/>}</div>
 <div style={{display:tab==='calc'?'block':'none'}}>{cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={calcSt} setSt={setCalcSt} setTab={setTab} setViewerAutoLoad={setViewerAutoLoad} calcAutoFiles={calcAutoFiles} clearCalcAutoFiles={()=>setCalcAutoFiles(null)}/>}</div>
 <div style={{display:tab==='formula'?'block':'none'}}><FormulaTab/></div>
 <div style={{display:tab==='viewer'?'block':'none'}}><ViewerTab cfg={cfg} autoLoad={viewerAutoLoad} clearAutoLoad={()=>setViewerAutoLoad(null)}/></div>
 <div style={{display:tab==='config'?'block':'none'}}>{cfg&&<CfgTab cfg={cfg} setCfg={setCfg}/>}</div>
-<div style={{display:tab==='preview'?'block':'none'}}><PrvTab init={pf}/></div>
 </div>)}
 
 // ═══ 공통: 경로 탐색 + 케이스 선택 ═══
@@ -1459,8 +1457,8 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
       const pts=[];
       pts.push({h:d.h_Comp_In_ref[i],P:d.P_Comp_In[i]+BA,lb:'①'});
       if(d.h_Comp_Out_ref?.[i]!=null&&d.P_Comp_Out?.[i]!=null)pts.push({h:d.h_Comp_Out_ref[i],P:d.P_Comp_Out[i]+BA,lb:'②'});
-      if(d.h_Cond_Out_ref?.[i]!=null)pts.push({h:d.h_Cond_Out_ref[i],P:(d.P_Comp_Out?.[i]||d.P_Comp_In[i])+BA-.3,lb:'③'});
-      if(d.h_Eva_In_ref?.[i]!=null)pts.push({h:d.h_Eva_In_ref[i],P:d.P_Comp_In[i]+BA+.1,lb:'④'});
+      if(d.h_Cond_Out_ref?.[i]!=null)pts.push({h:d.h_Cond_Out_ref[i],P:(d.P_Comp_Out?.[i]||d.P_Comp_In[i])+BA,lb:'③'});
+      if(d.h_Eva_In_ref?.[i]!=null)pts.push({h:d.h_Eva_In_ref[i],P:d.P_Comp_In[i]+BA,lb:'④'});
       pts.forEach(p=>{cycleH.push(p.h);cycleP.push(p.P)});
       if(pts.length>1){pts.push(pts[0]);hasOverlay=true;
         tr.push({x:pts.map(p=>p.h),y:pts.map(p=>p.P),mode:'lines+markers+text',text:pts.map(p=>p.lb),textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:9},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.label||cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})}
@@ -1483,8 +1481,8 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
     const pts=[];
     pts.push({lb:'①압축기입구',P:d.P_Comp_In[i]+BA,h:d.h_Comp_In_ref[i],T:d.T_Comp_In?.[i]});
     if(d.h_Comp_Out_ref?.[i]!=null)pts.push({lb:'②압축기출구',P:(d.P_Comp_Out?.[i]||0)+BA,h:d.h_Comp_Out_ref[i],T:d.T_Comp_Out?.[i]});
-    if(d.h_Cond_Out_ref?.[i]!=null)pts.push({lb:'③응축기출구',P:(d.P_Comp_Out?.[i]||0)+BA-.3,h:d.h_Cond_Out_ref[i],T:d.T_Cond_Out?.[i]});
-    if(d.h_Eva_In_ref?.[i]!=null)pts.push({lb:'④팽창밸브출구',P:d.P_Comp_In[i]+BA+.1,h:d.h_Eva_In_ref[i],T:d.T_Eva_Out?.[i]});
+    if(d.h_Cond_Out_ref?.[i]!=null)pts.push({lb:'③응축기출구',P:(d.P_Comp_Out?.[i]||0)+BA,h:d.h_Cond_Out_ref[i],T:d.T_Cond_Out?.[i]});
+    if(d.h_Eva_In_ref?.[i]!=null)pts.push({lb:'④팽창밸브출구',P:d.P_Comp_In[i]+BA,h:d.h_Eva_In_ref[i],T:d.T_Eva_Out?.[i]});
     return pts.length?{name:cs.label||cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
   }).filter(Boolean),[cases,caseVis,timeIdx]);
 
@@ -1597,24 +1595,6 @@ return(<div><div className="fg"><div>
 </div></div><div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:4}}><button className="bt" onClick={()=>sL(JSON.parse(JSON.stringify(cfg)))}>초기화</button><button className="bt bp" onClick={save} disabled={sv}>{sv?'저장 중...':'설정 저장'}</button></div></div>)}
 
 // ═══ 미리보기 탭 ═══
-function PrvTab({init}){const[rs,setRs]=useState([]);const[sel,setSel]=useState(init||'');const[pv,setPv]=useState(null);const[ld,setLd]=useState(false);
-const[xC,sXC]=useState('Time_min');const[yC,sYC]=useState('');const[y2,sY2]=useState('');const[u2,sU2]=useState(false);const cr=useRef();const ci=useRef();
-useEffect(()=>{fetch(`${API}/api/results`).then(r=>r.json()).then(d=>{setRs(d);if(init&&d.some(x=>x.name===init))setSel(init);else if(d.length&&!sel)setSel(d[0].name)})},[]);
-useEffect(()=>{if(!sel)return;setLd(true);fetch(`${API}/api/preview/${sel}?max_rows=5000`).then(r=>r.json()).then(d=>{setPv(d);const nc=d.numeric_columns;if(nc.length){if(!yC||!nc.includes(yC))sYC(nc.find(c=>c.includes('DuctOutTemp'))||nc[0]);if(!y2||!nc.includes(y2))sY2(nc.find(c=>c.includes('EvaInTemp'))||nc[Math.min(1,nc.length-1)])}setLd(false)})},[sel]);
-const draw=useCallback(()=>{if(!pv||!cr.current)return;const cs=pv.columns,xi=cs.indexOf(xC),yi=cs.indexOf(yC);if(xi<0||yi<0)return;
-const xD=pv.data.map(r=>r[xi]),yD=pv.data.map(r=>r[yi]);const ds=[{label:yC,data:yD,borderColor:'#4a9eff',borderWidth:1.2,pointRadius:0,tension:.1,yAxisID:'y'}];
-const sc={x:{title:{display:1,text:xC,color:'#9a9890'},ticks:{color:'#5a5850',maxTicksLimit:10},grid:{color:'rgba(255,255,255,.04)'}},y:{title:{display:1,text:yC,color:'#4a9eff'},ticks:{color:'#4a9eff'},grid:{color:'rgba(255,255,255,.04)'},position:'left'}};
-if(u2&&y2){const i2=cs.indexOf(y2);if(i2>=0){ds.push({label:y2,data:pv.data.map(r=>r[i2]),borderColor:'#ef4444',borderWidth:1.2,pointRadius:0,tension:.1,yAxisID:'y2'});sc.y2={title:{display:1,text:y2,color:'#ef4444'},ticks:{color:'#ef4444'},grid:{drawOnChartArea:0},position:'right'}}}
-if(ci.current)ci.current.destroy();ci.current=new Chart(cr.current,{type:'line',data:{labels:xD,datasets:ds},options:{responsive:1,maintainAspectRatio:0,animation:{duration:300},plugins:{legend:{labels:{color:'#9a9890',font:{size:11}}}},scales:sc}})},[pv,xC,yC,y2,u2]);
-useEffect(()=>{if(pv)draw()},[pv,draw]);
-return(<div>
-<div className="cd"><div style={{display:'flex',gap:8,alignItems:'center',marginBottom:14}}><span className="it">파일:</span><select value={sel} onChange={e=>setSel(e.target.value)} style={{flex:1,minWidth:200}}>{rs.map(r=><option key={r.name} value={r.name}>{r.name} {r.type==='merged'?'[M]':r.type==='calc'?'[C]':''}</option>)}</select><button className="bt bs" onClick={()=>fetch(`${API}/api/results`).then(r=>r.json()).then(setRs)}>새로고침</button></div>
-{ld&&<div style={{textAlign:'center',padding:30,color:'var(--tx2)'}}>로딩 중...</div>}
-{pv&&!ld&&<><div className="it" style={{marginBottom:10}}>{sel} — {pv.total_rows?.toLocaleString()}행 × {pv.columns.length}열</div><div className="tw"><table><thead><tr>{pv.columns.map(c=><th key={c}>{c}</th>)}</tr></thead><tbody>{pv.data.slice(0,200).map((r,i)=><tr key={i}>{r.map((v,j)=><td key={j}>{v==null?'':typeof v==='number'?(Number.isInteger(v)?v:v.toFixed(2)):v}</td>)}</tr>)}</tbody></table></div></>}
-</div>
-{pv&&!ld&&<div className="cd"><div className="ct">차트</div><div className="cc"><label>X:</label><select value={xC} onChange={e=>sXC(e.target.value)}>{pv.columns.map(c=><option key={c}>{c}</option>)}</select><label>Y:</label><select value={yC} onChange={e=>sYC(e.target.value)}>{pv.numeric_columns.map(c=><option key={c}>{c}</option>)}</select><label style={{marginLeft:8}}><input type="checkbox" checked={u2} onChange={e=>sU2(e.target.checked)} style={{marginRight:4,verticalAlign:'middle'}}/>Y2:</label><select value={y2} onChange={e=>sY2(e.target.value)} disabled={!u2}>{pv.numeric_columns.map(c=><option key={c}>{c}</option>)}</select><button className="bt bs bp" onClick={draw}>그리기</button></div><div className="cw"><canvas ref={cr}/></div></div>}
-</div>)}
-
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
