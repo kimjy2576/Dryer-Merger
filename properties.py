@@ -83,15 +83,18 @@ class FluidProperties:
     # ──── 1D 포화선 LUT ────
     def _build_sat_tables(self):
         ref = self._ref
-        # 임계온도 이하로 제한
-        Tc = PropsSI("Tcrit", ref) - 273.15  # °C
-        t_max = min(130, Tc - 0.5)  # 임계점 0.5°C 아래까지
-        self._t_range = np.linspace(-40, t_max, int((t_max + 40) * 10) + 1)
+        Tc = PropsSI("Tcrit", ref) - 273.15
+        Pc = PropsSI("Pcrit", ref) / 1e5  # bar
+        t_max = min(130, Tc - 0.5)
+        # [최적화] 해상도 1°C (기존 0.1°C) → 10배 빠른 빌드
+        self._t_range = np.linspace(-40, t_max, int(t_max + 40) + 1)
         t_k = self._t_range + 273.15
         self._psat_from_t = np.array([
             PropsSI("P", "T", tk, "Q", 0, ref) / 1000 for tk in t_k])
 
-        self._p_barg = np.linspace(-1.0, 45.0, 4601)
+        # [최적화] 압력 범위를 Pc까지, 해상도 0.1bar (기존 0.01bar)
+        p_max = min(45.0, Pc - 0.5)
+        self._p_barg = np.linspace(-1.0, p_max, int((p_max + 1) * 10) + 1)
         p_pa = (self._p_barg * 100 + self.patm) * 1000
 
         keys = ["tsat", "h_liq", "h_vap", "s_liq", "s_vap", "v_liq", "v_vap"]
@@ -113,13 +116,15 @@ class FluidProperties:
     # ──── 2D 단상 물성 그리드 캐시 ────
     def _build_2d_cache(self):
         """
-        T [-40..150°C, 1°C] × P [-1..45 barg, 0.5bar]
+        T [-40..150°C, 2°C] × P [-1..Pc barg, 1bar]
         → h, s, v, rho, cp, cv 6종 RegularGridInterpolator
-        ~18000 포인트, ~1.5초
+        [v2] 해상도 줄여서 빌드 속도 ~4배 개선
         """
         ref = self._ref
-        self._grid_t = np.arange(-40, 151, 1.0)
-        self._grid_p = np.arange(-1.0, 45.5, 0.5)
+        Pc = PropsSI("Pcrit", ref) / 1e5  # bar
+        p_max = min(45.0, Pc + 2)
+        self._grid_t = np.arange(-40, 151, 2.0)    # 2°C 간격 (기존 1°C)
+        self._grid_p = np.arange(-1.0, p_max + 1, 1.0)  # 1bar 간격 (기존 0.5bar)
         nt, npg = len(self._grid_t), len(self._grid_p)
 
         prop_keys = ["H", "S", "D", "C", "CVMASS"]

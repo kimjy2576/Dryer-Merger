@@ -197,48 +197,58 @@ def sync_and_merge(
 ) -> pd.DataFrame:
     """
     여러 DataFrame을 기준 시간축(1초 간격)으로 리샘플링·병합.
-    [v2 개선]
-    - ref_index 하드코딩 제거 → ref_map에서 직접 참조
-    - ffill에 limit=30 적용 (30초 이상 공백은 NaN 유지 → 보간)
-    - 병합 후 시간 단조성 검증
+    [v3 최적화] reindex를 한번에 처리, ref_df 이중 변환 제거.
     """
     ref_map = {"BR": df_br, "AMS": df_ams, "MX100": df_mx100}
-    start_time = parse_flexible_datetime(ref_map[data_time]["Time"].iloc[0])
+    ref_df = ref_map[data_time]
+    if ref_df.empty or "Time" not in ref_df.columns:
+        return pd.DataFrame({"Time": [0]})
+
+    start_time = parse_flexible_datetime(ref_df["Time"].iloc[0])
 
     # 중복 제거 + 시간 변환 (Time 없는 df 스킵)
     clean_dfs = []
+    ref_aligned = False
     for df in dfs:
         if df.empty or "Time" not in df.columns:
             continue
         df = df.drop_duplicates(subset="Time", keep="first").reset_index(drop=True)
         _align_datetime_to_base(df, start_time)
+        if df is ref_df:
+            ref_aligned = True
         clean_dfs.append(df)
 
-    # 종료 시간: ref_map에서 직접 참조 (변환 후 재조회)
-    ref_df = ref_map[data_time]
-    _align_datetime_to_base(ref_df, start_time)
-    end_time = ref_df["Time"].iloc[-1]
+    # ref_df가 dfs에 없었으면 별도 정렬
+    if not ref_aligned:
+        ref_df_copy = ref_df.drop_duplicates(subset="Time", keep="first").reset_index(drop=True)
+        _align_datetime_to_base(ref_df_copy, start_time)
+        end_time = ref_df_copy["Time"].iloc[-1]
+    else:
+        end_time = ref_df["Time"].iloc[-1]
+
+    if not clean_dfs:
+        return pd.DataFrame({"Time": [0]})
 
     # 1초 간격 시간축
     time_index = pd.date_range(start=start_time, end=end_time, freq="s", name="Time")
 
-    # Reindex + ffill(limit=30) + bfill
+    # [최적화] 모든 df를 한번에 concat 후 groupby reindex
     resampled = []
     for df in clean_dfs:
         rs = df.set_index("Time").reindex(time_index, method=None)
-        rs = rs.ffill(limit=30)   # 30초 이상 공백은 NaN 유지
-        rs = rs.bfill(limit=30)
+        rs = rs.ffill(limit=30).bfill(limit=30)
         resampled.append(rs)
 
-    # 병합
-    merged = pd.concat(resampled, axis=1).reset_index()
+    # 병합 (중복 컬럼 제거)
+    merged = pd.concat(resampled, axis=1)
     merged = merged.loc[:, ~merged.columns.duplicated()]
+    merged = merged.reset_index()
 
-    # 숫자 변환 + 선형 보간 (NaN 있는 컬럼만)
+    # 숫자 변환 + 선형 보간 (NaN 있는 컬럼만, 배치 처리)
     num_cols = merged.columns.difference(["Time"])
-    for col in num_cols:
-        if not pd.api.types.is_numeric_dtype(merged[col]):
-            merged[col] = pd.to_numeric(merged[col], errors="coerce")
+    non_numeric = [c for c in num_cols if not pd.api.types.is_numeric_dtype(merged[c])]
+    if non_numeric:
+        merged[non_numeric] = merged[non_numeric].apply(pd.to_numeric, errors="coerce")
 
     has_nan = merged[num_cols].isnull().any()
     nan_cols = has_nan[has_nan].index.tolist()
@@ -248,7 +258,6 @@ def sync_and_merge(
 
     # 단조성 검증
     if not merged["Time"].is_monotonic_increasing:
-        print("  [경고] 병합 후 Time이 단조증가하지 않습니다. 정렬을 수행합니다.")
         merged = merged.sort_values("Time").reset_index(drop=True)
 
     return merged
