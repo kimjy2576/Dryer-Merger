@@ -141,13 +141,14 @@ def _classify_files(folder: Path) -> dict:
     for f in sorted(folder.iterdir()):
         if not f.is_file(): continue
         n = f.name.lower()
-        if "_br.csv" in n or (n.endswith(".csv") and "br" in n):
-            files["br"].append(f.name)
-        elif "_ams.csv" in n or (n.endswith(".csv") and "ams" in n):
-            files["ams"].append(f.name)
-        elif n.endswith((".xls", ".xlsx")) or "_temp." in n:
+        # _merged, _calc, _result, _formula 파일은 원본이 아니므로 제외
+        if any(tag in n for tag in ["_merged", "_calc", "_result", "_formula"]):
+            continue
+        if n.endswith((".xls", ".xlsx")) or "_temp." in n:
             files["mx100"].append(f.name)
-        elif n.endswith(".csv") and "_merged" not in n and "_calc" not in n and "_result" not in n:
+        elif "_ams.csv" in n or "_ams_" in n:
+            files["ams"].append(f.name)
+        elif n.endswith(".csv"):
             files["br"].append(f.name)
     return files
 
