@@ -49,7 +49,7 @@ select option{background:#1a1a25;color:#e4e2dc}
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;const API='';
 
-function App(){const[tab,setTab]=useState('merge');const[cfg,setCfg]=useState(null);const[sid,setSid]=useState(null);const[st,setSt]=useState(null);const[pf,setPf]=useState(null);
+function App(){const[tab,setTab]=useState('merge');const[cfg,setCfg]=useState(null);const[sid,setSid]=useState(null);const[st,setSt]=useState(null);const[pf,setPf]=useState(null);const[viewerAutoLoad,setViewerAutoLoad]=useState(null);
 useEffect(()=>{fetch(`${API}/api/config`).then(r=>r.json()).then(setCfg)},[]);
 return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span className="bdg">v5 — Merge / Calc 분리</span></div>
 <div className="tabs">
@@ -61,9 +61,9 @@ return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span clas
   <button className={`tb ${tab==='preview'?'on':''}`} onClick={()=>setTab('preview')}>미리보기</button>
 </div>
 <div style={{display:tab==='merge'?'block':'none'}}>{cfg&&<MergeTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}</div>
-<div style={{display:tab==='calc'?'block':'none'}}>{cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}</div>
+<div style={{display:tab==='calc'?'block':'none'}}>{cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt} setTab={setTab} setViewerAutoLoad={setViewerAutoLoad}/>}</div>
 <div style={{display:tab==='formula'?'block':'none'}}><FormulaTab/></div>
-<div style={{display:tab==='viewer'?'block':'none'}}><ViewerTab cfg={cfg}/></div>
+<div style={{display:tab==='viewer'?'block':'none'}}><ViewerTab cfg={cfg} autoLoad={viewerAutoLoad} clearAutoLoad={()=>setViewerAutoLoad(null)}/></div>
 <div style={{display:tab==='config'?'block':'none'}}>{cfg&&<CfgTab cfg={cfg} setCfg={setCfg}/>}</div>
 <div style={{display:tab==='preview'?'block':'none'}}><PrvTab init={pf}/></div>
 </div>)}
@@ -388,7 +388,7 @@ return(<div>
 </div>)}
 
 // ═══ Calc 탭 ═══
-function CalcTab({cfg,sid,setSid,st,setSt}){
+function CalcTab({cfg,sid,setSid,st,setSt,setTab,setViewerAutoLoad}){
 const[poll,setPoll]=useState(false);const pr=useRef();
 const[results,setResults]=useState([]);
 const[selFiles,setSelFiles]=useState(new Set());
@@ -587,6 +587,17 @@ return(<div>
     </div>
     <div className="it" style={{marginBottom:8}}>_merged.csv → 변수 매핑({matchedCount}개) → CoolProp 물성 → 열전달/유량/성능 → <strong>_calc.csv</strong></div>
     {st&&<StatusPanel st={st} resultKey="calc_results"/>}
+    {st?.status==='done'&&st?.calc_results?.length>0&&<div style={{marginTop:10}}>
+      <button className="bt bg" onClick={()=>{
+        // merged + calc 파일명 수집
+        const calcFiles=st.calc_results||[];
+        const mergedFiles=(st.merge_results||[]).length?st.merge_results:calcFiles.map(f=>f.replace('_calc.csv','_merged.csv'));
+        const allFiles=[...new Set([...calcFiles,...mergedFiles])];
+        setViewerAutoLoad(allFiles);
+        setTab('viewer');
+      }} style={{background:'var(--teal)',borderColor:'var(--teal)'}}>📊 Viewer에서 보기 →</button>
+      <span className="it" style={{marginLeft:8}}>merged + calc 병합하여 Viewer에 자동 로드</span>
+    </div>}
   </div>
 </div>)}
 
@@ -829,7 +840,7 @@ const VW_CATS=[
 ];
 
 // ═══ Viewer 탭 ═══
-function ViewerTab({cfg}){
+function ViewerTab({cfg,autoLoad,clearAutoLoad}){
 const[files,setFiles]=useState([]);
 const[selFiles,setSelFiles]=useState(new Set());
 const[cases,setCases]=useState([]);  // [{name,data:{col:[...]}}]
@@ -844,6 +855,20 @@ const[chartW,setChartW]=useState(0);
 // 파일 목록 로드 (모든 CSV)
 const reloadFiles=()=>fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged')))).catch(()=>{});
 useEffect(()=>{reloadFiles()},[]);
+
+// autoLoad: Calc 완료 후 자동 로드
+const[pendingLoad,setPendingLoad]=useState(false);
+useEffect(()=>{if(!autoLoad?.length)return;
+  fetch(`${API}/api/results`).then(r=>r.json()).then(d=>{
+    const filtered=d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged'));
+    setFiles(filtered);
+    const toSel=new Set(autoLoad.filter(fn=>filtered.some(f=>f.name===fn)));
+    setSelFiles(toSel);
+    setMergeMode('auto');
+    if(clearAutoLoad)clearAutoLoad();
+    setPendingLoad(true);
+  }).catch(()=>{});
+},[autoLoad]);
 
 const[mergeMode,setMergeMode]=useState('auto'); // 'auto' | 'all' | 'each'
 
@@ -937,6 +962,9 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
   if(arr.length)setLoadMsg(`✅ ${arr.length}개 케이스 (${arr.reduce((s,c)=>s+c.rows,0)}행)`);
   if(errs.length)setLoadMsg(m=>(m?m+' / ':'')+'❌ '+errs.join(', '));
 };
+
+// autoLoad 트리거: 파일 선택 완료 후 자동 로드
+useEffect(()=>{if(pendingLoad&&selFiles.size>0){setPendingLoad(false);loadData()}},[pendingLoad,selFiles.size]);
 
 const selAll=useCallback(()=>{const s=new Set();files.forEach(f=>s.add(f.name));setSelFiles(s)},[files]);
 const selCalc=useCallback(()=>{const s=new Set();files.forEach(f=>{if(f.name.includes('_calc'))s.add(f.name)});setSelFiles(s)},[files]);
