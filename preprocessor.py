@@ -87,10 +87,26 @@ def preprocess_blackrose(
         return dummy.copy(), dummy.copy()
 
     df = df_raw.copy()
-    df.columns = [col.replace(" ", "", 1) for col in df.columns]
+    df.columns = [col.strip().replace(" ", "", 1) for col in df.columns]
 
-    # 시간 추출: .apply(lambda) → str accessor 벡터화 (~10배 빠름)
-    time_str = df["LogTime"].astype(str)
+    # LogTime 폴백: 다양한 시간 컬럼명 지원
+    time_col = None
+    for candidate in ["LogTime", "logtime", "Log Time", "Time", "DateTime", "Timestamp"]:
+        if candidate in df.columns:
+            time_col = candidate; break
+    if not time_col:
+        # 첫 번째 컬럼이 시간일 가능성
+        first = df.columns[0]
+        try:
+            pd.to_datetime(df[first].iloc[0])
+            time_col = first
+        except: pass
+    if not time_col:
+        print(f"[preprocess_br] 시간 컬럼 못 찾음. 컬럼: {df.columns[:10].tolist()}")
+        dummy = pd.DataFrame({"Time": [0]})
+        return dummy.copy(), dummy.copy()
+
+    time_str = df[time_col].astype(str)
     df["Time"] = time_str.str.split(" ").str[1].str.split(".").str[0]
 
     df_main = df[df["SW_ProtectionCount"] > 0].copy()
