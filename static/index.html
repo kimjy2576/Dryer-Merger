@@ -40,6 +40,8 @@ input,select{font-family:var(--font);font-size:13px;padding:7px 12px;background:
 .file-sel-item{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--bd);font-size:12px;font-family:var(--mono)}
 .file-sel-item:last-child{border:0}
 .file-sel-item input{accent-color:var(--teal)}
+select{background:var(--bg);color:var(--tx);border:1px solid var(--bd2);border-radius:4px}
+select option{background:#1a1a25;color:#e4e2dc}
 </style>
 </head>
 <body>
@@ -531,9 +533,9 @@ return(<div>
                   <span style={{fontSize:10,color:'var(--tx3)'}}>{v.label}</span>
                 </div>
                 <span style={{textAlign:'center',color:'var(--tx3)',fontSize:11}}>←</span>
-                <select value={matched||''} onChange={e=>setMap(v.key,e.target.value)} style={{fontSize:11,padding:'4px 6px',background:matched?'var(--bg)':'rgba(239,68,68,.06)',borderColor:isMissing?'rgba(239,68,68,.3)':'var(--bd2)'}}>
-                  <option value="">— 미연결 —</option>
-                  {mergedCols.map(c=><option key={c} value={c}>{c}</option>)}
+                <select value={matched||''} onChange={e=>setMap(v.key,e.target.value)} style={{fontSize:11,padding:'4px 6px',background:matched?'var(--bg)':'rgba(239,68,68,.06)',borderColor:isMissing?'rgba(239,68,68,.3)':'var(--bd2)',color:'var(--tx)'}}>
+                  <option value="" style={{background:'#1a1a25',color:'#e4e2dc'}}>— 미연결 —</option>
+                  {mergedCols.map(c=><option key={c} value={c} style={{background:'#1a1a25',color:'#e4e2dc'}}>{c}</option>)}
                 </select>
               </div>)})}
           </div>
