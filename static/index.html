@@ -49,7 +49,7 @@ select option{background:#1a1a25;color:#e4e2dc}
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;const API='';
 
-function App(){const[tab,setTab]=useState('merge');const[cfg,setCfg]=useState(null);const[sid,setSid]=useState(null);const[st,setSt]=useState(null);const[pf,setPf]=useState(null);const[viewerAutoLoad,setViewerAutoLoad]=useState(null);
+function App(){const[tab,setTab]=useState('merge');const[cfg,setCfg]=useState(null);const[sid,setSid]=useState(null);const[mergeSt,setMergeSt]=useState(null);const[calcSt,setCalcSt]=useState(null);const[pf,setPf]=useState(null);const[viewerAutoLoad,setViewerAutoLoad]=useState(null);
 useEffect(()=>{fetch(`${API}/api/config`).then(r=>r.json()).then(setCfg)},[]);
 return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span className="bdg">v5 — Merge / Calc 분리</span></div>
 <div className="tabs">
@@ -60,8 +60,8 @@ return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span clas
   <button className={`tb ${tab==='config'?'on':''}`} onClick={()=>setTab('config')}>설정</button>
   <button className={`tb ${tab==='preview'?'on':''}`} onClick={()=>setTab('preview')}>미리보기</button>
 </div>
-<div style={{display:tab==='merge'?'block':'none'}}>{cfg&&<MergeTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}</div>
-<div style={{display:tab==='calc'?'block':'none'}}>{cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt} setTab={setTab} setViewerAutoLoad={setViewerAutoLoad}/>}</div>
+<div style={{display:tab==='merge'?'block':'none'}}>{cfg&&<MergeTab cfg={cfg} sid={sid} setSid={setSid} st={mergeSt} setSt={setMergeSt}/>}</div>
+<div style={{display:tab==='calc'?'block':'none'}}>{cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={calcSt} setSt={setCalcSt} setTab={setTab} setViewerAutoLoad={setViewerAutoLoad}/>}</div>
 <div style={{display:tab==='formula'?'block':'none'}}><FormulaTab/></div>
 <div style={{display:tab==='viewer'?'block':'none'}}><ViewerTab cfg={cfg} autoLoad={viewerAutoLoad} clearAutoLoad={()=>setViewerAutoLoad(null)}/></div>
 <div style={{display:tab==='config'?'block':'none'}}>{cfg&&<CfgTab cfg={cfg} setCfg={setCfg}/>}</div>
