@@ -864,7 +864,7 @@ useEffect(()=>{if(!autoLoad?.length)return;
     setFiles(filtered);
     const toSel=new Set(autoLoad.filter(fn=>filtered.some(f=>f.name===fn)));
     setSelFiles(toSel);
-    setMergeMode('auto');
+    setMergeMode('all'); // Calc 세션 파일은 전부 하나로
     if(clearAutoLoad)clearAutoLoad();
     setPendingLoad(true);
   }).catch(()=>{});
@@ -887,20 +887,32 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
     // 파일별 개별
     for(const fn of selFiles)groups.set(fn.replace(/\.csv$/,''),[fn]);
   }else{
-    // auto: 같은 source_dir끼리 묶음
-    const dirMap=new Map(); // source_dir → [fn]
+    // auto: 1차 source_dir, 2차 base명으로 그룹핑
     const fileInfo=new Map();files.forEach(f=>fileInfo.set(f.name,f));
+    const baseMap=new Map(); // groupKey → [fn]
     for(const fn of selFiles){
       const f=fileInfo.get(fn);
-      const dir=f?.source_dir||fn; // source_dir 없으면 파일명 단독
-      if(!dirMap.has(dir))dirMap.set(dir,[]);
-      dirMap.get(dir).push(fn);
+      let key;
+      if(f?.source_dir){
+        // source_dir 있으면 폴더 기준
+        key='dir:'+f.source_dir;
+      }else{
+        // source_dir 없으면 base명 기준 (_calc/_merged 제거)
+        key='base:'+fn.replace(/_calc\.csv$/,'').replace(/_merged\.csv$/,'').replace(/\.csv$/,'');
+      }
+      if(!baseMap.has(key))baseMap.set(key,[]);
+      baseMap.get(key).push(fn);
     }
-    let gi=0;
-    for(const[dir,fns] of dirMap){
-      // 그룹명: 폴더명 사용 (또는 파일명)
-      const dirName=dir.includes('/')||dir.includes('\\')?dir.split(/[\\/]/).pop():fns[0].replace(/\.csv$/,'');
-      const gn=dirMap.size>1?dirName+'_'+(++gi):dirName;
+    for(const[key,fns] of baseMap){
+      // 그룹명: 폴더명 또는 base명
+      let gn;
+      if(key.startsWith('dir:')){
+        const dir=key.slice(4);
+        gn=dir.includes('/')||dir.includes('\\')?dir.split(/[\\/]/).pop():dir;
+      }else{
+        gn=key.slice(5); // 'base:' 제거
+      }
+      if(baseMap.size>1&&groups.has(gn))gn+='_'+(groups.size+1);
       groups.set(gn,fns);
     }
   }
@@ -966,10 +978,11 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
 // autoLoad 트리거: 파일 선택 완료 후 자동 로드
 useEffect(()=>{if(pendingLoad&&selFiles.size>0){setPendingLoad(false);loadData()}},[pendingLoad,selFiles.size]);
 
-const selAll=useCallback(()=>{const s=new Set();files.forEach(f=>s.add(f.name));setSelFiles(s)},[files]);
-const selCalc=useCallback(()=>{const s=new Set();files.forEach(f=>{if(f.name.includes('_calc'))s.add(f.name)});setSelFiles(s)},[files]);
-const selMerged=useCallback(()=>{const s=new Set();files.forEach(f=>{if(f.name.includes('_merged'))s.add(f.name)});setSelFiles(s)},[files]);
-const selNone=useCallback(()=>setSelFiles(new Set()),[]);
+const[filterMode,setFilterMode]=useState('');
+const selAll=useCallback(()=>{const s=new Set();files.forEach(f=>s.add(f.name));setSelFiles(s);setFilterMode('all')},[files]);
+const selCalc=useCallback(()=>{const s=new Set();files.forEach(f=>{if(f.name.includes('_calc'))s.add(f.name)});setSelFiles(s);setFilterMode('calc')},[files]);
+const selMerged=useCallback(()=>{const s=new Set();files.forEach(f=>{if(f.name.includes('_merged'))s.add(f.name)});setSelFiles(s);setFilterMode('merged')},[files]);
+const selNone=useCallback(()=>{setSelFiles(new Set());setFilterMode('')},[]);
 
 return(<div>
   {/* 파일 선택 */}
@@ -982,9 +995,9 @@ return(<div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,marginTop:10}}>
       <span className="it">{files.length}개 파일 — {selFiles.size}개 선택</span>
       <div style={{display:'flex',gap:6}}>
-        <button className="bt bs" onClick={selAll}>전체</button>
-        <button className="bt bs" style={{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}} onClick={selCalc}>calc만 ★</button>
-        <button className="bt bs" onClick={selMerged}>merged만</button>
+        <button className={`bt bs ${filterMode==='all'?'on':''}`} onClick={selAll}>전체</button>
+        <button className={`bt bs ${filterMode==='calc'?'on':''}`} style={filterMode==='calc'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selCalc}>calc만 ★</button>
+        <button className={`bt bs ${filterMode==='merged'?'on':''}`} onClick={selMerged}>merged만</button>
         <button className="bt bs" onClick={selNone}>해제</button>
         <button className="bt bs" onClick={reloadFiles}>새로고침</button>
         <button className="bt bs" style={{borderColor:'rgba(239,68,68,.3)',color:'var(--red)'}} onClick={async()=>{
@@ -997,7 +1010,7 @@ return(<div>
     <div className="it" style={{marginBottom:6}}>💡 "자동" 모드: 같은 폴더에서 온 merged+calc를 자동으로 하나의 케이스로 병합합니다.</div>
     {files.length>0?<div className="file-sel" style={{maxHeight:200}}>
       {files.map(f=><div key={f.name} className="file-sel-item" style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px',borderBottom:'1px solid var(--bd)'}}>
-        <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>{setSelFiles(p=>{const s=new Set(p);s.has(f.name)?s.delete(f.name):s.add(f.name);return s})}} style={{accentColor:'var(--teal)'}}/>
+        <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>{setSelFiles(p=>{const s=new Set(p);s.has(f.name)?s.delete(f.name):s.add(f.name);return s});setFilterMode('')}} style={{accentColor:'var(--teal)'}}/>
         <span style={{flex:1,fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
         {f.name.includes('_calc')&&<span className="rt rt-c">calc</span>}
         {f.name.includes('_merged')&&<span className="rt rt-m">merged</span>}
