@@ -27,6 +27,15 @@
     "HP_EEV_State": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
     "HP_SuperHeatDegree": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
     "Heatpump_DryMotionInfo": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "Ctrl_DryMotion" },
-    "Heatpump_PressSwitch": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" }
+    "Heatpump_PressSwitch": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "T_Comp_In": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "T_Comp_Out": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "T_Cond_In": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "T_Cond_M1": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "T_Cond_Out": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "T_Air_Eva_Out": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "Po_WD": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "Po_Comp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "Po_Fan": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" }
   }
 }

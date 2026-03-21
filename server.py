@@ -283,8 +283,11 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                 bp = str(case_dir / cf["br"][i]) if use_br and i < len(cf["br"]) else None
                 ap = str(case_dir / cf["ams"][i]) if use_ams and i < len(cf["ams"]) else None
                 mp = str(case_dir / cf["mx100"][i]) if use_mx and i < len(cf["mx100"]) else None
+                _log(sid, f"  소스: BR={bool(bp)} AMS={bool(ap)} MX100={bool(mp)}")
+                if mp: _log(sid, f"  MX100 경로: {mp} (exists={os.path.exists(mp)})")
 
                 df_ams, df_br, df_mx = _read(ap, bp, mp, dt)
+                _log(sid, f"  읽기: BR={len(df_br)}행 AMS={len(df_ams)}행 MX100={len(df_mx)}행")
 
                 # 선택된 소스만 전처리
                 if use_br and not df_br.empty:
@@ -303,8 +306,10 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
 
                 if use_mx and not df_mx.empty:
                     df_mx_proc = preprocess_mx100(df_mx, cfg["mx100"]["useless_columns"])
+                    _log(sid, f"  MX100 전처리: {len(df_mx_proc)}행, {len(df_mx_proc.columns)}col, Time={'Time' in df_mx_proc.columns}")
                 else:
                     df_mx_proc = pd.DataFrame()
+                    _log(sid, f"  MX100: 스킵 (use_mx={use_mx}, empty={df_mx.empty})")
 
                 merged = sync_and_merge(
                     [df_br_main, df_br_add, df_mx_proc, df_ams_proc],
@@ -700,16 +705,19 @@ def _read(ap, bp, mp, dt):
     if ap and os.path.exists(ap):
         df_a = pd.read_csv(ap, encoding="utf-8", skiprows=[0]); df_a.columns=[c.strip() for c in df_a.columns]
     if mp and os.path.exists(mp):
-        try: df_m = pd.read_excel(mp, skiprows=24, header=0)
-        except:
+        try:
+            df_m = pd.read_excel(mp, skiprows=24, header=0)
+            df_m.columns = [c.strip() for c in df_m.columns]
+        except Exception as e1:
             try:
                 df_m = pd.read_excel(mp, skiprows=24, header=[0,1])
                 cols = [c[1] if "Unnamed" in str(c[0]) else c[0] for c in df_m.columns]
-                df_m.columns = cols
+                df_m.columns = [c.strip() for c in cols]
                 if "Date" in df_m.columns and "Time" in df_m.columns:
                     df_m["Time"] = df_m["Date"].astype(str)+" "+df_m["Time"].astype(str)
                     df_m.drop(columns=["Date"], inplace=True, errors="ignore")
-            except: pass
+            except Exception as e2:
+                print(f"[MX100] 읽기 실패: {e1} / {e2}")
     return df_a, df_b, df_m
 
 def _log(sid, msg):
