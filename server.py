@@ -1120,6 +1120,74 @@ def formula_columns(fn: str):
     return {"columns": df.columns.tolist(), "numeric": df.select_dtypes(include=[np.number]).columns.tolist()}
 
 
+@app.get("/api/version")
+def get_version():
+    """현재 버전 정보."""
+    import subprocess
+    try:
+        commit = subprocess.check_output(
+            ["git", "log", "-1", "--format=%h %s", "--date=short"],
+            cwd=str(BASE_DIR), stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except:
+        commit = "unknown"
+    return {"commit": commit, "base_dir": str(BASE_DIR)}
+
+
+@app.post("/api/update")
+def self_update():
+    """GitHub에서 최신 코드 다운로드 + 서버 재시작."""
+    import subprocess, zipfile, io, shutil
+    repo_url = "https://github.com/kimjy2576/Dryer-Merger/archive/refs/heads/main.zip"
+
+    try:
+        # 1. 다운로드
+        import urllib.request
+        resp = urllib.request.urlopen(repo_url, timeout=30)
+        zip_data = resp.read()
+
+        # 2. 임시 폴더에 압축 해제
+        tmp = BASE_DIR / "_update_tmp"
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
+            zf.extractall(tmp)
+
+        # 3. 압축 해제된 폴더 찾기
+        extracted = list(tmp.iterdir())
+        src = extracted[0] if len(extracted) == 1 and extracted[0].is_dir() else tmp
+
+        # 4. 파일 덮어쓰기 (config/saves는 보존)
+        preserve = {"config/saves", "results", "_update_tmp"}
+        updated = []
+        for item in src.rglob("*"):
+            rel = item.relative_to(src)
+            # 보존 폴더 스킵
+            if any(str(rel).startswith(p) for p in preserve):
+                continue
+            dest = BASE_DIR / rel
+            if item.is_dir():
+                dest.mkdir(parents=True, exist_ok=True)
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(item), str(dest))
+                updated.append(str(rel))
+
+        # 5. 임시 폴더 삭제
+        shutil.rmtree(tmp, ignore_errors=True)
+
+        # 6. 서버 재시작 (백그라운드)
+        import threading
+        def restart():
+            import time; time.sleep(1)
+            os._exit(0)  # uvicorn이 재시작
+        threading.Thread(target=restart, daemon=True).start()
+
+        return {"status": "updated", "files": len(updated), "message": "서버 재시작 중... 3초 후 새로고침하세요."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @app.get("/")
 def index():
     f = STATIC / "index.html"
