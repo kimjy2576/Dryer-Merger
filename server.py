@@ -181,6 +181,7 @@ def scan_columns(req: BrowseRequest):
                 for enc in ("cp949", "utf-8"):
                     try:
                         df = pd.read_csv(fp, encoding=enc, skiprows=[0], nrows=5)
+                        df.columns = [c.strip() for c in df.columns]  # 공백 제거
                         for c in df.columns:
                             if c not in all_columns:
                                 all_columns[c] = {"source": "BR", "dtype": str(df[c].dtype)}
@@ -192,6 +193,7 @@ def scan_columns(req: BrowseRequest):
             try:
                 fp = case_dir / cf["ams"][0]
                 df = pd.read_csv(fp, encoding="utf-8", skiprows=[0], nrows=5)
+                df.columns = [c.strip() for c in df.columns]
                 for c in df.columns:
                     if c not in all_columns:
                         all_columns[c] = {"source": "AMS", "dtype": str(df[c].dtype)}
@@ -201,6 +203,7 @@ def scan_columns(req: BrowseRequest):
             try:
                 fp = case_dir / cf["mx100"][0]
                 df = pd.read_excel(fp, skiprows=24, header=0, nrows=5)
+                df.columns = [c.strip() for c in df.columns]
                 for c in df.columns:
                     if c not in all_columns:
                         all_columns[c] = {"source": "MX100", "dtype": str(df[c].dtype)}
@@ -692,10 +695,10 @@ def _read(ap, bp, mp, dt):
     df_a, df_b, df_m = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     if bp and os.path.exists(bp):
         for enc in ("cp949", "utf-8"):
-            try: df_b = pd.read_csv(bp, encoding=enc, skiprows=[0]); break
+            try: df_b = pd.read_csv(bp, encoding=enc, skiprows=[0]); df_b.columns=[c.strip() for c in df_b.columns]; break
             except: continue
     if ap and os.path.exists(ap):
-        df_a = pd.read_csv(ap, encoding="utf-8", skiprows=[0])
+        df_a = pd.read_csv(ap, encoding="utf-8", skiprows=[0]); df_a.columns=[c.strip() for c in df_a.columns]
     if mp and os.path.exists(mp):
         try: df_m = pd.read_excel(mp, skiprows=24, header=0)
         except:

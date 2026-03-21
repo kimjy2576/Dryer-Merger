@@ -56,7 +56,9 @@ def read_blackrose(filepath: str) -> pd.DataFrame:
     """BlackRose CSV 읽기 (cp949 / utf-8 자동 시도)."""
     for enc in ("cp949", "utf-8"):
         try:
-            return pd.read_csv(filepath, encoding=enc, skiprows=[0])
+            df = pd.read_csv(filepath, encoding=enc, skiprows=[0])
+            df.columns = [c.strip() for c in df.columns]
+            return df
         except UnicodeDecodeError:
             continue
     raise ValueError(f"BlackRose 파일 인코딩 인식 실패: {filepath}")
@@ -64,7 +66,9 @@ def read_blackrose(filepath: str) -> pd.DataFrame:
 
 def read_ams(filepath: str) -> pd.DataFrame:
     """AMS CSV 읽기."""
-    return pd.read_csv(filepath, encoding="utf-8", skiprows=[0])
+    df = pd.read_csv(filepath, encoding="utf-8", skiprows=[0])
+    df.columns = [c.strip() for c in df.columns]
+    return df
 
 
 def read_mx100_single_header(filepath: str) -> pd.DataFrame:

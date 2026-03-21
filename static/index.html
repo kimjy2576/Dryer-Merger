@@ -230,9 +230,19 @@ const scanVars=async()=>{if(!sid)return;setScanning(true);
       const settingsKeys=Object.keys(ds.variable_settings);
       console.log('[scanVars] CSV 컬럼:',csvCols.length,'개 / 설정 파일:',settingsKeys.length,'개');
       console.log('[scanVars] 설정 키:',settingsKeys);
+      // 1차: 정확 매칭
       Object.entries(ds.variable_settings).forEach(([col,s])=>{
         if(init[col]){init[col]={...init[col],...s,include:true};matchCount++}
       });
+      // 2차: strip 매칭 (CSV 컬럼에 공백이 있을 경우)
+      if(matchCount<settingsKeys.length){
+        const csvMap=new Map();csvCols.forEach(c=>csvMap.set(c.trim(),c)); // trimmed → original
+        Object.entries(ds.variable_settings).forEach(([col,s])=>{
+          if(!init[col]||init[col].include)return; // 이미 매칭됐으면 스킵
+          const orig=csvMap.get(col.trim());
+          if(orig&&init[orig]&&!init[orig].include){init[orig]={...init[orig],...s,include:true,rename:s.rename||''};matchCount++}
+        });
+      }
       console.log('[scanVars] 매칭:',matchCount,'개');
       // 매칭 0건이면 전부 include로 폴백
       if(matchCount===0){
