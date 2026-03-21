@@ -612,15 +612,15 @@ const BUILTIN_FORMULAS=[
   {name:'Ratio_Compression',desc:'압축비 [-]',expr:'P_Comp_Out / P_Comp_In',edit:true},
 ]},
 {cat:'유량',vars:[
-  {name:'Flow_ref_kgH',desc:'냉매 유량 [kg/h]',expr:'Q_cond / (h_Cond_In_ref - h_Cond_Out_ref) * 3.6',edit:false},
-  {name:'Flow_Dair_kgH',desc:'건조공기 유량 [kg/h]',expr:'풍량(CMM) × 밀도 × 60',edit:false},
-  {name:'Flow_air_Cond_CMM',desc:'응축기 풍량 [CMM]',expr:'Po_Fan / coeff_a * coeff_b (팬 법칙)',edit:false},
+  {name:'Flow_ref_kgH',desc:'냉매 유량 [kg/h]',expr:'Q_cond / (h_Cond_In_ref - h_Cond_Out_ref) * 3.6',edit:true},
+  {name:'Flow_Dair_kgH',desc:'건조공기 유량 [kg/h]',expr:'풍량(CMM) × 밀도 × 60',edit:true},
+  {name:'Flow_air_Cond_CMM',desc:'응축기 풍량 [CMM]',expr:'Po_Fan / coeff_a * coeff_b (팬 법칙)',edit:true},
 ]},
 {cat:'열전달',vars:[
-  {name:'Qrefr_Cond_recalc',desc:'응축기 열량 [W]',expr:'mdot_ref × (h_Cond_In - h_Cond_Out)',edit:false},
-  {name:'Qrefr_Eva_recalc',desc:'증발기 열량 [W]',expr:'mdot_ref × (h_Eva_Out - h_Eva_In)',edit:false},
-  {name:'Q_sen_eva',desc:'증발기 현열 [W]',expr:'mdot_air × Cp × (T_in - T_out)',edit:false},
-  {name:'Q_lat_eva',desc:'증발기 잠열 [W]',expr:'mdot_air × hfg × (W_in - W_out)',edit:false},
+  {name:'Qrefr_Cond_recalc',desc:'응축기 열량 [W]',expr:'mdot_ref × (h_Cond_In - h_Cond_Out)',edit:true},
+  {name:'Qrefr_Eva_recalc',desc:'증발기 열량 [W]',expr:'mdot_ref × (h_Eva_Out - h_Eva_In)',edit:true},
+  {name:'Q_sen_eva',desc:'증발기 현열 [W]',expr:'mdot_air × Cp × (T_in - T_out)',edit:true},
+  {name:'Q_lat_eva',desc:'증발기 잠열 [W]',expr:'mdot_air × hfg × (W_in - W_out)',edit:true},
   {name:'Q_Drum_Total',desc:'드럼 전체 열량 [W]',expr:'Q_Drum_Sen + Q_Drum_Lat',edit:true},
 ]},
 {cat:'성능지표',vars:[
@@ -628,25 +628,25 @@ const BUILTIN_FORMULAS=[
   {name:'COP_heating',desc:'COP 난방 [-]',expr:'Qrefr_Cond_recalc / Po_Comp',edit:true},
   {name:'COP_sys_cooling',desc:'시스템 COP 냉방 [-]',expr:'Qrefr_Eva_recalc / (Po_Comp + Po_Fan)',edit:true},
   {name:'COP_sys_heating',desc:'시스템 COP 난방 [-]',expr:'Qrefr_Cond_recalc / (Po_Comp + Po_Fan)',edit:true},
-  {name:'SMER',desc:'에너지효율 [kg/kWh]',expr:'Water_calc_gM / 1000 / Po_WD * 60000',edit:false},
+  {name:'SMER',desc:'에너지효율 [kg/kWh]',expr:'Water_calc_gM / 1000 / Po_WD * 60000',edit:true},
   {name:'Factor_SFH',desc:'현열비 [-]',expr:'Q_sen_eva / (Q_sen_eva + Q_lat_eva)',edit:true},
   {name:'Factor_LFH',desc:'잠열비 [-]',expr:'Q_lat_eva / (Q_sen_eva + Q_lat_eva)',edit:true},
 ]},
 {cat:'증발기 입구 공기',vars:[
   {name:'AH_Eva_In',desc:'증발기 입구 절대습도 [kg/kg]',expr:'wFromRH(T_Air_Eva_In, RH_Eva_In)',edit:false},
   {name:'RH_Eva_In',desc:'증발기 입구 상대습도 [-]',expr:'AH_Cond_Out → 역산 (순환 공기)',edit:false},
-  {name:'Flow_air_Eva_CMM',desc:'증발기 풍량 [CMM]',expr:'Q_sen / (ρ×Cp×ΔT) / 60',edit:false},
+  {name:'Flow_air_Eva_CMM',desc:'증발기 풍량 [CMM]',expr:'Q_sen / (ρ×Cp×ΔT) / 60',edit:true},
 ]},
 {cat:'수분/건조도',vars:[
-  {name:'Water_calc_gM',desc:'응축수량 [g/min]',expr:'mdot_air × (AH_in - AH_out) × 1000/60',edit:false},
+  {name:'Water_calc_gM',desc:'응축수량 [g/min]',expr:'mdot_air × (AH_in - AH_out) × 1000/60',edit:true},
   {name:'Water_calc_kg',desc:'누적 응축수 [kg]',expr:'∫ Water_calc_gM dt',edit:false},
-  {name:'RMC_calc',desc:'잔여수분율 [%]',expr:'(초기수분 - Water_calc_kg) / 의류무게 × 100',edit:false},
+  {name:'RMC_calc',desc:'잔여수분율 [%]',expr:'(초기수분 - Water_calc_kg) / 의류무게 × 100',edit:true},
 ]},
 {cat:'에너지 적산',vars:[
   {name:'E_WD',desc:'총 에너지 [Wh]',expr:'∫ Po_WD dt',edit:false},
   {name:'E_Comp',desc:'압축기 에너지 [Wh]',expr:'∫ Po_Comp dt',edit:false},
   {name:'E_Fan',desc:'팬 에너지 [Wh]',expr:'∫ Po_Fan dt',edit:false},
-  {name:'Po_Drum_calc',desc:'드럼 전력 추정 [W]',expr:'on_watts(56s) / off_watts(4s) 반복',edit:false},
+  {name:'Po_Drum_calc',desc:'드럼 전력 추정 [W]',expr:'on_watts(56s) / off_watts(4s) 반복',edit:true},
 ]},
 ];
 
