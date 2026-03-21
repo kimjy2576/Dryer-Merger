@@ -44,6 +44,15 @@ def _align_datetime_to_base(df: pd.DataFrame, base_date) -> pd.DataFrame:
     if pd.isna(base_date):
         return df
 
+    # Time 컬럼이 없으면 LogTime 등에서 폴백
+    if "Time" not in df.columns:
+        for alt in ["LogTime", "logtime", "LOGTIME", "time", "DateTime", "datetime", "Timestamp"]:
+            if alt in df.columns:
+                df = df.rename(columns={alt: "Time"})
+                break
+    if "Time" not in df.columns:
+        return df
+
     temp_dt = pd.to_datetime(df["Time"], errors="coerce")
     time_comp = temp_dt - temp_dt.dt.normalize()
     base_midnight = pd.Timestamp(base_date).normalize()
@@ -173,9 +182,11 @@ def sync_and_merge(
     ref_map = {"BR": df_br, "AMS": df_ams, "MX100": df_mx100}
     start_time = parse_flexible_datetime(ref_map[data_time]["Time"].iloc[0])
 
-    # 중복 제거 + 시간 변환
+    # 중복 제거 + 시간 변환 (Time 없는 df 스킵)
     clean_dfs = []
     for df in dfs:
+        if df.empty or "Time" not in df.columns:
+            continue
         df = df.drop_duplicates(subset="Time", keep="first").reset_index(drop=True)
         _align_datetime_to_base(df, start_time)
         clean_dfs.append(df)
