@@ -901,6 +901,95 @@ def compute_enthalpy(req: dict):
         raise HTTPException(400, f"엔탈피 계산 실패: {str(e)}")
 
 
+# ══════════════════════════════════════════════
+#  커스텀 수식 엔진
+# ══════════════════════════════════════════════
+@app.post("/api/eval-formulas")
+def eval_formulas(req: dict):
+    """
+    CSV 파일에 수식을 적용하여 새 컬럼 추가.
+    입력: {filename: str, formulas: [{name, expr, enabled}]}
+    pandas df.eval() 사용 — 기존 컬럼 참조 가능.
+    """
+    fn = req.get("filename")
+    formulas = req.get("formulas", [])
+    if not fn:
+        raise HTTPException(400, "filename 필요")
+
+    p = RESULT_DIR / fn
+    if not p.exists():
+        raise HTTPException(404, f"파일 없음: {fn}")
+
+    try:
+        df = pd.read_csv(p)
+    except Exception as e:
+        raise HTTPException(400, f"CSV 읽기 실패: {str(e)}")
+
+    results = []
+    errors = []
+    for f in formulas:
+        name = f.get("name", "").strip()
+        expr = f.get("expr", "").strip()
+        if not name or not expr or not f.get("enabled", True):
+            continue
+        try:
+            # 안전성: 위험 키워드 차단
+            dangerous = ["import", "exec", "eval", "__", "open", "os.", "sys.", "subprocess"]
+            if any(d in expr.lower() for d in dangerous):
+                errors.append({"name": name, "error": "허용되지 않는 키워드"})
+                continue
+            df[name] = df.eval(expr)
+            results.append({"name": name, "expr": expr, "rows": int(df[name].notna().sum())})
+        except Exception as e:
+            errors.append({"name": name, "error": str(e)})
+
+    # 결과 저장
+    out_name = fn.replace(".csv", "_formula.csv")
+    df.to_csv(RESULT_DIR / out_name, index=False)
+
+    return {
+        "output": out_name,
+        "applied": results,
+        "errors": errors,
+        "total_columns": len(df.columns),
+        "total_rows": len(df),
+    }
+
+
+@app.post("/api/preview-formula")
+def preview_formula(req: dict):
+    """수식 1개를 미리보기 (처음 10행만)."""
+    fn = req.get("filename")
+    expr = req.get("expr", "").strip()
+    if not fn or not expr:
+        raise HTTPException(400, "filename, expr 필요")
+
+    p = RESULT_DIR / fn
+    if not p.exists():
+        raise HTTPException(404, f"파일 없음: {fn}")
+
+    try:
+        df = pd.read_csv(p, nrows=100)
+        dangerous = ["import", "exec", "eval", "__", "open", "os.", "sys.", "subprocess"]
+        if any(d in expr.lower() for d in dangerous):
+            raise HTTPException(400, "허용되지 않는 키워드")
+        result = df.eval(expr)
+        sample = [None if pd.isna(v) else round(float(v), 4) for v in result.head(10)]
+        return {"preview": sample, "dtype": str(result.dtype)}
+    except Exception as e:
+        raise HTTPException(400, f"수식 오류: {str(e)}")
+
+
+@app.get("/api/formula-columns/{fn}")
+def formula_columns(fn: str):
+    """수식에서 참조할 수 있는 컬럼 목록."""
+    p = RESULT_DIR / fn
+    if not p.exists():
+        raise HTTPException(404)
+    df = pd.read_csv(p, nrows=1)
+    return {"columns": df.columns.tolist(), "numeric": df.select_dtypes(include=[np.number]).columns.tolist()}
+
+
 @app.get("/")
 def index():
     f = STATIC / "index.html"

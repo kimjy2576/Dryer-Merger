@@ -55,12 +55,14 @@ return(<div className="app"><div className="hdr"><h1>Dryer Merger</h1><span clas
 <div className="tabs">
   <button className={`tb ${tab==='merge'?'on':''}`} onClick={()=>setTab('merge')}>Merge</button>
   <button className={`tb ${tab==='calc'?'on':''}`} onClick={()=>setTab('calc')}>Calculation</button>
+  <button className={`tb ${tab==='formula'?'on':''}`} onClick={()=>setTab('formula')}>Formula</button>
   <button className={`tb ${tab==='viewer'?'on':''}`} onClick={()=>setTab('viewer')}>Viewer</button>
   <button className={`tb ${tab==='config'?'on':''}`} onClick={()=>setTab('config')}>설정</button>
   <button className={`tb ${tab==='preview'?'on':''}`} onClick={()=>setTab('preview')}>미리보기</button>
 </div>
 <div style={{display:tab==='merge'?'block':'none'}}>{cfg&&<MergeTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}</div>
 <div style={{display:tab==='calc'?'block':'none'}}>{cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={st} setSt={setSt}/>}</div>
+<div style={{display:tab==='formula'?'block':'none'}}><FormulaTab/></div>
 <div style={{display:tab==='viewer'?'block':'none'}}><ViewerTab cfg={cfg}/></div>
 <div style={{display:tab==='config'?'block':'none'}}>{cfg&&<CfgTab cfg={cfg} setCfg={setCfg}/>}</div>
 <div style={{display:tab==='preview'?'block':'none'}}><PrvTab init={pf}/></div>
@@ -579,6 +581,130 @@ class ErrorBound extends React.Component{
     React.createElement('pre',{style:{fontSize:11,color:'#ef4444',whiteSpace:'pre-wrap',fontFamily:'var(--mono)'}},String(this.state.err)),
     React.createElement('button',{onClick:()=>this.setState({err:null,info:null}),style:{marginTop:8,padding:'4px 12px',borderRadius:6,border:'1px solid #ef4444',background:'transparent',color:'#ef4444',cursor:'pointer'}},'다시 시도'));
   return this.props.children}
+}
+
+// ═══ Formula 탭 ═══
+function FormulaTab(){
+  const[files,setFiles]=useState([]);
+  const[selFile,setSelFile]=useState('');
+  const[cols,setCols]=useState([]);
+  const[formulas,setFormulas]=useState([{id:1,name:'',expr:'',enabled:true}]);
+  const[results,setResults]=useState(null);
+  const[preview,setPreview]=useState(null);
+  const[running,setRunning]=useState(false);
+  const nextId=useRef(2);
+  const loadRef=useRef(null);
+
+  useEffect(()=>{fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d)).catch(()=>{})},[]);
+  useEffect(()=>{if(!selFile)return;
+    fetch(`${API}/api/formula-columns/${selFile}`).then(r=>r.json()).then(d=>setCols(d.numeric||[])).catch(()=>{})
+  },[selFile]);
+
+  const addFormula=()=>{setFormulas(p=>[...p,{id:nextId.current++,name:'',expr:'',enabled:true}])};
+  const updateFormula=(id,key,val)=>setFormulas(p=>p.map(f=>f.id===id?{...f,[key]:val}:f));
+  const removeFormula=(id)=>setFormulas(p=>p.filter(f=>f.id!==id));
+  const toggleFormula=(id)=>setFormulas(p=>p.map(f=>f.id===id?{...f,enabled:!f.enabled}:f));
+
+  const previewExpr=async(expr)=>{if(!selFile||!expr)return;
+    try{const r=await fetch(`${API}/api/preview-formula`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:selFile,expr})});
+      const d=await r.json();setPreview(r.ok?d:{error:d.detail||'오류'});
+    }catch(e){setPreview({error:e.message})}};
+
+  const runAll=async()=>{if(!selFile)return;setRunning(true);setResults(null);
+    const valid=formulas.filter(f=>f.name&&f.expr&&f.enabled);
+    try{const r=await fetch(`${API}/api/eval-formulas`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:selFile,formulas:valid})});
+      setResults(await r.json());
+    }catch(e){setResults({error:e.message})}setRunning(false)};
+
+  const saveFormulas=()=>{const blob=new Blob([JSON.stringify({version:1,type:'formula_settings',formulas,timestamp:new Date().toISOString()},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='formula_settings.json';a.click()};
+  const loadFormulas=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.formulas){setFormulas(d.formulas.map((f,i)=>({...f,id:nextId.current++})));alert(d.formulas.length+'개 수식 불러옴')}}catch(er){alert('파싱 실패')}};rd.readAsText(f);e.target.value=''};
+
+  const insertCol=(col)=>{const last=formulas.filter(f=>f.enabled).pop();if(last)updateFormula(last.id,'expr',last.expr+col)};
+
+  return(<div>
+    <div className="cd">
+      <div className="ct">수식 편집기</div>
+      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
+        <span className="it">대상 파일:</span>
+        <select value={selFile} onChange={e=>setSelFile(e.target.value)} style={{flex:1,maxWidth:400}}>
+          <option value="">— 파일 선택 —</option>
+          {files.map(f=><option key={f.name} value={f.name}>{f.name} ({(f.size/1024).toFixed(0)}KB)</option>)}
+        </select>
+        <button className="bt bs" onClick={()=>fetch(`${API}/api/results`).then(r=>r.json()).then(setFiles)}>새로고침</button>
+      </div>
+
+      {selFile&&<>
+      <div style={{marginBottom:10}}>
+        <div style={{fontSize:11,color:'var(--tx2)',marginBottom:4}}>참조 가능 컬럼 ({cols.length}개) — 클릭 시 수식에 삽입:</div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:3,maxHeight:80,overflowY:'auto',padding:6,background:'var(--bg2)',borderRadius:6,border:'1px solid var(--bd)'}}>
+          {cols.map(c=><button key={c} onClick={()=>insertCol(c)} style={{fontSize:10,padding:'2px 6px',background:'var(--bg3)',border:'1px solid var(--bd2)',borderRadius:3,color:'var(--tx)',cursor:'pointer',fontFamily:'var(--mono)'}}>{c}</button>)}
+        </div>
+      </div>
+
+      <div style={{marginBottom:10}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+          <span style={{fontSize:12,fontWeight:500}}>수식 목록 ({formulas.filter(f=>f.enabled).length}/{formulas.length}개 활성)</span>
+          <div style={{display:'flex',gap:6}}>
+            <button className="bt bs" onClick={addFormula}>+ 수식 추가</button>
+            <button className="bt bs" onClick={saveFormulas}>💾 저장</button>
+            <button className="bt bs" onClick={()=>loadRef.current?.click()}>📂 불러오기</button>
+            <input ref={loadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadFormulas}/>
+          </div>
+        </div>
+        <div style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden'}}>
+          <div style={{display:'grid',gridTemplateColumns:'32px 180px 1fr 80px 40px',gap:0,padding:'6px 10px',background:'var(--bg3)',fontSize:11,color:'var(--tx2)',fontWeight:500}}>
+            <span></span><span>변수명</span><span>수식 (pandas eval)</span><span></span><span></span>
+          </div>
+          <div style={{maxHeight:350,overflowY:'auto'}}>
+            {formulas.map(f=><div key={f.id} style={{display:'grid',gridTemplateColumns:'32px 180px 1fr 80px 40px',gap:0,padding:'4px 10px',borderTop:'1px solid var(--bd)',alignItems:'center',opacity:f.enabled?1:.4}}>
+              <input type="checkbox" checked={f.enabled} onChange={()=>toggleFormula(f.id)} style={{accentColor:'var(--teal)'}}/>
+              <input value={f.name} onChange={e=>updateFormula(f.id,'name',e.target.value)} placeholder="변수명" style={{fontSize:11,padding:'4px 6px',fontFamily:'var(--mono)',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
+              <input value={f.expr} onChange={e=>updateFormula(f.id,'expr',e.target.value)} placeholder="예: Qrefr_Cond_recalc / Po_WD" style={{fontSize:11,padding:'4px 6px',fontFamily:'var(--mono)',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
+              <button className="bt bs" onClick={()=>previewExpr(f.expr)} disabled={!f.expr} style={{fontSize:10,padding:'3px 6px'}}>미리보기</button>
+              <button onClick={()=>removeFormula(f.id)} style={{fontSize:11,border:0,background:0,color:'var(--red)',cursor:'pointer'}}>×</button>
+            </div>)}
+          </div>
+        </div>
+      </div>
+
+      {preview&&<div style={{marginBottom:10,padding:8,background:'var(--bg2)',borderRadius:6,border:'1px solid var(--bd)',fontFamily:'var(--mono)',fontSize:11}}>
+        {preview.error?<span style={{color:'var(--red)'}}>❌ {preview.error}</span>
+        :<><span style={{color:'var(--teal)'}}>미리보기 (처음 10행): </span><span>{preview.preview?.join(', ')}</span> <span className="it">({preview.dtype})</span></>}
+      </div>}
+
+      <div style={{display:'flex',gap:8,alignItems:'center'}}>
+        <button className="bt bg" onClick={runAll} disabled={running||!formulas.some(f=>f.name&&f.expr&&f.enabled)}>
+          {running?'실행 중...':'수식 실행 ('+formulas.filter(f=>f.name&&f.expr&&f.enabled).length+'개)'}
+        </button>
+        <span className="it">→ {selFile.replace('.csv','')}_formula.csv</span>
+      </div>
+
+      {results&&<div style={{marginTop:10,padding:10,background:'var(--bg2)',borderRadius:8,border:'1px solid var(--bd)'}}>
+        {results.error?<div style={{color:'var(--red)'}}>❌ {results.error}</div>:<>
+          <div style={{color:'var(--teal)',fontSize:12,marginBottom:6}}>✅ {results.output} ({results.total_columns}col, {results.total_rows}rows)</div>
+          {results.applied?.map(a=><div key={a.name} style={{fontSize:11,color:'var(--green)'}}>✓ {a.name} = {a.expr} ({a.rows}행)</div>)}
+          {results.errors?.map((e,i)=><div key={i} style={{fontSize:11,color:'var(--red)'}}>✗ {e.name}: {e.error}</div>)}
+        </>}
+      </div>}
+      </>}
+    </div>
+
+    <div className="cd" style={{marginTop:10}}>
+      <div className="ct">수식 가이드</div>
+      <div style={{fontSize:11,color:'var(--tx2)',lineHeight:1.8}}>
+        <div><b>사칙연산:</b> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>A + B</code> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>A * B</code> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>A / B</code></div>
+        <div><b>괄호:</b> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>(A + B) / C</code></div>
+        <div><b>거듭제곱:</b> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>A ** 2</code></div>
+        <div style={{fontFamily:'var(--mono)',fontSize:10,padding:8,background:'var(--bg)',borderRadius:6,marginTop:6}}>
+          COP_total = Qrefr_Cond_recalc / Po_WD<br/>
+          dT_Cond = T_Cond_In - T_Cond_Out<br/>
+          dT_Eva = T_Air_Eva_In - T_Air_Eva_Out<br/>
+          Q_balance = Qrefr_Cond_recalc - Qrefr_Eva_recalc - Po_Comp<br/>
+          Eff_isen = (h_Eva_Out_ref - h_Eva_In_ref) / (h_Comp_Out_ref - h_Comp_In_ref)
+        </div>
+      </div>
+    </div>
+  </div>)
 }
 
 // ═══ Viewer 헬퍼 ═══
