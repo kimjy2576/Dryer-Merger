@@ -584,124 +584,180 @@ class ErrorBound extends React.Component{
 }
 
 // ═══ Formula 탭 ═══
+const BUILTIN_FORMULAS=[
+{cat:'응축기 공기측',vars:[
+  {name:'AH_Cond_In',desc:'응축기 입구 절대습도 [kg/kg]',expr:'wFromRH(T_Air_Eva_Out, RH_Eva_Out)',edit:false},
+  {name:'AH_Cond_Out',desc:'응축기 출구 절대습도 [kg/kg]',expr:'wFromRH(T_Air_Cond_Out, RH_Cond_Out_assumed)',edit:false},
+  {name:'RH_Cond_In',desc:'응축기 입구 상대습도',expr:'RH_Eva_Out (센서값 또는 수렴)',edit:false},
+  {name:'RH_Cond_Out',desc:'응축기 출구 상대습도',expr:'증발기 입구 RH와 동일 가정',edit:false},
+  {name:'h_Cond_In_MAir',desc:'응축기 입구 습공기 엔탈피 [kJ/kg]',expr:'1.006*T + W*(2501+1.86*T)',edit:false},
+  {name:'h_Cond_Out_MAir',desc:'응축기 출구 습공기 엔탈피 [kJ/kg]',expr:'1.006*T + W*(2501+1.86*T)',edit:false},
+]},
+{cat:'응축기 냉매측',vars:[
+  {name:'h_Cond_In_ref',desc:'응축기 냉매 입구 엔탈피 [kJ/kg]',expr:'CoolProp(H, T=T_Cond_In, P=P_Comp_Out)',edit:false},
+  {name:'h_Cond_Out_ref',desc:'응축기 냉매 출구 엔탈피 [kJ/kg]',expr:'CoolProp(H, T=T_Cond_Out, P=P_Comp_Out)',edit:false},
+  {name:'T_Dew_ref',desc:'응축 온도 (이슬점) [°C]',expr:'CoolProp(Tsat, P=P_Comp_Out)',edit:false},
+  {name:'T_subcooling',desc:'과냉도 [K]',expr:'T_Dew_ref - T_Cond_Out',edit:true},
+]},
+{cat:'증발기 냉매측',vars:[
+  {name:'h_Eva_In_ref',desc:'증발기 냉매 입구 엔탈피 [kJ/kg]',expr:'h_Cond_Out_ref (등엔탈피 팽창)',edit:false},
+  {name:'h_Eva_Out_ref',desc:'증발기 냉매 출구 엔탈피 [kJ/kg]',expr:'CoolProp(H, T=T_Eva_Out, P=P_Comp_In)',edit:false},
+  {name:'T_Boiling_ref',desc:'증발 온도 [°C]',expr:'CoolProp(Tsat, P=P_Comp_In)',edit:false},
+  {name:'T_Superheating',desc:'과열도 [K]',expr:'T_Eva_Out - T_Boiling_ref',edit:true},
+  {name:'Quality_x',desc:'건도 [-]',expr:'(h_Eva_In - h_liq) / (h_vap - h_liq)',edit:false},
+]},
+{cat:'압축기 냉매측',vars:[
+  {name:'h_Comp_In_ref',desc:'압축기 입구 엔탈피 [kJ/kg]',expr:'CoolProp(H, T=T_Comp_In, P=P_Comp_In)',edit:false},
+  {name:'h_Comp_Out_ref',desc:'압축기 출구 엔탈피 [kJ/kg]',expr:'CoolProp(H, T=T_Comp_Out, P=P_Comp_Out)',edit:false},
+  {name:'Ratio_Compression',desc:'압축비 [-]',expr:'P_Comp_Out / P_Comp_In',edit:true},
+]},
+{cat:'유량',vars:[
+  {name:'Flow_ref_kgH',desc:'냉매 유량 [kg/h]',expr:'Q_cond / (h_Cond_In_ref - h_Cond_Out_ref) * 3.6',edit:false},
+  {name:'Flow_Dair_kgH',desc:'건조공기 유량 [kg/h]',expr:'풍량(CMM) × 밀도 × 60',edit:false},
+  {name:'Flow_air_Cond_CMM',desc:'응축기 풍량 [CMM]',expr:'Po_Fan / coeff_a * coeff_b (팬 법칙)',edit:false},
+]},
+{cat:'열전달',vars:[
+  {name:'Qrefr_Cond_recalc',desc:'응축기 열량 [W]',expr:'mdot_ref × (h_Cond_In - h_Cond_Out)',edit:false},
+  {name:'Qrefr_Eva_recalc',desc:'증발기 열량 [W]',expr:'mdot_ref × (h_Eva_Out - h_Eva_In)',edit:false},
+  {name:'Q_sen_eva',desc:'증발기 현열 [W]',expr:'mdot_air × Cp × (T_in - T_out)',edit:false},
+  {name:'Q_lat_eva',desc:'증발기 잠열 [W]',expr:'mdot_air × hfg × (W_in - W_out)',edit:false},
+  {name:'Q_Drum_Total',desc:'드럼 전체 열량 [W]',expr:'Q_Drum_Sen + Q_Drum_Lat',edit:true},
+]},
+{cat:'성능지표',vars:[
+  {name:'COP_cooling',desc:'COP 냉방 [-]',expr:'Qrefr_Eva_recalc / Po_Comp',edit:true},
+  {name:'COP_heating',desc:'COP 난방 [-]',expr:'Qrefr_Cond_recalc / Po_Comp',edit:true},
+  {name:'COP_sys_cooling',desc:'시스템 COP 냉방 [-]',expr:'Qrefr_Eva_recalc / (Po_Comp + Po_Fan)',edit:true},
+  {name:'COP_sys_heating',desc:'시스템 COP 난방 [-]',expr:'Qrefr_Cond_recalc / (Po_Comp + Po_Fan)',edit:true},
+  {name:'SMER',desc:'에너지효율 [kg/kWh]',expr:'Water_calc_gM / 1000 / Po_WD * 60000',edit:false},
+  {name:'Factor_SFH',desc:'현열비 [-]',expr:'Q_sen_eva / (Q_sen_eva + Q_lat_eva)',edit:true},
+  {name:'Factor_LFH',desc:'잠열비 [-]',expr:'Q_lat_eva / (Q_sen_eva + Q_lat_eva)',edit:true},
+]},
+{cat:'증발기 입구 공기',vars:[
+  {name:'AH_Eva_In',desc:'증발기 입구 절대습도 [kg/kg]',expr:'wFromRH(T_Air_Eva_In, RH_Eva_In)',edit:false},
+  {name:'RH_Eva_In',desc:'증발기 입구 상대습도 [-]',expr:'AH_Cond_Out → 역산 (순환 공기)',edit:false},
+  {name:'Flow_air_Eva_CMM',desc:'증발기 풍량 [CMM]',expr:'Q_sen / (ρ×Cp×ΔT) / 60',edit:false},
+]},
+{cat:'수분/건조도',vars:[
+  {name:'Water_calc_gM',desc:'응축수량 [g/min]',expr:'mdot_air × (AH_in - AH_out) × 1000/60',edit:false},
+  {name:'Water_calc_kg',desc:'누적 응축수 [kg]',expr:'∫ Water_calc_gM dt',edit:false},
+  {name:'RMC_calc',desc:'잔여수분율 [%]',expr:'(초기수분 - Water_calc_kg) / 의류무게 × 100',edit:false},
+]},
+{cat:'에너지 적산',vars:[
+  {name:'E_WD',desc:'총 에너지 [Wh]',expr:'∫ Po_WD dt',edit:false},
+  {name:'E_Comp',desc:'압축기 에너지 [Wh]',expr:'∫ Po_Comp dt',edit:false},
+  {name:'E_Fan',desc:'팬 에너지 [Wh]',expr:'∫ Po_Fan dt',edit:false},
+  {name:'Po_Drum_calc',desc:'드럼 전력 추정 [W]',expr:'on_watts(56s) / off_watts(4s) 반복',edit:false},
+]},
+];
+
 function FormulaTab(){
-  const[files,setFiles]=useState([]);
-  const[selFile,setSelFile]=useState('');
-  const[cols,setCols]=useState([]);
-  const[formulas,setFormulas]=useState([{id:1,name:'',expr:'',enabled:true}]);
-  const[results,setResults]=useState(null);
-  const[preview,setPreview]=useState(null);
-  const[running,setRunning]=useState(false);
-  const nextId=useRef(2);
+  const[catOpen,setCatOpen]=useState({});
+  const[customFormulas,setCustomFormulas]=useState([]);
+  const[editOverrides,setEditOverrides]=useState({}); // {varName: newExpr}
+  const nextId=useRef(1);
   const loadRef=useRef(null);
 
-  useEffect(()=>{fetch(`${API}/api/results`).then(r=>r.json()).then(d=>setFiles(d)).catch(()=>{})},[]);
-  useEffect(()=>{if(!selFile)return;
-    fetch(`${API}/api/formula-columns/${selFile}`).then(r=>r.json()).then(d=>setCols(d.numeric||[])).catch(()=>{})
-  },[selFile]);
+  const togCat=c=>setCatOpen(p=>({...p,[c]:!p[c]}));
+  const setOverride=(name,expr)=>setEditOverrides(p=>({...p,[name]:expr}));
 
-  const addFormula=()=>{setFormulas(p=>[...p,{id:nextId.current++,name:'',expr:'',enabled:true}])};
-  const updateFormula=(id,key,val)=>setFormulas(p=>p.map(f=>f.id===id?{...f,[key]:val}:f));
-  const removeFormula=(id)=>setFormulas(p=>p.filter(f=>f.id!==id));
-  const toggleFormula=(id)=>setFormulas(p=>p.map(f=>f.id===id?{...f,enabled:!f.enabled}:f));
+  // 커스텀 수식
+  const addCustom=()=>setCustomFormulas(p=>[...p,{id:nextId.current++,name:'',expr:'',desc:'',enabled:true}]);
+  const updateCustom=(id,key,val)=>setCustomFormulas(p=>p.map(f=>f.id===id?{...f,[key]:val}:f));
+  const removeCustom=id=>setCustomFormulas(p=>p.filter(f=>f.id!==id));
 
-  const previewExpr=async(expr)=>{if(!selFile||!expr)return;
-    try{const r=await fetch(`${API}/api/preview-formula`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:selFile,expr})});
-      const d=await r.json();setPreview(r.ok?d:{error:d.detail||'오류'});
-    }catch(e){setPreview({error:e.message})}};
+  // 저장
+  const saveAll=()=>{
+    const data={version:1,type:'formula_settings',overrides:editOverrides,custom:customFormulas,timestamp:new Date().toISOString()};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='formula_settings.json';a.click()};
+  const loadAll=e=>{const f=e.target.files[0];if(!f)return;
+    const rd=new FileReader();rd.onload=ev=>{try{const d=JSON.parse(ev.target.result);
+      if(d.overrides)setEditOverrides(d.overrides);
+      if(d.custom)setCustomFormulas(d.custom.map((f,i)=>({...f,id:nextId.current++})));
+      alert('수식 설정 불러옴');}catch(er){alert('파싱 실패')}};rd.readAsText(f);e.target.value=''};
 
-  const runAll=async()=>{if(!selFile)return;setRunning(true);setResults(null);
-    const valid=formulas.filter(f=>f.name&&f.expr&&f.enabled);
-    try{const r=await fetch(`${API}/api/eval-formulas`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:selFile,formulas:valid})});
-      setResults(await r.json());
-    }catch(e){setResults({error:e.message})}setRunning(false)};
-
-  const saveFormulas=()=>{const blob=new Blob([JSON.stringify({version:1,type:'formula_settings',formulas,timestamp:new Date().toISOString()},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='formula_settings.json';a.click()};
-  const loadFormulas=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.formulas){setFormulas(d.formulas.map((f,i)=>({...f,id:nextId.current++})));alert(d.formulas.length+'개 수식 불러옴')}}catch(er){alert('파싱 실패')}};rd.readAsText(f);e.target.value=''};
-
-  const insertCol=(col)=>{const last=formulas.filter(f=>f.enabled).pop();if(last)updateFormula(last.id,'expr',last.expr+col)};
+  const totalBuiltin=BUILTIN_FORMULAS.reduce((s,c)=>s+c.vars.length,0);
 
   return(<div>
+    {/* 헤더 */}
     <div className="cd">
-      <div className="ct">수식 편집기</div>
-      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
-        <span className="it">대상 파일:</span>
-        <select value={selFile} onChange={e=>setSelFile(e.target.value)} style={{flex:1,maxWidth:400}}>
-          <option value="">— 파일 선택 —</option>
-          {files.map(f=><option key={f.name} value={f.name}>{f.name} ({(f.size/1024).toFixed(0)}KB)</option>)}
-        </select>
-        <button className="bt bs" onClick={()=>fetch(`${API}/api/results`).then(r=>r.json()).then(setFiles)}>새로고침</button>
-      </div>
-
-      {selFile&&<>
-      <div style={{marginBottom:10}}>
-        <div style={{fontSize:11,color:'var(--tx2)',marginBottom:4}}>참조 가능 컬럼 ({cols.length}개) — 클릭 시 수식에 삽입:</div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:3,maxHeight:80,overflowY:'auto',padding:6,background:'var(--bg2)',borderRadius:6,border:'1px solid var(--bd)'}}>
-          {cols.map(c=><button key={c} onClick={()=>insertCol(c)} style={{fontSize:10,padding:'2px 6px',background:'var(--bg3)',border:'1px solid var(--bd2)',borderRadius:3,color:'var(--tx)',cursor:'pointer',fontFamily:'var(--mono)'}}>{c}</button>)}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div className="ct" style={{margin:0}}>수식 편집기 — Calculation 변수 정의</div>
+        <div style={{display:'flex',gap:6}}>
+          <button className="bt bs" onClick={saveAll}>💾 설정 저장</button>
+          <button className="bt bs" onClick={()=>loadRef.current?.click()}>📂 불러오기</button>
+          <input ref={loadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadAll}/>
         </div>
       </div>
-
-      <div style={{marginBottom:10}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-          <span style={{fontSize:12,fontWeight:500}}>수식 목록 ({formulas.filter(f=>f.enabled).length}/{formulas.length}개 활성)</span>
-          <div style={{display:'flex',gap:6}}>
-            <button className="bt bs" onClick={addFormula}>+ 수식 추가</button>
-            <button className="bt bs" onClick={saveFormulas}>💾 저장</button>
-            <button className="bt bs" onClick={()=>loadRef.current?.click()}>📂 불러오기</button>
-            <input ref={loadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadFormulas}/>
-          </div>
-        </div>
-        <div style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden'}}>
-          <div style={{display:'grid',gridTemplateColumns:'32px 180px 1fr 80px 40px',gap:0,padding:'6px 10px',background:'var(--bg3)',fontSize:11,color:'var(--tx2)',fontWeight:500}}>
-            <span></span><span>변수명</span><span>수식 (pandas eval)</span><span></span><span></span>
-          </div>
-          <div style={{maxHeight:350,overflowY:'auto'}}>
-            {formulas.map(f=><div key={f.id} style={{display:'grid',gridTemplateColumns:'32px 180px 1fr 80px 40px',gap:0,padding:'4px 10px',borderTop:'1px solid var(--bd)',alignItems:'center',opacity:f.enabled?1:.4}}>
-              <input type="checkbox" checked={f.enabled} onChange={()=>toggleFormula(f.id)} style={{accentColor:'var(--teal)'}}/>
-              <input value={f.name} onChange={e=>updateFormula(f.id,'name',e.target.value)} placeholder="변수명" style={{fontSize:11,padding:'4px 6px',fontFamily:'var(--mono)',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
-              <input value={f.expr} onChange={e=>updateFormula(f.id,'expr',e.target.value)} placeholder="예: Qrefr_Cond_recalc / Po_WD" style={{fontSize:11,padding:'4px 6px',fontFamily:'var(--mono)',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
-              <button className="bt bs" onClick={()=>previewExpr(f.expr)} disabled={!f.expr} style={{fontSize:10,padding:'3px 6px'}}>미리보기</button>
-              <button onClick={()=>removeFormula(f.id)} style={{fontSize:11,border:0,background:0,color:'var(--red)',cursor:'pointer'}}>×</button>
-            </div>)}
-          </div>
-        </div>
-      </div>
-
-      {preview&&<div style={{marginBottom:10,padding:8,background:'var(--bg2)',borderRadius:6,border:'1px solid var(--bd)',fontFamily:'var(--mono)',fontSize:11}}>
-        {preview.error?<span style={{color:'var(--red)'}}>❌ {preview.error}</span>
-        :<><span style={{color:'var(--teal)'}}>미리보기 (처음 10행): </span><span>{preview.preview?.join(', ')}</span> <span className="it">({preview.dtype})</span></>}
-      </div>}
-
-      <div style={{display:'flex',gap:8,alignItems:'center'}}>
-        <button className="bt bg" onClick={runAll} disabled={running||!formulas.some(f=>f.name&&f.expr&&f.enabled)}>
-          {running?'실행 중...':'수식 실행 ('+formulas.filter(f=>f.name&&f.expr&&f.enabled).length+'개)'}
-        </button>
-        <span className="it">→ {selFile.replace('.csv','')}_formula.csv</span>
-      </div>
-
-      {results&&<div style={{marginTop:10,padding:10,background:'var(--bg2)',borderRadius:8,border:'1px solid var(--bd)'}}>
-        {results.error?<div style={{color:'var(--red)'}}>❌ {results.error}</div>:<>
-          <div style={{color:'var(--teal)',fontSize:12,marginBottom:6}}>✅ {results.output} ({results.total_columns}col, {results.total_rows}rows)</div>
-          {results.applied?.map(a=><div key={a.name} style={{fontSize:11,color:'var(--green)'}}>✓ {a.name} = {a.expr} ({a.rows}행)</div>)}
-          {results.errors?.map((e,i)=><div key={i} style={{fontSize:11,color:'var(--red)'}}>✗ {e.name}: {e.error}</div>)}
-        </>}
-      </div>}
-      </>}
+      <div className="it" style={{marginTop:6}}>Calculation 실행 시 아래 수식으로 변수가 계산됩니다. 기본 {totalBuiltin}개 + 커스텀 {customFormulas.length}개</div>
     </div>
 
-    <div className="cd" style={{marginTop:10}}>
+    {/* 기본 수식 카테고리 */}
+    {BUILTIN_FORMULAS.map(cat=>{
+      const open=catOpen[cat.cat]!==false; // 기본 열림
+      return(<div key={cat.cat} className="cd" style={{marginTop:8}}>
+        <div onClick={()=>togCat(cat.cat)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer',userSelect:'none'}}>
+          <div className="ct" style={{margin:0}}>{open?'▼':'▶'} {cat.cat} <span className="it">({cat.vars.length}개)</span></div>
+        </div>
+        {open&&<div style={{marginTop:8}}>
+          <div style={{display:'grid',gridTemplateColumns:'180px 1fr 1fr',gap:0,padding:'4px 8px',background:'var(--bg3)',borderRadius:'6px 6px 0 0',fontSize:10,color:'var(--tx2)',fontWeight:500}}>
+            <span>변수명</span><span>설명</span><span>수식</span>
+          </div>
+          {cat.vars.map(v=>{
+            const hasOverride=editOverrides[v.name]!=null&&editOverrides[v.name]!==v.expr;
+            return(<div key={v.name} style={{display:'grid',gridTemplateColumns:'180px 1fr 1fr',gap:0,padding:'5px 8px',borderTop:'1px solid var(--bd)',alignItems:'center',fontSize:11}}>
+              <span style={{fontFamily:'var(--mono)',color:hasOverride?'var(--amber)':'var(--teal)'}}>{v.name}</span>
+              <span style={{color:'var(--tx2)'}}>{v.desc}</span>
+              <div style={{display:'flex',alignItems:'center',gap:4}}>
+                {v.edit?<input value={editOverrides[v.name]??v.expr} onChange={e=>setOverride(v.name,e.target.value)}
+                  style={{flex:1,fontSize:10,padding:'3px 6px',fontFamily:'var(--mono)',background:hasOverride?'rgba(245,158,11,.06)':'var(--bg)',border:'1px solid '+(hasOverride?'rgba(245,158,11,.3)':'var(--bd2)'),borderRadius:4,color:'var(--tx)'}}/>
+                :<span style={{fontFamily:'var(--mono)',fontSize:10,color:'var(--tx3)'}}>{v.expr}</span>}
+                {hasOverride&&<button onClick={()=>setOverride(v.name,v.expr)} style={{fontSize:9,border:0,background:0,color:'var(--amber)',cursor:'pointer'}} title="원래대로">↺</button>}
+              </div>
+            </div>)})}
+        </div>}
+      </div>)})}
+
+    {/* 커스텀 수식 */}
+    <div className="cd" style={{marginTop:8}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div className="ct" style={{margin:0}}>커스텀 수식 <span className="it">({customFormulas.length}개)</span></div>
+        <button className="bt bs" onClick={addCustom}>+ 수식 추가</button>
+      </div>
+      <div className="it" style={{marginTop:4,marginBottom:8}}>pandas eval 문법 — 기존 컬럼을 사칙연산으로 조합. Calculation 후 자동 적용됩니다.</div>
+
+      {customFormulas.length>0&&<div style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden'}}>
+        <div style={{display:'grid',gridTemplateColumns:'32px 160px 200px 1fr 40px',gap:0,padding:'6px 10px',background:'var(--bg3)',fontSize:10,color:'var(--tx2)',fontWeight:500}}>
+          <span></span><span>변수명</span><span>설명</span><span>수식</span><span></span>
+        </div>
+        {customFormulas.map(f=><div key={f.id} style={{display:'grid',gridTemplateColumns:'32px 160px 200px 1fr 40px',gap:0,padding:'4px 10px',borderTop:'1px solid var(--bd)',alignItems:'center',opacity:f.enabled?1:.4}}>
+          <input type="checkbox" checked={f.enabled} onChange={()=>updateCustom(f.id,'enabled',!f.enabled)} style={{accentColor:'var(--teal)'}}/>
+          <input value={f.name} onChange={e=>updateCustom(f.id,'name',e.target.value)} placeholder="변수명" style={{fontSize:11,padding:'3px 6px',fontFamily:'var(--mono)',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
+          <input value={f.desc||''} onChange={e=>updateCustom(f.id,'desc',e.target.value)} placeholder="설명 (선택)" style={{fontSize:11,padding:'3px 6px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
+          <input value={f.expr} onChange={e=>updateCustom(f.id,'expr',e.target.value)} placeholder="예: Qrefr_Cond_recalc / Po_WD" style={{fontSize:11,padding:'3px 6px',fontFamily:'var(--mono)',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
+          <button onClick={()=>removeCustom(f.id)} style={{fontSize:11,border:0,background:0,color:'var(--red)',cursor:'pointer'}}>×</button>
+        </div>)}
+      </div>}
+      {customFormulas.length===0&&<div className="it" style={{textAlign:'center',padding:16}}>커스텀 수식이 없습니다. [+ 수식 추가]를 눌러 시작하세요.</div>}
+    </div>
+
+    {/* 수식 가이드 */}
+    <div className="cd" style={{marginTop:8}}>
       <div className="ct">수식 가이드</div>
       <div style={{fontSize:11,color:'var(--tx2)',lineHeight:1.8}}>
         <div><b>사칙연산:</b> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>A + B</code> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>A * B</code> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>A / B</code></div>
         <div><b>괄호:</b> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>(A + B) / C</code></div>
         <div><b>거듭제곱:</b> <code style={{background:'var(--bg3)',padding:'1px 4px',borderRadius:3}}>A ** 2</code></div>
-        <div style={{fontFamily:'var(--mono)',fontSize:10,padding:8,background:'var(--bg)',borderRadius:6,marginTop:6}}>
+        <div style={{marginTop:6}}><b>커스텀 수식 예시:</b></div>
+        <div style={{fontFamily:'var(--mono)',fontSize:10,padding:8,background:'var(--bg)',borderRadius:6,marginTop:4}}>
           COP_total = Qrefr_Cond_recalc / Po_WD<br/>
           dT_Cond = T_Cond_In - T_Cond_Out<br/>
           dT_Eva = T_Air_Eva_In - T_Air_Eva_Out<br/>
           Q_balance = Qrefr_Cond_recalc - Qrefr_Eva_recalc - Po_Comp<br/>
-          Eff_isen = (h_Eva_Out_ref - h_Eva_In_ref) / (h_Comp_Out_ref - h_Comp_In_ref)
+          Eff_isen = (h_Eva_Out_ref - h_Eva_In_ref) / (h_Comp_Out_ref - h_Comp_In_ref)<br/>
+          P_ratio = (P_Comp_Out + 1.01325) / (P_Comp_In + 1.01325)
         </div>
+        <div style={{marginTop:6}}><b>편집 가능 수식 (🟡):</b> 기본 수식 중 노란색 표시된 항목은 직접 수정 가능합니다. 수정된 값은 설정 저장 시 함께 저장됩니다.</div>
       </div>
     </div>
   </div>)
