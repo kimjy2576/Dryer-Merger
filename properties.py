@@ -83,7 +83,10 @@ class FluidProperties:
     # ──── 1D 포화선 LUT ────
     def _build_sat_tables(self):
         ref = self._ref
-        self._t_range = np.linspace(-40, 130, 3401)
+        # 임계온도 이하로 제한
+        Tc = PropsSI("Tcrit", ref) - 273.15  # °C
+        t_max = min(130, Tc - 0.5)  # 임계점 0.5°C 아래까지
+        self._t_range = np.linspace(-40, t_max, int((t_max + 40) * 10) + 1)
         t_k = self._t_range + 273.15
         self._psat_from_t = np.array([
             PropsSI("P", "T", tk, "Q", 0, ref) / 1000 for tk in t_k])
