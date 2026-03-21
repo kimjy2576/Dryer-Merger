@@ -3,7 +3,7 @@
   "type": "merge_settings",
   "timestamp": "2026-03-19T00:00:00.000Z",
   "variable_settings": {
-    "Time": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
+    "LogTime": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "Time" },
     "Current_RPM": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
     "Request_RPM": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
     "Wash_Temp": { "include": true, "weight": 1.0, "bias": 0.0, "rename": "" },
