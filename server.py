@@ -75,6 +75,54 @@ def update_config(body: dict):
     return {"status": "ok"}
 
 
+@app.get("/api/saves/{category}")
+def list_saves(category: str):
+    """세이브 슬롯 목록. category: merge/calc/formula"""
+    import json
+    d = BASE_DIR / "config" / "saves" / category
+    d.mkdir(parents=True, exist_ok=True)
+    slots = []
+    for f in sorted(d.glob("*.json"), key=os.path.getmtime, reverse=True):
+        try:
+            meta = json.loads(f.read_text("utf-8"))
+            slots.append({"name": f.stem, "timestamp": meta.get("timestamp", ""), "size": f.stat().st_size})
+        except:
+            slots.append({"name": f.stem, "timestamp": "", "size": f.stat().st_size})
+    return {"slots": slots}
+
+
+@app.post("/api/saves/{category}/{name}")
+def save_slot(category: str, name: str, req: dict):
+    """세이브 슬롯에 저장."""
+    import json
+    d = BASE_DIR / "config" / "saves" / category
+    d.mkdir(parents=True, exist_ok=True)
+    req["timestamp"] = pd.Timestamp.now().isoformat()
+    req["slot_name"] = name
+    (d / f"{name}.json").write_text(json.dumps(req, ensure_ascii=False, indent=2), "utf-8")
+    return {"saved": name, "category": category}
+
+
+@app.get("/api/saves/{category}/{name}")
+def load_slot(category: str, name: str):
+    """세이브 슬롯에서 불러오기."""
+    import json
+    p = BASE_DIR / "config" / "saves" / category / f"{name}.json"
+    if not p.exists():
+        raise HTTPException(404, f"슬롯 없음: {name}")
+    return json.loads(p.read_text("utf-8"))
+
+
+@app.delete("/api/saves/{category}/{name}")
+def delete_slot(category: str, name: str):
+    """세이브 슬롯 삭제."""
+    p = BASE_DIR / "config" / "saves" / category / f"{name}.json"
+    if not p.exists():
+        raise HTTPException(404, f"슬롯 없음: {name}")
+    p.unlink()
+    return {"deleted": name}
+
+
 @app.get("/api/default-merge-settings")
 def get_default_merge_settings():
     """기본 Merge 변수 설정 반환."""

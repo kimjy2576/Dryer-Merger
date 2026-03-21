@@ -89,6 +89,50 @@ return(<div className="cd"><div className="ct">데이터 경로</div>
 </>}
 </div>)}
 
+// ═══ 세이브 슬롯 공용 컴포넌트 ═══
+function SaveSlots({category,getData,onLoad,label}){
+  const[slots,setSlots]=useState([]);
+  const[newName,setNewName]=useState('');
+  const[open,setOpen]=useState(false);
+  const reload=()=>fetch(`${API}/api/saves/${category}`).then(r=>r.json()).then(d=>setSlots(d.slots||[])).catch(()=>{});
+  useEffect(()=>{reload()},[]);
+  const save=async()=>{if(!newName.trim())return;
+    const data=getData();
+    try{await fetch(`${API}/api/saves/${category}/${encodeURIComponent(newName.trim())}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      setNewName('');reload();
+    }catch(e){alert('저장 실패')}};
+  const load=async(name)=>{
+    try{const r=await fetch(`${API}/api/saves/${category}/${encodeURIComponent(name)}`);const d=await r.json();onLoad(d);
+    }catch(e){alert('불러오기 실패')}};
+  const del=async(name)=>{if(!confirm(`"${name}" 슬롯을 삭제하시겠습니까?`))return;
+    try{await fetch(`${API}/api/saves/${category}/${encodeURIComponent(name)}`,{method:'DELETE'});reload();
+    }catch(e){alert('삭제 실패')}};
+  return(<div style={{display:'inline-block',position:'relative'}}>
+    <button className="bt bs" onClick={()=>{setOpen(!open);if(!open)reload()}} style={{borderColor:'var(--teal)',color:'var(--teal)'}}>💾 {label||'세이브'}</button>
+    {open&&<div style={{position:'absolute',right:0,top:'100%',marginTop:4,zIndex:999,width:320,background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:10,boxShadow:'0 8px 32px rgba(0,0,0,.5)',padding:12}}>
+      <div style={{fontSize:12,fontWeight:500,marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span>세이브 슬롯</span>
+        <button onClick={()=>setOpen(false)} style={{border:0,background:0,color:'var(--tx2)',cursor:'pointer',fontSize:14}}>×</button>
+      </div>
+      {/* 새 저장 */}
+      <div style={{display:'flex',gap:4,marginBottom:8}}>
+        <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&save()} placeholder="새 세이브 이름" style={{flex:1,fontSize:11,padding:'4px 8px',background:'var(--bg2)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)',fontFamily:'var(--font)'}}/>
+        <button className="bt bs" onClick={save} disabled={!newName.trim()} style={{fontSize:10,padding:'4px 10px',background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}}>저장</button>
+      </div>
+      {/* 슬롯 목록 */}
+      <div style={{maxHeight:200,overflowY:'auto'}}>
+        {slots.length===0&&<div className="it" style={{textAlign:'center',padding:8}}>저장된 슬롯 없음</div>}
+        {slots.map(s=><div key={s.name} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 4px',borderBottom:'1px solid var(--bd)',fontSize:11}}>
+          <span style={{flex:1,fontFamily:'var(--mono)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={s.name}>{s.name}</span>
+          <span className="it" style={{fontSize:9,whiteSpace:'nowrap'}}>{s.timestamp?new Date(s.timestamp).toLocaleDateString():''}</span>
+          <button onClick={()=>{load(s.name);setOpen(false)}} style={{fontSize:9,padding:'2px 8px',background:'var(--teal)',border:'1px solid var(--teal)',color:'#fff',borderRadius:3,cursor:'pointer'}}>불러오기</button>
+          <button onClick={()=>del(s.name)} style={{fontSize:9,padding:'2px 5px',border:'1px solid rgba(239,68,68,.3)',background:0,color:'var(--red)',borderRadius:3,cursor:'pointer'}}>×</button>
+        </div>)}
+      </div>
+    </div>}
+  </div>)
+}
+
 // ═══ 로컬 파일 불러오기 ═══
 function LocalImport({onImported,addSuffix=true,filterMergedCalc=false}){
 const[open,setOpen]=useState(false);
@@ -338,11 +382,12 @@ return(<div>
         <button className="bt bs" onClick={selectAll}>전체 선택</button>
         <button className="bt bs" onClick={deselectAll}>전체 해제</button>
         <span className="it">{filteredVars.length}개 표시</span>
-        <div style={{marginLeft:'auto',display:'flex',gap:6}}>
-          <button className="bt bs" onClick={saveSettings}>💾 설정 저장</button>
-          <button className="bt bs" onClick={()=>loadRef.current?.click()}>📂 불러오기</button>
-          <button className="bt bs" onClick={saveAsDefault} style={{borderColor:'var(--teal)',color:'var(--teal)'}}>⭐ 디폴트 저장</button>
-          <input ref={loadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadSettings}/>
+        <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+          <SaveSlots category="merge" label="세이브 슬롯"
+            getData={()=>({type:'merge_settings',variable_settings:varSet})}
+            onLoad={d=>{if(d.variable_settings){
+              setVarSet(prev=>{const m={...prev};Object.entries(d.variable_settings).forEach(([col,s])=>{if(m[col])m[col]={...m[col],...s};else m[col]=s});return m});
+              alert(`불러오기 완료: ${Object.keys(d.variable_settings).length}개 변수`)}}}/>
         </div>
       </div>
 
@@ -531,12 +576,12 @@ return(<div>
       <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10,flexWrap:'wrap'}}>
         {firstSel&&<button className="bt bs bp" onClick={()=>autoMap(firstSel)}>자동 매핑</button>}
         <span className="it">merged: {mergedCols.length}개 컬럼</span>
-        <div style={{marginLeft:'auto',display:'flex',gap:6}}>
-          <button className="bt bs" onClick={saveMapping}>💾 매핑 저장</button>
-          <button className="bt bs" onClick={()=>mapLoadRef.current?.click()}>📂 불러오기</button>
-          <button className="bt bs" onClick={saveMappingDefault} style={{borderColor:'var(--teal)',color:'var(--teal)'}}>⭐ 디폴트 저장</button>
-          <button className="bt bs" onClick={loadMappingDefault} style={{color:'var(--teal)'}}>⭐ 디폴트 불러오기</button>
-          <input ref={mapLoadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadMapping}/>
+        <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+          <SaveSlots category="calc" label="세이브 슬롯"
+            getData={()=>({type:'calc_mapping',mapping})}
+            onLoad={d=>{if(d.mapping){setMapping(d.mapping);
+              const um=calcVars.filter(v=>v.required&&!d.mapping[v.key]).map(v=>v.key);setUnmatched(um);
+              alert(`매핑 불러오기: ${Object.values(d.mapping).filter(Boolean).length}개 연결`)}}}/>
         </div>
       </div>
 
@@ -725,11 +770,12 @@ function FormulaTab(){
     <div className="cd">
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <div className="ct" style={{margin:0}}>수식 편집기 — Calculation 변수 정의</div>
-        <div style={{display:'flex',gap:6}}>
-          <button className="bt bs" onClick={saveAll}>💾 설정 저장</button>
-          <button className="bt bs" onClick={()=>loadRef.current?.click()}>📂 불러오기</button>
-          <button className="bt bs" onClick={saveFormulaDefault} style={{borderColor:'var(--teal)',color:'var(--teal)'}}>⭐ 디폴트 저장</button>
-          <input ref={loadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadAll}/>
+        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          <SaveSlots category="formula" label="세이브 슬롯"
+            getData={()=>({type:'formula_settings',overrides:editOverrides,custom:customFormulas})}
+            onLoad={d=>{if(d.overrides)setEditOverrides(d.overrides);
+              if(d.custom)setCustomFormulas(d.custom.map((f,i)=>({...f,id:nextId.current++})));
+              alert('수식 설정 불러옴')}}/>
         </div>
       </div>
       <div className="it" style={{marginTop:6}}>Calculation 실행 시 아래 수식으로 변수가 계산됩니다. 기본 {totalBuiltin}개 + 커스텀 {customFormulas.length}개</div>
@@ -995,9 +1041,9 @@ return(<div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,marginTop:10}}>
       <span className="it">{files.length}개 파일 — {selFiles.size}개 선택</span>
       <div style={{display:'flex',gap:6}}>
-        <button className={`bt bs ${filterMode==='all'?'on':''}`} onClick={selAll}>전체</button>
+        <button className={`bt bs ${filterMode==='all'?'on':''}`} style={filterMode==='all'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selAll}>전체</button>
         <button className={`bt bs ${filterMode==='calc'?'on':''}`} style={filterMode==='calc'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selCalc}>calc만 ★</button>
-        <button className={`bt bs ${filterMode==='merged'?'on':''}`} onClick={selMerged}>merged만</button>
+        <button className={`bt bs ${filterMode==='merged'?'on':''}`} style={filterMode==='merged'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selMerged}>merged만</button>
         <button className="bt bs" onClick={selNone}>해제</button>
         <button className="bt bs" onClick={reloadFiles}>새로고침</button>
         <button className="bt bs" style={{borderColor:'rgba(239,68,68,.3)',color:'var(--red)'}} onClick={async()=>{
