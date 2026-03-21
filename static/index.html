@@ -273,6 +273,12 @@ const saveSettings=()=>{
   const blob=new Blob([JSON.stringify(proj,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='merge_settings.json';a.click();URL.revokeObjectURL(a.href);
 };
+// 디폴트로 저장
+const saveAsDefault=async()=>{
+  const inc=Object.fromEntries(Object.entries(varSet).filter(([,v])=>v.include));
+  try{const r=await fetch(`${API}/api/save-default-merge-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({variable_settings:inc})});
+    const d=await r.json();alert(`✅ 디폴트 저장 완료: ${d.saved}개 변수`);}catch(e){alert('저장 실패: '+e.message)}
+};
 // 설정 불러오기
 const loadSettings=e=>{
   const f=e.target.files[0];if(!f)return;
@@ -335,6 +341,7 @@ return(<div>
         <div style={{marginLeft:'auto',display:'flex',gap:6}}>
           <button className="bt bs" onClick={saveSettings}>💾 설정 저장</button>
           <button className="bt bs" onClick={()=>loadRef.current?.click()}>📂 불러오기</button>
+          <button className="bt bs" onClick={saveAsDefault} style={{borderColor:'var(--teal)',color:'var(--teal)'}}>⭐ 디폴트 저장</button>
           <input ref={loadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadSettings}/>
         </div>
       </div>
@@ -438,6 +445,17 @@ const saveMapping=()=>{
   const blob=new Blob([JSON.stringify(proj,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='calc_mapping.json';a.click();URL.revokeObjectURL(a.href);
 };
+const saveMappingDefault=async()=>{
+  try{const r=await fetch(`${API}/api/save-default-calc-mapping`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mapping})});
+    const d=await r.json();alert(`✅ 디폴트 저장 완료: ${d.saved}개 매핑`);}catch(e){alert('저장 실패: '+e.message)}
+};
+const loadMappingDefault=async()=>{
+  try{const r=await fetch(`${API}/api/default-calc-mapping`);const d=await r.json();
+    if(d.mapping&&Object.keys(d.mapping).length){setMapping(d.mapping);
+      const um=calcVars.filter(v=>v.required&&!d.mapping[v.key]).map(v=>v.key);setUnmatched(um);
+      alert(`디폴트 매핑 불러옴: ${Object.values(d.mapping).filter(Boolean).length}개 연결`);
+    }else alert('저장된 디폴트 매핑 없음')}catch(e){alert('불러오기 실패: '+e.message)}
+};
 const loadMapping=e=>{
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();r.onload=ev=>{
@@ -516,6 +534,8 @@ return(<div>
         <div style={{marginLeft:'auto',display:'flex',gap:6}}>
           <button className="bt bs" onClick={saveMapping}>💾 매핑 저장</button>
           <button className="bt bs" onClick={()=>mapLoadRef.current?.click()}>📂 불러오기</button>
+          <button className="bt bs" onClick={saveMappingDefault} style={{borderColor:'var(--teal)',color:'var(--teal)'}}>⭐ 디폴트 저장</button>
+          <button className="bt bs" onClick={loadMappingDefault} style={{color:'var(--teal)'}}>⭐ 디폴트 불러오기</button>
           <input ref={mapLoadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadMapping}/>
         </div>
       </div>
@@ -675,6 +695,17 @@ function FormulaTab(){
       if(d.overrides)setEditOverrides(d.overrides);
       if(d.custom)setCustomFormulas(d.custom.map((f,i)=>({...f,id:nextId.current++})));
       alert('수식 설정 불러옴');}catch(er){alert('파싱 실패')}};rd.readAsText(f);e.target.value=''};
+  const saveFormulaDefault=async()=>{
+    try{const r=await fetch(`${API}/api/save-default-formula-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({overrides:editOverrides,custom:customFormulas})});
+      const d=await r.json();alert(`✅ 디폴트 저장 완료: 수식 수정 ${d.saved_overrides}개, 커스텀 ${d.saved_custom}개`);}catch(e){alert('저장 실패: '+e.message)}
+  };
+  // 초기 디폴트 로드
+  useEffect(()=>{
+    fetch(`${API}/api/default-formula-settings`).then(r=>r.json()).then(d=>{
+      if(d.overrides&&Object.keys(d.overrides).length)setEditOverrides(d.overrides);
+      if(d.custom?.length)setCustomFormulas(d.custom.map((f,i)=>({...f,id:nextId.current++})));
+    }).catch(()=>{})
+  },[]);
 
   const totalBuiltin=BUILTIN_FORMULAS.reduce((s,c)=>s+c.vars.length,0);
 
@@ -686,6 +717,7 @@ function FormulaTab(){
         <div style={{display:'flex',gap:6}}>
           <button className="bt bs" onClick={saveAll}>💾 설정 저장</button>
           <button className="bt bs" onClick={()=>loadRef.current?.click()}>📂 불러오기</button>
+          <button className="bt bs" onClick={saveFormulaDefault} style={{borderColor:'var(--teal)',color:'var(--teal)'}}>⭐ 디폴트 저장</button>
           <input ref={loadRef} type="file" accept=".json" style={{display:'none'}} onChange={loadAll}/>
         </div>
       </div>

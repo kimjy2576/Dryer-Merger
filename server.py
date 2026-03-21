@@ -86,6 +86,64 @@ def get_default_merge_settings():
         return json.load(f)
 
 
+@app.post("/api/save-default-merge-settings")
+def save_default_merge_settings(req: dict):
+    """현재 Merge 변수 설정을 디폴트로 저장."""
+    import json
+    p = BASE_DIR / "config" / "merge_settings_BR.json"
+    data = {"version": 1, "type": "merge_settings",
+            "timestamp": pd.Timestamp.now().isoformat(),
+            "variable_settings": req.get("variable_settings", {})}
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
+    return {"saved": len(data["variable_settings"]), "path": str(p)}
+
+
+@app.get("/api/default-calc-mapping")
+def get_default_calc_mapping():
+    """기본 Calculation 변수 매핑 반환."""
+    import json
+    p = BASE_DIR / "config" / "calc_mapping_default.json"
+    if not p.exists():
+        return {"mapping": {}}
+    return json.loads(p.read_text("utf-8"))
+
+
+@app.post("/api/save-default-calc-mapping")
+def save_default_calc_mapping(req: dict):
+    """현재 Calculation 변수 매핑을 디폴트로 저장."""
+    import json
+    p = BASE_DIR / "config" / "calc_mapping_default.json"
+    data = {"version": 1, "type": "calc_mapping",
+            "timestamp": pd.Timestamp.now().isoformat(),
+            "mapping": req.get("mapping", {})}
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
+    return {"saved": len(data["mapping"]), "path": str(p)}
+
+
+@app.get("/api/default-formula-settings")
+def get_default_formula_settings():
+    """기본 Formula 수식 설정 반환."""
+    import json
+    p = BASE_DIR / "config" / "formula_default.json"
+    if not p.exists():
+        return {"overrides": {}, "custom": []}
+    return json.loads(p.read_text("utf-8"))
+
+
+@app.post("/api/save-default-formula-settings")
+def save_default_formula_settings(req: dict):
+    """현재 Formula 수식을 디폴트로 저장."""
+    import json
+    p = BASE_DIR / "config" / "formula_default.json"
+    data = {"version": 1, "type": "formula_settings",
+            "timestamp": pd.Timestamp.now().isoformat(),
+            "overrides": req.get("overrides", {}),
+            "custom": req.get("custom", [])}
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
+    return {"saved_overrides": len(data["overrides"]),
+            "saved_custom": len(data["custom"]), "path": str(p)}
+
+
 @app.get("/api/validate-refrigerant/{name}")
 def validate_ref(name: str, backend: str = "HEOS"):
     """냉매명이 CoolProp/REFPROP에서 유효한지 검증."""
