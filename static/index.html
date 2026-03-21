@@ -220,16 +220,31 @@ const scanVars=async()=>{if(!sid)return;setScanning(true);
   try{const r=await fetch(`${API}/api/scan-columns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:sid})});
   const d=await r.json();if(!r.ok){alert(d.detail);setScanning(false);return}
   setVarCols(d.columns);
+  const csvCols=Object.keys(d.columns);
   // 기본 설정: 전부 include=false로 시작
-  const init={};Object.keys(d.columns).forEach(c=>{init[c]={include:false,weight:1.0,bias:0.0,rename:''}});
-  // 기본 merge_settings 로드하여 매칭되는 변수만 include=true + rename/W&B 적용
+  const init={};csvCols.forEach(c=>{init[c]={include:false,weight:1.0,bias:0.0,rename:''}});
+  // 기본 merge_settings 로드
+  let matchCount=0;
   try{const dr=await fetch(`${API}/api/default-merge-settings`);const ds=await dr.json();
-    if(ds.variable_settings){Object.entries(ds.variable_settings).forEach(([col,s])=>{
-      if(init[col]){init[col]={...init[col],...s,include:true}}
-    })}
-  }catch(e){/* 기본 설정 없으면 전부 include로 폴백 */
-    Object.keys(init).forEach(c=>{init[c].include=true})}
+    if(ds.variable_settings){
+      const settingsKeys=Object.keys(ds.variable_settings);
+      console.log('[scanVars] CSV 컬럼:',csvCols.length,'개 / 설정 파일:',settingsKeys.length,'개');
+      console.log('[scanVars] 설정 키:',settingsKeys);
+      Object.entries(ds.variable_settings).forEach(([col,s])=>{
+        if(init[col]){init[col]={...init[col],...s,include:true};matchCount++}
+      });
+      console.log('[scanVars] 매칭:',matchCount,'개');
+      // 매칭 0건이면 전부 include로 폴백
+      if(matchCount===0){
+        console.warn('[scanVars] 매칭 0건 — 전부 include로 설정');
+        csvCols.forEach(c=>{init[c].include=true});
+      }
+    }
+  }catch(e){
+    console.warn('[scanVars] 설정 로드 실패, 전부 include:',e);
+    csvCols.forEach(c=>{init[c].include=true})}
   setVarSet(init);setVarOpen(true);
+  if(matchCount>0)console.log('[scanVars] 적용 완료:',matchCount,'개 체크됨');
   }catch(e){alert(e.message)}setScanning(false)};
 
 // 변수 설정 변경
