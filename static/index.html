@@ -396,6 +396,7 @@ return(<div>
         <span className="it">{filteredVars.length}개 표시</span>
         <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
           <button className="bt bs" onClick={saveAsDefault} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:10}}>⭐ 디폴트 저장</button>
+          <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-merge-settings`);const d=await r.json();if(d.variable_settings){setVarSet(prev=>{const m={...prev};Object.entries(d.variable_settings).forEach(([col,s])=>{if(m[col])m[col]={...m[col],...s,include:true}});return m});alert(`디폴트 불러옴: ${Object.keys(d.variable_settings).length}개`)}else alert('저장된 디폴트 없음')}catch(e){alert('불러오기 실패')}}} style={{color:'var(--teal)',fontSize:10}}>⭐ 디폴트 불러오기</button>
           <SaveSlots category="merge" label="세이브 슬롯"
             getData={()=>({type:'merge_settings',variable_settings:varSet})}
             onLoad={d=>{if(d.variable_settings){
@@ -803,6 +804,7 @@ function FormulaTab(){
         <div className="ct" style={{margin:0}}>수식 편집기 — Calculation 변수 정의</div>
         <div style={{display:'flex',gap:6,alignItems:'center'}}>
           <button className="bt bs" onClick={saveFormulaDefault} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:10}}>⭐ 디폴트 저장</button>
+          <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-formula-settings`);const d=await r.json();if(d.overrides)setEditOverrides(d.overrides);if(d.custom?.length)setCustomFormulas(d.custom.map((f,i)=>({...f,id:nextId.current++})));alert('디폴트 수식 불러옴')}catch(e){alert('불러오기 실패')}}} style={{color:'var(--teal)',fontSize:10}}>⭐ 디폴트 불러오기</button>
           <SaveSlots category="formula" label="세이브 슬롯"
             getData={()=>({type:'formula_settings',overrides:editOverrides,custom:customFormulas})}
             onLoad={d=>{if(d.overrides)setEditOverrides(d.overrides);
