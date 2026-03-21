@@ -27,25 +27,31 @@ def run_stage1(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     return df
 
 
+def _col(df, *names):
+    """여러 이름 중 존재하는 첫 컬럼 반환."""
+    for n in names:
+        if n in df.columns: return df[n].values
+    raise KeyError(f"컬럼 없음: {names}")
+
 def _calc_ftemp(df, cfg_ft):
     k1, k2, k3 = cfg_ft["k1"], cfg_ft["k2"], cfg_ft["k3"]
     delta = cfg_ft["auto_delta"]
     win = int(np.round(cfg_ft["moving_avg_window_min"] * 60, 0))
-    raw = 10 * (k1 * df["Heatpump_DuctOutTemp"].values
-                - k2 * df["Heatpump_DuctInTemp"].values
-                + k3 * df["Heatpump_EvaInTemp"].values) + delta / 10
+    raw = 10 * (k1 * _col(df, "Heatpump_DuctOutTemp", "T_Air_Cond_Out")
+                - k2 * _col(df, "Heatpump_DuctInTemp", "T_Air_Eva_In")
+                + k3 * _col(df, "Heatpump_EvaInTemp", "T_Eva_In")) + delta / 10
     return pd.Series(raw, index=df.index).rolling(window=win).mean().bfill().round(0)
 
 
 def _calc_pressures(df, props, patm):
     if "P_Comp_Out" not in df.columns and "P_Cond_Out" not in df.columns:
-        ref_col = "T_Cond_M1" if "T_Cond_M1" in df.columns else "Heatpump_DuctOutTemp"
-        p = props.psat_t_barg(df[ref_col].values)
-        df["P_Comp_Out"] = p
-        df["P_Cond_Out"] = p
+        for c in ["T_Cond_M1", "Heatpump_DuctOutTemp", "T_Air_Cond_Out"]:
+            if c in df.columns:
+                p = props.psat_t_barg(df[c].values); df["P_Comp_Out"] = p; df["P_Cond_Out"] = p; break
     elif "P_Cond_Out" not in df.columns:
-        ref_col = "T_Cond_M1" if "T_Cond_M1" in df.columns else "Heatpump_DuctOutTemp"
-        df["P_Cond_Out"] = props.psat_t_barg(df[ref_col].values)
+        for c in ["T_Cond_M1", "Heatpump_DuctOutTemp", "T_Air_Cond_Out"]:
+            if c in df.columns:
+                df["P_Cond_Out"] = props.psat_t_barg(df[c].values); break
 
     if "P_Comp_In" not in df.columns and "P_Eva_In" not in df.columns:
         p = props.psat_t_barg(df["Heatpump_EvaInTemp"].values)
