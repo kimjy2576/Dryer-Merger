@@ -109,8 +109,15 @@ def preprocess_blackrose(
     time_str = df[time_col].astype(str)
     df["Time"] = time_str.str.split(" ").str[1].str.split(".").str[0]
 
-    df_main = df[df["SW_ProtectionCount"] > 0].copy()
-    df_sub = df[df["MainProcess"] == 10].copy()
+    # 필터링: 컬럼 없으면 전체 데이터 사용
+    if "SW_ProtectionCount" in df.columns:
+        df_main = df[df["SW_ProtectionCount"] > 0].copy()
+    else:
+        df_main = df.copy()
+    if "MainProcess" in df.columns:
+        df_sub = df[df["MainProcess"] == 10].copy()
+    else:
+        df_sub = pd.DataFrame(columns=df.columns)
 
     df_main.rename(columns=column_mapping, inplace=True)
 
