@@ -11,13 +11,13 @@
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2/plotly.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a25;--bg4:#22222f;--tx:#e8e6e0;--tx2:#9a9890;--tx3:#5a5850;--bd:rgba(255,255,255,0.06);--bd2:rgba(255,255,255,0.12);--blue:#4a9eff;--blue2:#2563eb;--green:#22c55e;--green2:#16a34a;--red:#ef4444;--amber:#f59e0b;--teal:#14b8a6;--font:'IBM Plex Sans KR',sans-serif;--mono:'JetBrains Mono',monospace;--r:10px}
+:root{--bg:#f5f5f7;--bg2:#ffffff;--bg3:#eeeef0;--bg4:#e4e4e8;--tx:#1a1a2e;--tx2:#5a5a6e;--tx3:#9a9aaa;--bd:rgba(0,0,0,0.08);--bd2:rgba(0,0,0,0.15);--blue:#2563eb;--blue2:#1d4ed8;--green:#16a34a;--green2:#15803d;--red:#dc2626;--amber:#d97706;--teal:#0d9488;--font:'IBM Plex Sans KR',sans-serif;--mono:'JetBrains Mono',monospace;--r:10px}
 *{box-sizing:border-box;margin:0;padding:0}body{font-family:var(--font);background:var(--bg);color:var(--tx);font-size:14px;min-height:100vh}
-::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--tx3);border-radius:3px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--tx3);border-radius:3px}::-webkit-scrollbar-track{background:var(--bg3)}
 .app{max-width:1200px;margin:0 auto;padding:20px}
 .hdr{display:flex;align-items:center;gap:14px;margin-bottom:24px}.hdr h1{font-size:20px;font-weight:500}.hdr .bdg{font-size:11px;background:var(--bg3);color:var(--tx2);padding:3px 10px;border-radius:20px}
-.tabs{display:flex;gap:2px;background:var(--bg2);padding:3px;border-radius:var(--r);margin-bottom:20px}.tb{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:500;border:none;background:0;color:var(--tx2);cursor:pointer;border-radius:8px;transition:.15s;font-family:var(--font)}.tb.on{background:var(--bg3);color:var(--tx)}
-.cd{background:var(--bg2);border:1px solid var(--bd);border-radius:14px;padding:20px;margin-bottom:16px}.ct{font-size:12px;font-weight:500;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+.tabs{display:flex;gap:2px;background:var(--bg3);padding:3px;border-radius:var(--r);margin-bottom:20px}.tb{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:500;border:none;background:0;color:var(--tx2);cursor:pointer;border-radius:8px;transition:.15s;font-family:var(--font)}.tb.on{background:var(--bg2);color:var(--tx);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.cd{background:var(--bg2);border:1px solid var(--bd);border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}.ct{font-size:12px;font-weight:500;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
 .bt{padding:8px 18px;border-radius:8px;font-size:13px;font-weight:500;border:1px solid var(--bd2);background:var(--bg3);color:var(--tx);cursor:pointer;transition:.15s;font-family:var(--font)}.bt:hover{background:var(--bg4)}.bt:disabled{opacity:.4;cursor:not-allowed}
 .bp{background:var(--blue2);border-color:var(--blue2);color:#fff}.bp:hover{background:var(--blue)}
 .bg{background:var(--green2);border-color:var(--green2);color:#fff}.bg:hover{background:var(--green)}
@@ -40,8 +40,8 @@ input,select{font-family:var(--font);font-size:13px;padding:7px 12px;background:
 .file-sel-item{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--bd);font-size:12px;font-family:var(--mono)}
 .file-sel-item:last-child{border:0}
 .file-sel-item input{accent-color:var(--teal)}
-select{background:var(--bg);color:var(--tx);border:1px solid var(--bd2);border-radius:4px}
-select option{background:#1a1a25;color:#e4e2dc}
+select{background:var(--bg2);color:var(--tx);border:1px solid var(--bd2);border-radius:4px}
+select option{background:#fff;color:#1a1a2e}
 </style>
 </head>
 <body>
@@ -128,7 +128,7 @@ function SaveSlots({category,getData,onLoad,label}){
     const rd=new FileReader();rd.onload=ev=>{try{const d=JSON.parse(ev.target.result);onLoad(d);alert('JSON 불러오기 완료')}catch(er){alert('JSON 파싱 실패')}};rd.readAsText(f);e.target.value=''};
   return(<div style={{display:'inline-block',position:'relative'}}>
     <button className="bt bs" onClick={()=>{setOpen(!open);if(!open)reload()}} style={{borderColor:'var(--teal)',color:'var(--teal)'}}>💾 {label||'세이브'}</button>
-    {open&&<div style={{position:'absolute',right:0,top:'100%',marginTop:4,zIndex:999,width:340,background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:10,boxShadow:'0 8px 32px rgba(0,0,0,.5)',padding:12}}>
+    {open&&<div style={{position:'absolute',right:0,top:'100%',marginTop:4,zIndex:999,width:340,background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:10,boxShadow:'0 8px 32px rgba(0,0,0,.15)',padding:12}}>
       <div style={{fontSize:12,fontWeight:500,marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <span>세이브 슬롯</span>
         <button onClick={()=>setOpen(false)} style={{border:0,background:0,color:'var(--tx2)',cursor:'pointer',fontSize:14}}>×</button>
@@ -646,8 +646,8 @@ return(<div>
                 </div>
                 <span style={{textAlign:'center',color:'var(--tx3)',fontSize:11}}>←</span>
                 <select value={matched||''} onChange={e=>setMap(v.key,e.target.value)} style={{fontSize:11,padding:'4px 6px',background:matched?'var(--bg)':'rgba(239,68,68,.06)',borderColor:isMissing?'rgba(239,68,68,.3)':'var(--bd2)',color:'var(--tx)'}}>
-                  <option value="" style={{background:'#1a1a25',color:'#e4e2dc'}}>— 미연결 —</option>
-                  {mergedCols.map(c=><option key={c} value={c} style={{background:'#1a1a25',color:'#e4e2dc'}}>{c}</option>)}
+                  <option value="" style={{background:'#fff',color:'#1a1a2e'}}>— 미연결 —</option>
+                  {mergedCols.map(c=><option key={c} value={c} style={{background:'#fff',color:'#1a1a2e'}}>{c}</option>)}
                 </select>
               </div>)})}
           </div>
@@ -916,8 +916,8 @@ function specVol(T,W){return(8.3145/28.9645*(T+273.15))*(1+1.6078*W)/P_ATM*1000}
 
 // 습공기 배경선 (한 번만 생성)
 const PSYCH_BG=(()=>{const out=[];
-  [.1,.2,.3,.4,.5,.6,.7,.8,.9,1].forEach(rh=>{const tA=[],wA=[];for(let t=-5;t<=65;t+=.5){const w=wFromRH(t,rh);if(w>=0&&w<=.035){tA.push(t);wA.push(w)}}out.push({x:tA,y:wA,mode:'lines',line:{color:'rgba(100,180,255,0.25)',width:rh===1?2.5:.8},showlegend:false,hoverinfo:'skip'})});
-  for(let h=10;h<=140;h+=10){const tA=[],wA=[];for(let t=-5;t<=70;t++){const w=(h-1.006*t)/(2501+1.86*t);if(w>=0&&w<=.035){tA.push(t);wA.push(w)}}if(tA.length>2)out.push({x:tA,y:wA,mode:'lines',line:{color:'rgba(239,68,68,0.18)',width:.7,dash:'dot'},showlegend:false,hoverinfo:'skip'})}
+  [.1,.2,.3,.4,.5,.6,.7,.8,.9,1].forEach(rh=>{const tA=[],wA=[];for(let t=-5;t<=65;t+=.5){const w=wFromRH(t,rh);if(w>=0&&w<=.035){tA.push(t);wA.push(w)}}out.push({x:tA,y:wA,mode:'lines',line:{color:'rgba(59,130,246,0.3)',width:rh===1?2.5:.8},showlegend:false,hoverinfo:'skip'})});
+  for(let h=10;h<=140;h+=10){const tA=[],wA=[];for(let t=-5;t<=70;t++){const w=(h-1.006*t)/(2501+1.86*t);if(w>=0&&w<=.035){tA.push(t);wA.push(w)}}if(tA.length>2)out.push({x:tA,y:wA,mode:'lines',line:{color:'rgba(239,68,68,0.25)',width:.7,dash:'dot'},showlegend:false,hoverinfo:'skip'})}
   return out;
 })();
 
@@ -1131,9 +1131,9 @@ return(<div>
     <button key={k} className={`tb ${sub===k?'on':''}`} onClick={()=>setSub(k)}>{lb}</button>)}</div>
 
   {/* 공통 컨트롤 */}
-  <div className="ctrl" style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:10,padding:'8px 12px',background:'var(--bg2,#12121a)',border:'1px solid var(--bd,rgba(255,255,255,.06))',borderRadius:8}}>
+  <div className="ctrl" style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:10,padding:'8px 12px',background:'var(--bg2,var(--bg3))',border:'1px solid var(--bd,rgba(0,0,0,.06))',borderRadius:8}}>
     {cases.map((c,i)=><div key={c.name} style={{display:'flex',alignItems:'center',gap:2}}>
-      <button style={{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',borderRadius:'5px 0 0 5px',border:'1px solid var(--bd2,rgba(255,255,255,.1))',borderRight:0,background:caseVis[c.name]?'var(--bg3,#1a1a25)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}>
+      <button style={{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',borderRadius:'5px 0 0 5px',border:'1px solid var(--bd2,rgba(0,0,0,.1))',borderRight:0,background:caseVis[c.name]?'var(--bg3,#1a1a25)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}>
         <span style={{width:8,height:8,borderRadius:'50%',background:VW_COLORS[i]}}/>{c.label||c.name}
       </button>
       <button onClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n)setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}} title="이름 변경" style={{padding:'3px 5px',borderRadius:'0 5px 5px 0',border:'1px solid var(--bd2)',background:'var(--bg2)',color:'var(--tx3)',cursor:'pointer',fontSize:9}}>✏️</button>
@@ -1226,11 +1226,11 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       const tr=[];const shapes=[];
       const perRowH=Math.round(chartH/2); // chartH는 기준 2행 높이, 행당 높이 = chartH/2
       const totalH=actR*perRowH;
-      const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.06,ygap:.12},height:totalH,width:finalW,margin:{t:30,b:40,l:70,r:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
+      const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.06,ygap:.12},height:totalH,width:finalW,margin:{t:30,b:40,l:70,r:20},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:'var(--font)',color:'#5a5a6e',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
       nPlots.forEach((k,pi)=>{
         const xk='x'+(pi+1>1?pi+1:''),yk='y'+(pi+1>1?pi+1:'');
-        lo['xaxis'+(pi+1)]={title:Math.floor(pi/actC)+1===actR?{text:'Time',font:{size:10}}:undefined,gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10}};
-        lo['yaxis'+(pi+1)]={title:{text:k,font:{size:10}},gridcolor:'rgba(255,255,255,0.04)',tickfont:{size:10},
+        lo['xaxis'+(pi+1)]={title:Math.floor(pi/actC)+1===actR?{text:'Time',font:{size:10}}:undefined,gridcolor:'rgba(0,0,0,0.08)',tickfont:{size:10}};
+        lo['yaxis'+(pi+1)]={title:{text:k,font:{size:10}},gridcolor:'rgba(0,0,0,0.08)',tickfont:{size:10},
           ...(tab.yranges?.[k]?.length===2&&tab.yranges[k][0]!=null&&tab.yranges[k][1]!=null?{range:tab.yranges[k],autorange:false}:{})};
         zones.forEach((z,zi)=>{shapes.push({type:'rect',xref:xk,yref:yk+' domain',x0:z.start,x1:z.end,y0:0,y1:1,fillcolor:VW_ZC[zi%VW_ZC.length],line:{color:VW_ZB[zi%VW_ZB.length],width:1,dash:'dot'},layer:'below'})});
         cases.forEach((cs,ci)=>{
@@ -1319,7 +1319,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
     :<div className="cd"><div className="it" style={{padding:20,textAlign:'center'}}>변수를 추가하세요.</div></div>}
 
     {/* 구간 */}
-    <div style={{display:'flex',gap:6,alignItems:'center',marginTop:8,padding:'8px 12px',background:'var(--bg2,#12121a)',border:'1px solid var(--bd)',borderRadius:8,flexWrap:'wrap'}}>
+    <div style={{display:'flex',gap:6,alignItems:'center',marginTop:8,padding:'8px 12px',background:'var(--bg2,var(--bg3))',border:'1px solid var(--bd)',borderRadius:8,flexWrap:'wrap'}}>
       <span style={{fontSize:11,color:'var(--tx2)'}}>구간:</span>
       <input value={zs} onChange={e=>setZs(e.target.value)} placeholder="시작(min)" style={{width:80,fontSize:11,padding:'3px 6px'}}/>
       <span style={{color:'var(--tx3)'}}>~</span>
@@ -1398,7 +1398,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
       if(autoFit){xRange=calcX;yRange=calcY}
       else if(fixedRange){xRange=fixedRange.x;yRange=fixedRange.y}
     }
-    try{Plotly.react(ref.current,tr,{title:{text:'습공기 선도'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':' — 배경만'),font:{size:14}},xaxis:{title:'건구온도 [°C]',range:xRange,gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'절대습도 [kg/kg]',range:yRange,gridcolor:'rgba(255,255,255,0.04)'},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
+    try{Plotly.react(ref.current,tr,{title:{text:'습공기 선도'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':' — 배경만'),font:{size:14}},xaxis:{title:'건구온도 [°C]',range:xRange,gridcolor:'rgba(0,0,0,0.08)'},yaxis:{title:'절대습도 [kg/kg]',range:yRange,gridcolor:'rgba(0,0,0,0.08)'},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:'var(--font)',color:'#5a5a6e',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
   },[cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,dataStatus.anyPt,autoFit]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d)return null;
@@ -1472,7 +1472,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
   useEffect(()=>{if(!ref.current||!satData)return;
     const fW=chartW>0?chartW:undefined;
     const s=satData.sat,c=satData.critical;
-    const tr=[{x:s.hl,y:s.P,mode:'lines',line:{color:'#3b82f6',width:2.5},showlegend:false,hoverinfo:'skip'},{x:s.hv,y:s.P,mode:'lines',line:{color:'#ef4444',width:2.5},showlegend:false,hoverinfo:'skip'},{x:[c.h],y:[c.P],mode:'markers',marker:{size:10,color:'#fff',symbol:'diamond'},showlegend:false,hovertemplate:'임계점<br>'+c.P.toFixed(1)+'bar, '+c.T.toFixed(1)+'°C<extra></extra>'}];
+    const tr=[{x:s.hl,y:s.P,mode:'lines',line:{color:'#3b82f6',width:2.5},showlegend:false,hoverinfo:'skip'},{x:s.hv,y:s.P,mode:'lines',line:{color:'#ef4444',width:2.5},showlegend:false,hoverinfo:'skip'},{x:[c.h],y:[c.P],mode:'markers',marker:{size:10,color:'#1a1a2e',symbol:'diamond'},showlegend:false,hovertemplate:'임계점<br>'+c.P.toFixed(1)+'bar, '+c.T.toFixed(1)+'°C<extra></extra>'}];
     let hasOverlay=false;
     const cycleH=[],cycleP=[];
     cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;if(!d)return;
@@ -1502,7 +1502,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
       hRange=[Math.min(...s.hl)*.8,Math.max(...s.hv)*1.05];
       pRange=[Math.log10(.5),Math.log10(c.P*1.15)];
     }
-    try{Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':' — 포화선만'),font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:hRange,gridcolor:'rgba(255,255,255,0.04)'},yaxis:{title:'압력 [bar abs]',type:'log',range:pRange,gridcolor:'rgba(255,255,255,0.04)',dtick:.30103},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#0c0c14',font:{family:'var(--font)',color:'#8a8880',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
+    try{Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':' — 포화선만'),font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:hRange,gridcolor:'rgba(0,0,0,0.08)'},yaxis:{title:'압력 [bar abs]',type:'log',range:pRange,gridcolor:'rgba(0,0,0,0.08)',dtick:.30103},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:'var(--font)',color:'#5a5a6e',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
   },[satData,cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,autoFit]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d?.h_Comp_In_ref?.[i]||!d?.P_Comp_In?.[i])return null;const BA=1.01325;
