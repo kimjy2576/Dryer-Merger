@@ -52,6 +52,8 @@ const {useState,useEffect,useRef,useCallback,useMemo}=React;const API='';
 function App(){const[tab,setTab]=useState('merge');const[cfg,setCfg]=useState(null);const[sid,setSid]=useState(null);const[mergeSt,setMergeSt]=useState(null);const[calcSt,setCalcSt]=useState(null);const[viewerAutoLoad,setViewerAutoLoad]=useState(null);const[calcAutoFiles,setCalcAutoFiles]=useState(null);
 useEffect(()=>{fetch(`${API}/api/config`).then(r=>r.json()).then(setCfg)},[]);
 const[updating,setUpdating]=useState(false);
+const[verDate,setVerDate]=useState('');
+useEffect(()=>{fetch(`${API}/api/version`).then(r=>r.json()).then(d=>setVerDate(d.date||'')).catch(()=>{})},[]);
 const doUpdate=async()=>{if(!confirm('GitHub에서 최신 버전을 받고 서버를 재시작합니다.\n계속하시겠습니까?'))return;
   setUpdating(true);try{const r=await fetch(`${API}/api/update`,{method:'POST'});const d=await r.json();
     if(d.status==='updated'){alert(`✅ ${d.files}개 파일 업데이트.\n서버 재시작 중... 자동 새로고침됩니다.`);
@@ -59,11 +61,10 @@ const doUpdate=async()=>{if(!confirm('GitHub에서 최신 버전을 받고 서�
       setTimeout(tryReload,3000)}
     else{alert('❌ 업데이트 실패: '+d.message);setUpdating(false)}
   }catch(e){alert('❌ 연결 실패');setUpdating(false)}};
-return(<div className="app"><div className="hdr" style={{display:'flex',alignItems:'center',gap:12}}>
-  <h1>Dryer Merger</h1><span className="bdg">v5</span>
-  <div style={{marginLeft:'auto'}}>
-    <button onClick={doUpdate} disabled={updating} style={{fontSize:10,padding:'4px 12px',background:updating?'var(--bg3)':'rgba(59,130,246,.1)',border:'1px solid rgba(59,130,246,.3)',color:updating?'var(--tx3)':'#3b82f6',borderRadius:6,cursor:updating?'wait':'pointer'}}>{updating?'⏳ 업데이트 중...':'🔄 업데이트'}</button>
-  </div>
+return(<div className="app"><div className="hdr" style={{display:'flex',alignItems:'center',gap:10}}>
+  <h1>Dryer Merger</h1>
+  <span className="bdg">{verDate||'...'}</span>
+  <button onClick={doUpdate} disabled={updating} style={{fontSize:10,padding:'3px 10px',background:updating?'var(--bg3)':'rgba(59,130,246,.06)',border:'1px solid rgba(59,130,246,.25)',color:updating?'var(--tx3)':'#2563eb',borderRadius:5,cursor:updating?'wait':'pointer'}}>{updating?'⏳ 업데이트 중...':'🔄 업데이트'}</button>
 </div>
 <div className="tabs">
   <button className={`tb ${tab==='merge'?'on':''}`} onClick={()=>setTab('merge')}>Merge</button>

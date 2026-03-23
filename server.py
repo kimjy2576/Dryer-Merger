@@ -1142,16 +1142,29 @@ def formula_columns(fn: str):
 
 @app.get("/api/version")
 def get_version():
-    """현재 버전 정보."""
+    """현재 버전 정보 — 최신 파일 수정 날짜 기반."""
     import subprocess
+    # 1순위: git 커밋 날짜
     try:
+        date_str = subprocess.check_output(
+            ["git", "log", "-1", "--format=%ci"],
+            cwd=str(BASE_DIR), stderr=subprocess.DEVNULL
+        ).decode().strip()[:10]  # "2026-03-23"
         commit = subprocess.check_output(
-            ["git", "log", "-1", "--format=%h %s", "--date=short"],
+            ["git", "log", "-1", "--format=%h"],
             cwd=str(BASE_DIR), stderr=subprocess.DEVNULL
         ).decode().strip()
+        return {"date": date_str, "commit": commit, "base_dir": str(BASE_DIR)}
     except:
-        commit = "unknown"
-    return {"commit": commit, "base_dir": str(BASE_DIR)}
+        pass
+    # 2순위: server.py 수정 날짜
+    try:
+        import datetime
+        mtime = os.path.getmtime(BASE_DIR / "server.py")
+        date_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+        return {"date": date_str, "commit": "", "base_dir": str(BASE_DIR)}
+    except:
+        return {"date": "unknown", "commit": "", "base_dir": str(BASE_DIR)}
 
 
 @app.post("/api/update")
