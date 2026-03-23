@@ -70,8 +70,8 @@ return(<div className="app"><div className="hdr" style={{display:'flex',alignIte
   <button className={`tb ${tab==='merge'?'on':''}`} onClick={()=>setTab('merge')}>Merge</button>
   <button className={`tb ${tab==='calc'?'on':''}`} onClick={()=>setTab('calc')}>Calculation</button>
   <button className={`tb ${tab==='formula'?'on':''}`} onClick={()=>setTab('formula')}>Formula</button>
-  <button className={`tb ${tab==='viewer'?'on':''}`} onClick={()=>setTab('viewer')}>Viewer</button>
-  <button className={`tb ${tab==='config'?'on':''}`} onClick={()=>setTab('config')}>설정</button>
+  <button className={`tb ${tab==='viewer'?'on':''}`} onClick={()=>setTab('viewer')}>Visualization</button>
+  <button className={`tb ${tab==='config'?'on':''}`} onClick={()=>setTab('config')}>Setting</button>
 </div>
 <div style={{display:tab==='merge'?'block':'none'}}>{cfg&&<MergeTab cfg={cfg} sid={sid} setSid={setSid} st={mergeSt} setSt={setMergeSt} setTab={setTab} setCalcAutoFiles={setCalcAutoFiles}/>}</div>
 <div style={{display:tab==='calc'?'block':'none'}}>{cfg&&<CalcTab cfg={cfg} sid={sid} setSid={setSid} st={calcSt} setSt={setCalcSt} setTab={setTab} setViewerAutoLoad={setViewerAutoLoad} calcAutoFiles={calcAutoFiles} clearCalcAutoFiles={()=>setCalcAutoFiles(null)}/>}</div>
@@ -471,7 +471,7 @@ function CalcTab({cfg,sid,setSid,st,setSt,setTab,setViewerAutoLoad,calcAutoFiles
 const[poll,setPoll]=useState(false);const pr=useRef();
 const[results,setResults]=useState([]);
 const[selFiles,setSelFiles]=useState(new Set());
-const[exp,setExp]=useState({load_kg:'',imc_kg:'',fmc_kg:''});
+const[expMap,setExpMap]=useState({}); // {filename: {load_kg, imc_kg, fmc_kg}}
 const[calcSid,setCalcSid]=useState(sid);
 // 변수 매핑
 const[calcVars,setCalcVars]=useState([]);     // 서버에서 받은 CALC_VARIABLES
@@ -564,11 +564,12 @@ const runCalc=async()=>{
     const msg=`필수 변수 ${unmatched.length}개가 매핑되지 않았습니다:\n\n${unmatched.join(', ')}\n\n일부 계산이 생략될 수 있습니다. 계속하시겠습니까?`;
     if(!confirm(msg))return;
   }
-  const expData=(exp.load_kg&&exp.imc_kg&&exp.fmc_kg)?{load_kg:+exp.load_kg,imc_kg:+exp.imc_kg,fmc_kg:+exp.fmc_kg}:null;
+  const expData={};let hasExp=false;
+  [...selFiles].forEach(fn=>{const e=expMap[fn];if(e&&e.load_kg&&e.imc_kg&&e.fmc_kg){expData[fn]={load_kg:+e.load_kg,imc_kg:+e.imc_kg,fmc_kg:+e.fmc_kg};hasExp=true}});
   const vm={};Object.entries(mapping).forEach(([k,v])=>{if(v&&v!==k)vm[k]=v});
   try{
     const r=await fetch(`${API}/api/calculate`,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({session_id:sid||null,config:cfg,source_files:[...selFiles],experimental:expData,variable_mapping:Object.keys(vm).length?vm:null})});
+      body:JSON.stringify({session_id:sid||null,config:cfg,source_files:[...selFiles],experimental:hasExp?expData:null,variable_mapping:Object.keys(vm).length?vm:null})});
     const d=await r.json();
     if(d.session_id&&!sid){setSid(d.session_id);setCalcSid(d.session_id)}
     else{setCalcSid(sid)}
@@ -657,15 +658,24 @@ return(<div>
     </div>}
   </div>}
 
-  {/* 실험 입력값 */}
-  <div className="cd">
-    <div className="ct">실험 입력값 (선택사항)</div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
-      <div><label style={{fontSize:11,color:'var(--tx2)',display:'block',marginBottom:4}}>건조부하 [kg]</label><input value={exp.load_kg} onChange={e=>setExp(p=>({...p,load_kg:e.target.value}))} placeholder="3.0" style={{width:'100%'}}/></div>
-      <div><label style={{fontSize:11,color:'var(--tx2)',display:'block',marginBottom:4}}>초기 함수율 무게 [kg]</label><input value={exp.imc_kg} onChange={e=>setExp(p=>({...p,imc_kg:e.target.value}))} placeholder="4.8" style={{width:'100%'}}/></div>
-      <div><label style={{fontSize:11,color:'var(--tx2)',display:'block',marginBottom:4}}>최종 함수율 무게 [kg]</label><input value={exp.fmc_kg} onChange={e=>setExp(p=>({...p,fmc_kg:e.target.value}))} placeholder="3.15" style={{width:'100%'}}/></div>
+  {/* 실험 입력값 — 파일별 */}
+  {selFiles.size>0&&<div className="cd">
+    <div className="ct">실험 입력값 (선택사항 — 파일별)</div>
+    <div style={{fontSize:10,color:'var(--tx3)',marginBottom:8}}>각 파일별 건조부하, 초기/최종 함수율 무게를 입력하세요. 비워두면 해당 계산을 생략합니다.</div>
+    <div style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 100px 100px 100px',gap:0,padding:'6px 10px',background:'var(--bg3)',fontSize:10,fontWeight:500,color:'var(--tx2)'}}>
+        <span>파일</span><span>건조부하 [kg]</span><span>초기 무게 [kg]</span><span>최종 무게 [kg]</span>
+      </div>
+      {[...selFiles].map(fn=>{const e=expMap[fn]||{load_kg:'',imc_kg:'',fmc_kg:''};
+        const setE=(k,v)=>setExpMap(p=>({...p,[fn]:{...(p[fn]||{load_kg:'',imc_kg:'',fmc_kg:''}),[k]:v}}));
+        return(<div key={fn} style={{display:'grid',gridTemplateColumns:'1fr 100px 100px 100px',gap:6,padding:'5px 10px',borderTop:'1px solid var(--bd)',alignItems:'center',fontSize:11}}>
+          <span style={{fontFamily:'var(--mono)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={fn}>{fn.replace('_merged.csv','')}</span>
+          <input value={e.load_kg} onChange={ev=>setE('load_kg',ev.target.value)} placeholder="3.0" style={{fontSize:11,padding:'3px 6px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
+          <input value={e.imc_kg} onChange={ev=>setE('imc_kg',ev.target.value)} placeholder="4.8" style={{fontSize:11,padding:'3px 6px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
+          <input value={e.fmc_kg} onChange={ev=>setE('fmc_kg',ev.target.value)} placeholder="3.15" style={{fontSize:11,padding:'3px 6px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
+        </div>)})}
     </div>
-  </div>
+  </div>}
 
   {/* Calc 실행 */}
   <div className="cd">
