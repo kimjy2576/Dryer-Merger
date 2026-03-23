@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from config import load_config
 
-app = FastAPI(title="Dryer Merger", version="5.0")
+app = FastAPI(title="HPWD Data Manager", version="5.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/health")
@@ -1245,7 +1245,7 @@ def self_update():
 @app.get("/")
 def index():
     f = STATIC / "index.html"
-    return HTMLResponse(f.read_text("utf-8")) if f.exists() else HTMLResponse("<h1>Dryer Merger v5</h1>")
+    return HTMLResponse(f.read_text("utf-8")) if f.exists() else HTMLResponse("<h1>HPWD Data Manager</h1>")
 
 if STATIC.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")

@@ -31,7 +31,7 @@ if __name__ == "__main__":
             first_run = False
 
         print(f"\n{'='*40}")
-        print(f"  Dryer Merger v5 — http://localhost:{PORT}")
+        print(f"  HPWD Data Manager — http://localhost:{PORT}")
         print(f"{'='*40}\n")
 
         # uvicorn을 자식 프로세스로 실행

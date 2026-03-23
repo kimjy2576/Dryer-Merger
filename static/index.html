@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dryer Merger v5</title>
+<title>HPWD Data Manager</title>
 <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
@@ -62,7 +62,7 @@ const doUpdate=async()=>{if(!confirm('GitHub에서 최신 버전을 받고 서�
     else{alert('❌ 업데이트 실패: '+d.message);setUpdating(false)}
   }catch(e){alert('❌ 연결 실패');setUpdating(false)}};
 return(<div className="app"><div className="hdr" style={{display:'flex',alignItems:'center',gap:10}}>
-  <h1>Dryer Merger</h1>
+  <h1>HPWD Data Manager</h1>
   <span className="bdg">{verDate||'...'}</span>
   <button onClick={doUpdate} disabled={updating} style={{fontSize:10,padding:'3px 10px',background:updating?'var(--bg3)':'rgba(59,130,246,.06)',border:'1px solid rgba(59,130,246,.25)',color:updating?'var(--tx3)':'#2563eb',borderRadius:5,cursor:updating?'wait':'pointer'}}>{updating?'⏳ 업데이트 중...':'🔄 업데이트'}</button>
 </div>
@@ -1130,7 +1130,7 @@ return(<div>
 
   {cases.length>0&&<>
   {/* 서브탭 */}
-  <div style={{display:'flex',gap:3,marginBottom:10}}>{[['chart','라인차트'],['psych','습공기 선도'],['ph','P-h 선도']].map(([k,lb])=>
+  <div style={{display:'flex',gap:3,marginBottom:10}}>{[['chart','개별선도'],['psych','습공기 선도'],['ph','P-h 선도']].map(([k,lb])=>
     <button key={k} className={`tb ${sub===k?'on':''}`} onClick={()=>setSub(k)}>{lb}</button>)}</div>
 
   {/* 공통 컨트롤 — 케이스 */}
@@ -1362,8 +1362,8 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
   const visCase=cases.filter(c=>caseVis[c.name]);
 
   return(<div>
-    {/* 카테고리 탭 */}
-    <div style={{display:'flex',gap:3,marginBottom:8,flexWrap:'wrap',alignItems:'center'}}>
+    {/* ── 구역 1: 탭 관리 ── */}
+    <div style={{display:'flex',gap:3,marginBottom:6,flexWrap:'wrap',alignItems:'center'}}>
       {tabs.map((t,i)=><div key={t.id} style={{display:'flex',alignItems:'center',gap:0}}>
         <button className={`bt bs ${tabIdx===i?'on':''}`} onClick={()=>setTabIdx(i)} style={{borderRadius:tabs.length>1&&i===tabIdx?'6px 0 0 6px':'6px',fontSize:11}}>{t.name}</button>
         {tabs.length>1&&tabIdx===i&&<button onClick={()=>removeTab(i)} style={{padding:'2px 5px',fontSize:9,border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--red)',borderRadius:'0 6px 6px 0',cursor:'pointer',fontFamily:'var(--font)'}}>×</button>}
@@ -1384,27 +1384,42 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
       }} style={{fontSize:10}}>📂 불러오기</button>
     </div>
 
-    {/* 컨트롤 */}
-    <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:6,flexWrap:'wrap',fontSize:11}}>
-      <span style={{fontWeight:500,color:'var(--tx2)'}}>행:</span>
-      <select value={tab.rows} onChange={e=>{const r=+e.target.value;const need=r*tab.cols;
-        if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({rows:r,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({rows:r})}
-      }} style={{width:50,fontSize:12,padding:'3px 6px',fontWeight:500}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}행</option>)}</select>
-      <span style={{fontWeight:500,color:'var(--tx2)'}}>열:</span>
-      <select value={tab.cols} onChange={e=>{const c=+e.target.value;const need=tab.rows*c;
-        if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({cols:c,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({cols:c})}
-      }} style={{width:50,fontSize:12,padding:'3px 6px',fontWeight:500}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}열</option>)}</select>
-      <span style={{fontSize:10,color:'var(--tx3)',fontFamily:'var(--mono)'}}>{tab.rows}×{tab.cols}={tab.rows*tab.cols}개</span>
-      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-      <label style={{fontSize:12,display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>스무딩</label>
-      {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:65}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="120" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:100}}/><span className="it">{smW}</span></>}
-      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-      <button className="bt bs" onClick={fitAll}>📐 Fit</button>
-      <button className="bt bs" onClick={fitAll}>🔄 리셋</button>
+    {/* ── 구역 2: 레이아웃 + 데이터 처리 + 보기 ── */}
+    <div style={{display:'flex',gap:8,marginBottom:6,flexWrap:'wrap',fontSize:11}}>
+      {/* 레이아웃 */}
+      <div style={{display:'flex',gap:5,alignItems:'center',padding:'5px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:6}}>
+        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>레이아웃</span>
+        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+        <span style={{color:'var(--tx3)',fontSize:10}}>행</span>
+        <select value={tab.rows} onChange={e=>{const r=+e.target.value;const need=r*tab.cols;
+          if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({rows:r,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({rows:r})}
+        }} style={{width:45,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
+        <span style={{color:'var(--tx3)',fontSize:10}}>열</span>
+        <select value={tab.cols} onChange={e=>{const c=+e.target.value;const need=tab.rows*c;
+          if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({cols:c,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({cols:c})}
+        }} style={{width:45,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
+        <span style={{fontSize:9,color:'var(--tx3)',fontFamily:'var(--mono)'}}>{tab.rows}×{tab.cols}</span>
+      </div>
+      {/* 데이터 처리 */}
+      <div style={{display:'flex',gap:5,alignItems:'center',padding:'5px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:6}}>
+        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>스무딩</span>
+        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+        <input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>
+        {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:55,fontSize:10}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="120" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:70}}/><span style={{fontSize:9,fontFamily:'var(--mono)',color:'var(--tx3)'}}>w={smW}</span></>}
+      </div>
+      {/* 보기 */}
+      <div style={{display:'flex',gap:5,alignItems:'center',padding:'5px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:6}}>
+        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>보기</span>
+        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+        <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px'}}>📐 Fit</button>
+        <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px'}}>🔄 리셋</button>
+      </div>
     </div>
 
-    {/* 변수 선택 + 순서 변경 */}
-    <div style={{display:'flex',gap:4,marginBottom:6,flexWrap:'wrap',alignItems:'center'}}>
+    {/* ── 구역 3: 변수 선택 + Y축 범위 ── */}
+    <div style={{marginBottom:6}}>
+      <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)',marginBottom:4}}>변수 선택 / Y축 범위</div>
+      <div style={{display:'flex',gap:4,flexWrap:'wrap',alignItems:'center'}}>
       {tab.plots.slice(0,tab.rows*tab.cols).map((k,i)=>{const yr=tab.yranges?.[k];const hasR=yr&&(yr[0]!=null||yr[1]!=null);
         return(<div key={i} style={{display:'flex',alignItems:'center',gap:2,padding:'2px 4px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:5}}>
         {i>0&&<button onClick={()=>movePlot(i,i-1)} style={{fontSize:9,border:0,background:0,color:'var(--tx3)',cursor:'pointer',padding:0}}>◀</button>}
@@ -1418,6 +1433,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
         <button onClick={()=>removePlot(i)} style={{fontSize:9,border:0,background:0,color:'var(--red)',cursor:'pointer',padding:'0 2px'}}>×</button>
       </div>)})}
       <button className="bt bs" onClick={addPlot} style={{fontSize:10}}>+ 변수</button>
+    </div>
     </div>
 
     {err&&<div style={{padding:10,margin:'6px 0',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,fontSize:12,color:'var(--red)'}}>{err}</div>}
