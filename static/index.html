@@ -941,6 +941,8 @@ const[caseVis,setCaseVis]=useState({});
 const[loading,setLoading]=useState(false);
 const[sub,setSub]=useState('chart'); // chart | psych | ph
 const[lw,setLw]=useState(2);
+const[xGap,setXGap]=useState(.10);
+const[yGap,setYGap]=useState(.18);
 const[dragMode,setDragMode]=useState('xy');
 const[chartH,setChartH]=useState(750);
 const[chartW,setChartW]=useState(0);
@@ -1133,12 +1135,36 @@ return(<div>
   {/* 공통 컨트롤 — 케이스 */}
   <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:6,padding:'8px 12px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:8}}>
     <span style={{fontSize:11,fontWeight:500,color:'var(--tx2)'}}>케이스:</span>
-    {cases.map((c,i)=><div key={c.name} style={{display:'flex',alignItems:'center',gap:2}}>
+    {cases.map((c,i)=><div key={c.name} style={{display:'flex',alignItems:'center',gap:0}}>
       <button style={{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:'5px 0 0 5px',border:'1px solid var(--bd2)',borderRight:0,background:caseVis[c.name]?'var(--bg3)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}>
         <span style={{width:10,height:10,borderRadius:'50%',background:VW_COLORS[i]}}/>{c.label||c.name}
       </button>
-      <button onClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n)setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}} title="이름 변경" style={{padding:'4px 6px',borderRadius:'0 5px 5px 0',border:'1px solid var(--bd2)',background:'var(--bg3)',color:'var(--tx3)',cursor:'pointer',fontSize:9}}>✏️</button>
+      <button onClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n)setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}} title="이름 변경" style={{padding:'4px 5px',border:'1px solid var(--bd2)',borderRight:0,background:'var(--bg3)',color:'var(--tx3)',cursor:'pointer',fontSize:9}}>✏️</button>
+      <button onClick={()=>{if(cases.length<=1){alert('최소 1개 케이스 필요');return}if(!confirm(`"${c.label||c.name}" 케이스를 삭제하시겠습니까?`))return;setCases(prev=>prev.filter(cc=>cc.name!==c.name));setCaseVis(p=>{const n={...p};delete n[c.name];return n})}} title="케이스 삭제" style={{padding:'4px 5px',borderRadius:'0 5px 5px 0',border:'1px solid var(--bd2)',background:'var(--bg3)',color:'var(--red)',cursor:'pointer',fontSize:9}}>×</button>
     </div>)}
+    <span style={{width:1,height:20,background:'var(--bd2)'}}/>
+    <button className="bt bs" onClick={async()=>{
+      // 파일 목록에서 추가할 파일 선택
+      try{const r=await fetch(`${API}/api/results`);const d=await r.json();
+        const available=d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged')).map(f=>f.name);
+        const sel=prompt('추가할 파일명 입력 (콤마로 구분):\n\n사용 가능:\n'+available.join('\n'));
+        if(!sel)return;
+        const fns=sel.split(',').map(s=>s.trim()).filter(Boolean);
+        if(!fns.length)return;
+        const merged={};let totalRows=0;
+        for(const fn of fns){
+          try{const r2=await fetch(`${API}/api/viewer-data/${fn}`);if(!r2.ok)continue;
+            const d2=await r2.json();Object.entries(d2).forEach(([col,arr])=>{if(!merged[col])merged[col]=arr;
+              else if(arr.length>merged[col].length)merged[col]=arr});
+            totalRows=Math.max(totalRows,Object.values(d2)[0]?.length||0);
+          }catch(e){}}
+        if(Object.keys(merged).length){
+          const name=fns[0].replace(/\.csv$/,'');
+          setCases(prev=>[...prev,{name:'case_'+(prev.length+1),label:name,data:merged,columns:Object.keys(merged)}]);
+          setCaseVis(p=>({...p,['case_'+(cases.length+1)]:true}));
+        }
+      }catch(e){alert('파일 로드 실패')}
+    }} style={{fontSize:10}}>+ 케이스 추가</button>
   </div>
 
   {/* 공통 컨트롤 — 그래프 설정 */}
@@ -1156,10 +1182,17 @@ return(<div>
     {[[0,'자동'],[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW(w)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
     <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW(+e.target.value)} style={{width:60}}/>
     <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartW?chartW+'px':'자동'}</span>
+    <span style={{width:1,height:16,background:'var(--bd2)'}}/>
+    <span style={{color:'var(--tx2)'}}>간격:</span>
+    <span style={{fontSize:9,color:'var(--tx3)'}}>X</span>
+    <input type="range" min="0.02" max="0.25" step=".01" value={xGap} onChange={e=>setXGap(+e.target.value)} style={{width:50}}/>
+    <span style={{fontSize:9,color:'var(--tx3)'}}>Y</span>
+    <input type="range" min="0.05" max="0.35" step=".01" value={yGap} onChange={e=>setYGap(+e.target.value)} style={{width:50}}/>
+    <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:9}}>{xGap.toFixed(2)}/{yGap.toFixed(2)}</span>
   </div>
 
   <ErrorBound>
-  {sub==='chart'&&<VwChart cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/>}
+  {sub==='chart'&&<VwChart cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} xGap={xGap} yGap={yGap}/>}
   {sub==='psych'&&<VwPsych cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/>}
   {sub==='ph'&&<VwPh cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} cfg={cfg}/>}
   </ErrorBound>
@@ -1222,7 +1255,7 @@ const VL={
 const yTitle=k=>VL[k]?`<b>${VL[k]}</b>`:`<b>${k}</b>`;
 
 // ═══ Viewer: 라인차트 ═══
-function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
+function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
   const allVars=useMemo(()=>{
     if(!cases?.length)return[];
     const s=new Set();
@@ -1237,9 +1270,6 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       const r=c.rows||3,cl=c.cols||3;
       return{id:i,name:c.name,rows:r,cols:cl,plots:av.slice(0,r*cl)}
     });
-    // "전체" 탭 맨 앞에
-    const allAv=allVars.slice(0,9);
-    ts.unshift({id:-1,name:'전체',rows:3,cols:3,plots:allAv});
     return ts;
   };
   const[tabs,setTabs]=useState(()=>initTabs());
@@ -1292,7 +1322,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       const perRowH=Math.max(220,Math.round(chartH/Math.max(actR,1)));
       const totalH=actR*perRowH;
 
-      const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.10,ygap:.18},height:totalH,width:finalW,margin:{t:30,b:50,l:80,r:30},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:'var(--font)',color:'#3a3a4e',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
+      const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:xGap,ygap:yGap},height:totalH,width:finalW,margin:{t:30,b:50,l:80,r:30},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:'var(--font)',color:'#3a3a4e',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
       nPlots.forEach((k,pi)=>{
         const xk='x'+(pi+1>1?pi+1:''),yk='y'+(pi+1>1?pi+1:'');
         lo['xaxis'+(pi+1)]={title:Math.floor(pi/actC)+1===actR?{text:'<b>Time</b> [min]',font:{size:11}}:undefined,gridcolor:'rgba(0,0,0,0.06)',tickfont:{size:10},zeroline:false,linecolor:'rgba(0,0,0,0.15)',linewidth:1,mirror:true};
@@ -1311,7 +1341,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       if(tr.length)Plotly.react(ref.current,tr,lo,{responsive:!finalW,displaylogo:false,scrollZoom:true});
       else setErr('표시할 데이터 없음');
     }catch(e){console.error('VwChart:',e);setErr('렌더링 오류: '+e.message)}
-  },[cases,caseVis,lw,chartH,finalW,tab,smOn,smM,smW,dragMode,zones]);
+  },[cases,caseVis,lw,chartH,finalW,tab,smOn,smM,smW,dragMode,zones,xGap,yGap]);
 
   // 구간 통계
   const zoneStats=useMemo(()=>zones.map(z=>{
