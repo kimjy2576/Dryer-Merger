@@ -922,14 +922,14 @@ const PSYCH_BG=(()=>{const out=[];
 })();
 
 const VW_CATS=[
-  {name:'압축기',vars:['P_Comp_In','P_Comp_Out','T_Comp_In','T_Comp_Out','T_Superheating','Ratio_Compression']},
-  {name:'증발기',vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_Out','T_Boiling_ref','RH_Eva_In']},
-  {name:'응축기',vars:['T_Cond_In','T_Cond_Out','T_Air_Cond_Out','T_Dew_ref','T_subcooling','RH_Cond_Out']},
-  {name:'유량',vars:['Flow_air_Cond_CMM','Flow_ref_kgH_recalc','Water_calc_gM']},
-  {name:'성능',vars:['COP_heating','COP_cooling','SMER','Factor_LFH','Factor_SFH']},
-  {name:'전력',vars:['Po_WD','Po_Comp','Po_Fan','E_WD','E_Comp']},
-  {name:'열전달',vars:['Qrefr_Eva_recalc','Qrefr_Cond_recalc','Q_Drum_Sen','Q_Drum_Lat']},
-  {name:'제어',vars:['Ctrl_Comp_Hz','RMC_calc']},
+  {name:'압축기 상태량',rows:3,cols:2,vars:['P_Comp_In','P_Comp_Out','T_Comp_In','T_Comp_Body','T_Superheating','T_SH_CompOut']},
+  {name:'증발기 상태량',rows:3,cols:3,vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_In','T_Eva_Out','T_Boiling_ref','T_Superheating','RH_Eva_In','AH_Eva_In','AH_Cond_In']},
+  {name:'응축기 상태량',rows:3,cols:3,vars:['T_Air_Eva_Out','T_Air_Cond_Out','T_Cond_In','T_Cond_Out','T_Cond_M1','T_subcooling','T_Dew_ref','RH_Cond_Out','AH_Cond_Out']},
+  {name:'유량',rows:3,cols:2,vars:['Flow_air_Cond_CMM','Flow_Mair_Cond_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH','Water_calc_gM','Water_calc_kg']},
+  {name:'성능지표',rows:3,cols:3,vars:['COP_heating','SMER','COP_cooling','COP_sys_heating','COP_sys_cooling','Factor_LFH','Ratio_Compression','Factor_SFH','RMC_calc']},
+  {name:'소비전력',rows:2,cols:3,vars:['E_WD','E_Comp','E_Fan','Po_WD','Po_Comp','Po_Fan']},
+  {name:'열전달',rows:3,cols:3,vars:['Qrefr_Eva_recalc','Qrefr_Cond_recalc','Q_sen_eva','Q_lat_eva','Q_Drum_Sen','Q_Drum_Lat','Q_Drum_Total','Qrefr_Eva_recalc','Qrefr_Cond_recalc']},
+  {name:'제어지표',rows:3,cols:2,vars:['Ctrl_Comp_Hz','HP_F_Temp','HP_EEV_Position','HP_FanSpeed','RMC_calc','HP Fan Q Current']},
 ];
 
 // ═══ Viewer 탭 ═══
@@ -942,7 +942,7 @@ const[loading,setLoading]=useState(false);
 const[sub,setSub]=useState('chart'); // chart | psych | ph
 const[lw,setLw]=useState(2);
 const[dragMode,setDragMode]=useState('xy');
-const[chartH,setChartH]=useState(580);
+const[chartH,setChartH]=useState(750);
 const[chartW,setChartW]=useState(0);
 
 // 파일 목록 로드 (모든 CSV)
@@ -1171,10 +1171,14 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
 
   // 탭 = 카테고리 (생성/삭제 가능)
   const initTabs=()=>{
-    const ts=VW_CATS.map((c,i)=>{const av=c.vars.filter(k=>cases.some(cs=>cs?.data?.[k]));return{id:i,name:c.name,rows:2,cols:3,plots:av.slice(0,6)}});
+    const ts=VW_CATS.map((c,i)=>{
+      const av=c.vars.filter(k=>cases.some(cs=>cs?.data?.[k]));
+      const r=c.rows||3,cl=c.cols||3;
+      return{id:i,name:c.name,rows:r,cols:cl,plots:av.slice(0,r*cl)}
+    });
     // "전체" 탭 맨 앞에
-    const allAv=allVars.slice(0,6);
-    ts.unshift({id:-1,name:'전체',rows:2,cols:3,plots:allAv});
+    const allAv=allVars.slice(0,9);
+    ts.unshift({id:-1,name:'전체',rows:3,cols:3,plots:allAv});
     return ts;
   };
   const[tabs,setTabs]=useState(()=>initTabs());
@@ -1224,7 +1228,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       const actR=Math.max(1,Math.min(tab.rows,Math.ceil(nPlots.length/tab.cols)));
       const actC=Math.max(1,Math.min(tab.cols,nPlots.length));
       const tr=[];const shapes=[];
-      const perRowH=Math.round(chartH/2); // chartH는 기준 2행 높이, 행당 높이 = chartH/2
+      const perRowH=Math.max(200,Math.round(chartH/Math.max(actR,1))); // 행당 최소 200px
       const totalH=actR*perRowH;
       const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.06,ygap:.12},height:totalH,width:finalW,margin:{t:30,b:40,l:70,r:20},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:'var(--font)',color:'#5a5a6e',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
       nPlots.forEach((k,pi)=>{
