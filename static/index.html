@@ -949,6 +949,7 @@ const[files,setFiles]=useState([]);
 const[selFiles,setSelFiles]=useState(new Set());
 const[cases,setCases]=useState([]);  // [{name,data:{col:[...]}}]
 const[caseVis,setCaseVis]=useState({});
+const[caseColors,setCaseColors]=useState({}); // {caseName: '#hex'}
 const[loading,setLoading]=useState(false);
 const[sub,setSub]=useState('chart'); // chart | psych | ph
 const[lw,setLw]=useState(2);
@@ -1140,42 +1141,20 @@ return(<div>
 
   {cases.length>0&&<>
   {/* 서브탭 */}
-  <div style={{display:'flex',gap:3,marginBottom:10}}>{[['chart','개별선도'],['psych','습공기 선도'],['ph','P-h 선도']].map(([k,lb])=>
-    <button key={k} className={`tb ${sub===k?'on':''}`} onClick={()=>setSub(k)}>{lb}</button>)}</div>
+  <div style={{display:'flex',gap:3,marginBottom:10,background:'var(--bg3)',padding:3,borderRadius:'var(--r)'}}>{[['chart','개별선도'],['psych','습공기 선도'],['ph','P-h 선도']].map(([k,lb])=>
+    <button key={k} className={`tb ${sub===k?'on':''}`} onClick={()=>setSub(k)} style={sub!==k?{border:'1px solid var(--bd2)',background:'var(--bg)'}:{}}>{lb}</button>)}</div>
 
   {/* 공통 컨트롤 — 케이스 */}
   <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:6,padding:'8px 12px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:8}}>
     <span style={{fontSize:11,fontWeight:500,color:'var(--tx2)'}}>케이스:</span>
-    {cases.map((c,i)=><div key={c.name} style={{display:'flex',alignItems:'center',gap:0}}>
-      <button style={{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:'5px 0 0 5px',border:'1px solid var(--bd2)',borderRight:0,background:caseVis[c.name]?'var(--bg3)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}>
-        <span style={{width:10,height:10,borderRadius:'50%',background:VW_COLORS[i]}}/>{c.label||c.name}
+    {cases.map((c,i)=>{const col=caseColors[c.name]||VW_COLORS[i%VW_COLORS.length];return(<div key={c.name} style={{display:'flex',alignItems:'center',gap:0}}>
+      <input type="color" value={col} onChange={e=>setCaseColors(p=>({...p,[c.name]:e.target.value}))} title="색상 변경" style={{width:20,height:22,padding:0,border:'1px solid var(--bd2)',borderRight:0,borderRadius:'5px 0 0 5px',cursor:'pointer',background:'var(--bg3)'}}/>
+      <button style={{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',border:'1px solid var(--bd2)',borderRight:0,borderLeft:0,background:caseVis[c.name]?'var(--bg3)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}>
+        <span style={{width:10,height:10,borderRadius:'50%',background:col}}/>{c.label||c.name}
       </button>
       <button onClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n)setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}} title="이름 변경" style={{padding:'4px 5px',border:'1px solid var(--bd2)',borderRight:0,background:'var(--bg3)',color:'var(--tx3)',cursor:'pointer',fontSize:9}}>✏️</button>
       <button onClick={()=>{if(cases.length<=1){alert('최소 1개 케이스 필요');return}if(!confirm(`"${c.label||c.name}" 케이스를 삭제하시겠습니까?`))return;setCases(prev=>prev.filter(cc=>cc.name!==c.name));setCaseVis(p=>{const n={...p};delete n[c.name];return n})}} title="케이스 삭제" style={{padding:'4px 5px',borderRadius:'0 5px 5px 0',border:'1px solid var(--bd2)',background:'var(--bg3)',color:'var(--red)',cursor:'pointer',fontSize:9}}>×</button>
     </div>)}
-    <span style={{width:1,height:20,background:'var(--bd2)'}}/>
-    <button className="bt bs" onClick={async()=>{
-      // 파일 목록에서 추가할 파일 선택
-      try{const r=await fetch(`${API}/api/results`);const d=await r.json();
-        const available=d.filter(f=>f.name.includes('_calc')||f.name.includes('_merged')).map(f=>f.name);
-        const sel=prompt('추가할 파일명 입력 (콤마로 구분):\n\n사용 가능:\n'+available.join('\n'));
-        if(!sel)return;
-        const fns=sel.split(',').map(s=>s.trim()).filter(Boolean);
-        if(!fns.length)return;
-        const merged={};let totalRows=0;
-        for(const fn of fns){
-          try{const r2=await fetch(`${API}/api/viewer-data/${fn}`);if(!r2.ok)continue;
-            const d2=await r2.json();Object.entries(d2).forEach(([col,arr])=>{if(!merged[col])merged[col]=arr;
-              else if(arr.length>merged[col].length)merged[col]=arr});
-            totalRows=Math.max(totalRows,Object.values(d2)[0]?.length||0);
-          }catch(e){}}
-        if(Object.keys(merged).length){
-          const name=fns[0].replace(/\.csv$/,'');
-          setCases(prev=>[...prev,{name:'case_'+(prev.length+1),label:name,data:merged,columns:Object.keys(merged)}]);
-          setCaseVis(p=>({...p,['case_'+(cases.length+1)]:true}));
-        }
-      }catch(e){alert('파일 로드 실패')}
-    }} style={{fontSize:10}}>+ 케이스 추가</button>
   </div>
 
   {/* 공통 컨트롤 — 그래프 설정 (행별 구역) */}
@@ -1229,9 +1208,9 @@ return(<div>
   </div>
 
   <ErrorBound>
-  {sub==='chart'&&<VwChart cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} xGap={xGap} yGap={yGap}/>}
-  {sub==='psych'&&<VwPsych cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/>}
-  {sub==='ph'&&<VwPh cases={cases} caseVis={caseVis} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} cfg={cfg}/>}
+  {sub==='chart'&&<VwChart cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} xGap={xGap} yGap={yGap}/>}
+  {sub==='psych'&&<VwPsych cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/>}
+  {sub==='ph'&&<VwPh cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} cfg={cfg}/>}
   </ErrorBound>
   </>}
 </div>)}
@@ -1292,7 +1271,7 @@ const VL={
 const yTitle=k=>VL[k]?`<b>${VL[k]}</b>`:`<b>${k}</b>`;
 
 // ═══ Viewer: 라인차트 ═══
-function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
+function VwChart({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,xGap,yGap}){
   const allVars=useMemo(()=>{
     if(!cases?.length)return[];
     const s=new Set();
@@ -1372,13 +1351,13 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
           if(!xArr?.length)return;
           let yArr=cs.data[k];if(!yArr?.length)return;
           if(smOn&&yArr.length>3)try{yArr=vSmooth(yArr,smM,smW)}catch(e){}
-          tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.label||cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},xaxis:xk,yaxis:yk,hovertemplate:'%{y:.2f}<extra>'+(cs.label||cs.name)+'</extra>'});
+          tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.label||cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:(caseColors?.[cs.name]||VW_COLORS[ci%VW_COLORS.length]),width:lw},xaxis:xk,yaxis:yk,hovertemplate:'%{y:.2f}<extra>'+(cs.label||cs.name)+'</extra>'});
         });
       });
       if(tr.length)Plotly.react(ref.current,tr,lo,{responsive:!finalW,displaylogo:false,scrollZoom:true});
       else setErr('표시할 데이터 없음');
     }catch(e){console.error('VwChart:',e);setErr('렌더링 오류: '+e.message)}
-  },[cases,caseVis,lw,chartH,finalW,tab,smOn,smM,smW,dragMode,zones,xGap,yGap]);
+  },[cases,caseVis,caseColors,lw,chartH,finalW,tab,smOn,smM,smW,dragMode,zones,xGap,yGap]);
 
   // 구간 통계
   const zoneStats=useMemo(()=>zones.map(z=>{
@@ -1501,7 +1480,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
 }
 
 // ═══ Viewer: 습공기 선도 ═══
-function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
+function VwPsych({cases,caseVis,caseColors,lw,chartH,chartW,dragMode}){
   const findCol=(d,names)=>{for(const n of names){if(d[n])return d[n]}return null};
   const[timeR,setTimeR]=useState(.5);
   const[autoFit,setAutoFit]=useState(true);
@@ -1533,7 +1512,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
       pts.forEach(p=>{allT.push(p[0]);allW.push(p[1])});
       if(pts.length){
         const xs=[...pts.map(p=>p[0]),pts[0][0]],ys=[...pts.map(p=>p[1]),pts[0][1]],tx=[...pts.map(p=>p[2]),''];
-        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:12,color:VW_COLORS[ci%VW_COLORS.length],family:'var(--font)'},marker:{size:12,line:{width:1,color:'#fff'}},line:{color:VW_COLORS[ci%VW_COLORS.length],width:Math.max(lw,2.5)},name:cs.label||cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
+        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:12,color:(caseColors?.[cs.name]||VW_COLORS[ci%VW_COLORS.length]),family:'var(--font)'},marker:{size:12,line:{width:1,color:'#fff'}},line:{color:(caseColors?.[cs.name]||VW_COLORS[ci%VW_COLORS.length]),width:Math.max(lw,2.5)},name:cs.label||cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
     });
     // 데이터 기반 축 범위
     let xRange=[-5,70],yRange=[0,.032];
@@ -1556,7 +1535,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
       legend:{orientation:'h',y:-.15,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,0.8)'},
       hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'
     },{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
-  },[cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,dataStatus.anyPt,autoFit]);
+  },[cases,caseVis,caseColors,timeIdx,lw,chartH,chartW,dragMode,curT,dataStatus.anyPt,autoFit]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d)return null;
     const pts=[];
@@ -1564,7 +1543,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
     const tEO=d.T_Air_Eva_Out?.[i]??d.T_Eva_Out?.[i];
     if(tEO!=null&&d.AH_Cond_In?.[i]!=null){const T=tEO,W=d.AH_Cond_In[i];pts.push({lb:'②증발기출구',T,W,h:hMoist(T,W),rh:rhFromAH(W,T),dp:dewPt(W),v:specVol(T,W)})}
     if(d.T_Air_Cond_Out?.[i]!=null&&d.AH_Cond_Out?.[i]!=null){const T=d.T_Air_Cond_Out[i],W=d.AH_Cond_Out[i];pts.push({lb:'③응축기출구',T,W,h:hMoist(T,W),rh:rhFromAH(W,T),dp:dewPt(W),v:specVol(T,W)})}
-    return pts.length?{name:cs.label||cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
+    return pts.length?{name:cs.label||cs.name,color:(caseColors?.[cs.name]||VW_COLORS[ci%VW_COLORS.length]),pts}:null;
   }).filter(Boolean),[cases,caseVis,timeIdx]);
 
   // 디버그: 첫 케이스의 실제 값
@@ -1609,7 +1588,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
 }
 
 // ═══ Viewer: P-h 선도 ═══
-function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
+function VwPh({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,cfg}){
   const hasRefData=useMemo(()=>cases.some(c=>c?.data?.h_Comp_In_ref||c?.data?.P_Comp_In),[cases]);
   const[timeR,setTimeR]=useState(.5);
   const[autoFit,setAutoFit]=useState(true);
@@ -1646,7 +1625,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
       if(d.h_Eva_In_ref?.[i]!=null)pts.push({h:d.h_Eva_In_ref[i],P:d.P_Comp_In[i]+BA,lb:'④'});
       pts.forEach(p=>{cycleH.push(p.h);cycleP.push(p.P)});
       if(pts.length>1){pts.push(pts[0]);hasOverlay=true;
-        tr.push({x:pts.map(p=>p.h),y:pts.map(p=>p.P),mode:'lines+markers+text',text:pts.map(p=>p.lb),textposition:'top center',textfont:{size:12,color:VW_COLORS[ci%VW_COLORS.length],family:'var(--font)'},marker:{size:12,line:{width:1,color:'#fff'}},line:{color:VW_COLORS[ci%VW_COLORS.length],width:Math.max(lw,2.5)},name:cs.label||cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})}
+        tr.push({x:pts.map(p=>p.h),y:pts.map(p=>p.P),mode:'lines+markers+text',text:pts.map(p=>p.lb),textposition:'top center',textfont:{size:12,color:(caseColors?.[cs.name]||VW_COLORS[ci%VW_COLORS.length]),family:'var(--font)'},marker:{size:12,line:{width:1,color:'#fff'}},line:{color:(caseColors?.[cs.name]||VW_COLORS[ci%VW_COLORS.length]),width:Math.max(lw,2.5)},name:cs.label||cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})}
     });
     // 축 범위
     let hRange,pRange;
@@ -1673,7 +1652,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
       legend:{orientation:'h',y:-.15,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,0.8)'},
       hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'
     },{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
-  },[satData,cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,autoFit]);
+  },[satData,cases,caseVis,caseColors,timeIdx,lw,chartH,chartW,dragMode,curT,autoFit]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d?.h_Comp_In_ref?.[i]||!d?.P_Comp_In?.[i])return null;const BA=1.01325;
     const pts=[];
@@ -1681,7 +1660,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
     if(d.h_Comp_Out_ref?.[i]!=null)pts.push({lb:'②압축기출구',P:(d.P_Comp_Out?.[i]||0)+BA,h:d.h_Comp_Out_ref[i],T:d.T_Comp_Out?.[i]});
     if(d.h_Cond_Out_ref?.[i]!=null)pts.push({lb:'③응축기출구',P:(d.P_Comp_Out?.[i]||0)+BA,h:d.h_Cond_Out_ref[i],T:d.T_Cond_Out?.[i]});
     if(d.h_Eva_In_ref?.[i]!=null)pts.push({lb:'④팽창밸브출구',P:d.P_Comp_In[i]+BA,h:d.h_Eva_In_ref[i],T:d.T_Eva_Out?.[i]});
-    return pts.length?{name:cs.label||cs.name,color:VW_COLORS[ci%VW_COLORS.length],pts}:null;
+    return pts.length?{name:cs.label||cs.name,color:(caseColors?.[cs.name]||VW_COLORS[ci%VW_COLORS.length]),pts}:null;
   }).filter(Boolean),[cases,caseVis,timeIdx]);
 
   return(<div>
