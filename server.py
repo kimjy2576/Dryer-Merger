@@ -685,6 +685,12 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
                     df = df.rename(columns=rename_dict)
                     _log(sid, f"  변수 매핑: {len(rename_dict)}개 적용")
 
+            # 압력 재계산 (Merge에서 잘못 계산됐을 수 있으므로)
+            from calculator import _calc_pressures
+            from properties import get_props as _gp
+            _props = _gp(env["refrigerant"], env["patm"], env.get("backend", "HEOS"))
+            df = _calc_pressures(df, _props, env["patm"])
+
             # Stage 2 실행
             df_calc = run_stage2(df, cfg, exp)
             _log(sid, f"  계산 완료: {len(df_calc.columns)}열")

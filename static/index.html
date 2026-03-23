@@ -960,7 +960,7 @@ useEffect(()=>{if(!autoLoad?.length)return;
     setFiles(filtered);
     const toSel=new Set(autoLoad.filter(fn=>filtered.some(f=>f.name===fn)));
     setSelFiles(toSel);
-    setMergeMode('all'); // Calc 세션 파일은 전부 하나로
+    setMergeMode('auto'); // auto: base명 매칭으로 merged+calc 병합
     if(clearAutoLoad)clearAutoLoad();
     setPendingLoad(true);
   }).catch(()=>{});
