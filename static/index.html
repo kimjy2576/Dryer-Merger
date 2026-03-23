@@ -934,8 +934,8 @@ const PSYCH_BG=(()=>{const out=[];
 
 const VW_CATS=[
   {name:'압축기 상태량',rows:3,cols:2,vars:['P_Comp_In','P_Comp_Out','T_Comp_In','T_Comp_Body','T_Superheating','T_SH_CompOut']},
-  {name:'증발기 상태량',rows:3,cols:3,vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_In','T_Eva_Out','T_Boiling_ref','T_Superheating','RH_Eva_In','AH_Eva_In','AH_Cond_In']},
-  {name:'응축기 상태량',rows:3,cols:3,vars:['T_Air_Eva_Out','T_Air_Cond_Out','T_Cond_In','T_Cond_Out','T_Cond_M1','T_subcooling','T_Dew_ref','RH_Cond_Out','AH_Cond_Out']},
+  {name:'증발기 상태량',rows:3,cols:3,vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_In','T_Eva_Out','T_Boiling_ref','T_Superheating','RH_Eva_In','AH_Eva_In']},
+  {name:'응축기 상태량',rows:3,cols:3,vars:['T_Air_Eva_Out','T_Air_Cond_Out','T_Cond_In','T_Cond_Out','T_Cond_M1','T_subcooling','RH_Cond_Out','AH_Cond_Out']},
   {name:'유량',rows:3,cols:2,vars:['Flow_air_Cond_CMM','Flow_Mair_Cond_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH','Water_calc_gM','Water_calc_kg']},
   {name:'성능지표',rows:3,cols:3,vars:['COP_heating','SMER','COP_cooling','COP_sys_heating','COP_sys_cooling','Factor_LFH','Ratio_Compression','Factor_SFH','RMC_calc']},
   {name:'소비전력',rows:2,cols:3,vars:['E_WD','E_Comp','E_Fan','Po_WD','Po_Comp','Po_Fan']},
@@ -1102,7 +1102,7 @@ return(<div>
       <span className="it">{files.length}개 파일 — {selFiles.size}개 선택</span>
       <div style={{display:'flex',gap:6}}>
         <button className={`bt bs ${filterMode==='all'?'on':''}`} style={filterMode==='all'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selAll}>전체</button>
-        <button className={`bt bs ${filterMode==='calc'?'on':''}`} style={filterMode==='calc'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selCalc}>calc만 ★</button>
+        <button className={`bt bs ${filterMode==='calc'?'on':''}`} style={filterMode==='calc'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selCalc}>calc만</button>
         <button className={`bt bs ${filterMode==='merged'?'on':''}`} style={filterMode==='merged'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selMerged}>merged만</button>
         <button className="bt bs" onClick={selNone}>해제</button>
         <button className="bt bs" onClick={reloadFiles}>새로고침</button>
