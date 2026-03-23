@@ -1393,17 +1393,19 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
 
   return(<div>
     {/* ── 구역 1: 탭 관리 ── */}
-    <div style={{display:'flex',gap:3,marginBottom:6,flexWrap:'wrap',alignItems:'center'}}>
+    <div style={{display:'flex',gap:5,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:4,fontSize:11}}>
+      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>카테고리</span>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
       {tabs.map((t,i)=><div key={t.id} style={{display:'flex',alignItems:'center',gap:0}}>
-        <button className={`bt bs ${tabIdx===i?'on':''}`} onClick={()=>setTabIdx(i)} style={{borderRadius:tabs.length>1&&i===tabIdx?'6px 0 0 6px':'6px',fontSize:11}}>{t.name}</button>
-        {tabs.length>1&&tabIdx===i&&<button onClick={()=>removeTab(i)} style={{padding:'2px 5px',fontSize:9,border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--red)',borderRadius:'0 6px 6px 0',cursor:'pointer',fontFamily:'var(--font)'}}>×</button>}
+        <button className={`bt bs ${tabIdx===i?'on':''}`} onClick={()=>setTabIdx(i)} style={{borderRadius:tabs.length>1&&i===tabIdx?'6px 0 0 6px':'6px',fontSize:10,padding:'3px 8px'}}>{t.name}</button>
+        {tabs.length>1&&tabIdx===i&&<button onClick={()=>removeTab(i)} style={{padding:'3px 5px',fontSize:9,border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--red)',borderRadius:'0 6px 6px 0',cursor:'pointer',fontFamily:'var(--font)'}}>×</button>}
       </div>)}
-      <button className="bt bs" onClick={addCustomTab} style={{fontSize:10}}>+ 탭 추가</button>
-      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
+      <button className="bt bs" onClick={addCustomTab} style={{fontSize:9,padding:'3px 8px'}}>+ 탭</button>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
       <button className="bt bs" onClick={()=>{
         const cfg={version:1,type:'viewer_chart_settings',tabs:tabs.map(t=>({name:t.name,rows:t.rows,cols:t.cols,plots:t.plots,yranges:t.yranges||{}})),tabIdx,smOn,smM,smW,zones,timestamp:new Date().toISOString()};
         const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='viewer_chart_settings.json';a.click()
-      }} style={{fontSize:10}}>💾 저장</button>
+      }} style={{fontSize:9,padding:'3px 8px'}}>💾 저장</button>
       <button className="bt bs" onClick={()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=ev=>{
         const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=e=>{try{
           const c=JSON.parse(e.target.result);if(c.tabs){
@@ -1411,44 +1413,39 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
             if(c.smOn!=null)setSmOn(c.smOn);if(c.smM)setSmM(c.smM);if(c.smW)setSmW(c.smW);
             if(c.zones)setZones(c.zones);
           }}catch(er){alert('설정 파일 파싱 실패')}};rd.readAsText(f)};inp.click()
-      }} style={{fontSize:10}}>📂 불러오기</button>
+      }} style={{fontSize:9,padding:'3px 8px'}}>📂 불러오기</button>
     </div>
 
-    {/* ── 구역 2: 레이아웃 + 데이터 처리 + 보기 ── */}
-    <div style={{display:'flex',gap:8,marginBottom:6,flexWrap:'wrap',fontSize:11}}>
-      {/* 레이아웃 */}
-      <div style={{display:'flex',gap:5,alignItems:'center',padding:'5px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:6}}>
-        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>레이아웃</span>
-        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-        <span style={{color:'var(--tx3)',fontSize:10}}>행</span>
-        <select value={tab.rows} onChange={e=>{const r=+e.target.value;const need=r*tab.cols;
-          if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({rows:r,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({rows:r})}
-        }} style={{width:45,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
-        <span style={{color:'var(--tx3)',fontSize:10}}>열</span>
-        <select value={tab.cols} onChange={e=>{const c=+e.target.value;const need=tab.rows*c;
-          if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({cols:c,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({cols:c})}
-        }} style={{width:45,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
-        <span style={{fontSize:9,color:'var(--tx3)',fontFamily:'var(--mono)'}}>{tab.rows}×{tab.cols}</span>
-      </div>
-      {/* 데이터 처리 */}
-      <div style={{display:'flex',gap:5,alignItems:'center',padding:'5px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:6}}>
-        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>스무딩</span>
-        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-        <input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>
-        {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:55,fontSize:10}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="120" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:70}}/><span style={{fontSize:9,fontFamily:'var(--mono)',color:'var(--tx3)'}}>w={smW}</span></>}
-      </div>
-      {/* 보기 */}
-      <div style={{display:'flex',gap:5,alignItems:'center',padding:'5px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:6}}>
-        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>보기</span>
-        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-        <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px'}}>📐 Fit</button>
-        <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px'}}>🔄 리셋</button>
-      </div>
+    {/* ── 구역 2: 레이아웃 + 스무딩 + 보기 ── */}
+    <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:4,fontSize:11}}>
+      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>레이아웃</span>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+      <span style={{color:'var(--tx3)',fontSize:10}}>행</span>
+      <select value={tab.rows} onChange={e=>{const r=+e.target.value;const need=r*tab.cols;
+        if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({rows:r,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({rows:r})}
+      }} style={{width:42,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
+      <span style={{color:'var(--tx3)',fontSize:10}}>열</span>
+      <select value={tab.cols} onChange={e=>{const c=+e.target.value;const need=tab.rows*c;
+        if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({cols:c,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({cols:c})}
+      }} style={{width:42,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
+      <span style={{fontSize:9,color:'var(--tx3)',fontFamily:'var(--mono)'}}>{tab.rows}×{tab.cols}</span>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>스무딩</span>
+      <input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>
+      {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:55,fontSize:10}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="120" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:70}}/><span style={{fontSize:9,fontFamily:'var(--mono)',color:'var(--tx3)'}}>w={smW}</span></>}
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>보기</span>
+      <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px'}}>📐 Fit</button>
+      <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px'}}>🔄 리셋</button>
     </div>
 
     {/* ── 구역 3: 변수 선택 + Y축 범위 ── */}
-    <div style={{marginBottom:6}}>
-      <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)',marginBottom:4}}>변수 선택 / Y축 범위</div>
+    <div style={{padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:6}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>변수/Y축</span>
+        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+        <button className="bt bs" onClick={addPlot} style={{fontSize:9,padding:'2px 8px'}}>+ 변수 추가</button>
+      </div>
       <div style={{display:'flex',gap:4,flexWrap:'wrap',alignItems:'center'}}>
       {tab.plots.slice(0,tab.rows*tab.cols).map((k,i)=>{const yr=tab.yranges?.[k];const hasR=yr&&(yr[0]!=null||yr[1]!=null);
         return(<div key={i} style={{display:'flex',alignItems:'center',gap:2,padding:'2px 4px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:5}}>
@@ -1462,7 +1459,6 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode,xGap,yGap}){
         {i<tab.plots.length-1&&<button onClick={()=>movePlot(i,i+1)} style={{fontSize:9,border:0,background:0,color:'var(--tx3)',cursor:'pointer',padding:0}}>▶</button>}
         <button onClick={()=>removePlot(i)} style={{fontSize:9,border:0,background:0,color:'var(--red)',cursor:'pointer',padding:'0 2px'}}>×</button>
       </div>)})}
-      <button className="bt bs" onClick={addPlot} style={{fontSize:10}}>+ 변수</button>
     </div>
     </div>
 
