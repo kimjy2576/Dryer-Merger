@@ -955,6 +955,11 @@ const[sub,setSub]=useState('chart'); // chart | psych | ph
 const[lw,setLw]=useState(2);
 const[xGap,setXGap]=useState(.10);
 const[yGap,setYGap]=useState(.18);
+// 시작 시 디폴트 자동 로드
+useEffect(()=>{fetch(`${API}/api/default-viewer-settings`).then(r=>r.json()).then(d=>{
+  if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);
+  if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);
+}).catch(()=>{})},[]);
 const[dragMode,setDragMode]=useState('xy');
 const[chartH,setChartH]=useState(750);
 const[chartW,setChartW]=useState(0);
@@ -1199,7 +1204,7 @@ return(<div>
     <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
       <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>설정</span>
       <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <button className="bt bs" onClick={async()=>{try{await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode})});alert('✅ Viewer 디폴트 저장')}catch(e){alert('실패')}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 디폴트 저장</button>
+      <button className="bt bs" onClick={async()=>{try{await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode})});alert(`✅ Viewer 디폴트 저장\n선 두께: ${lw}\n높이: ${chartH}px\n너비: ${chartW||'자동'}\n간격: X=${xGap.toFixed(2)} Y=${yGap.toFixed(2)}`)}catch(e){alert('실패')}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 디폴트 저장</button>
       <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-viewer-settings`);const d=await r.json();if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);alert('디폴트 불러옴')}catch(e){alert('실패')}}} style={{color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 불러오기</button>
       <SaveSlots category="viewer" label="슬롯"
         getData={()=>({type:'viewer_settings',lw,xGap,yGap,chartH,chartW,dragMode})}
