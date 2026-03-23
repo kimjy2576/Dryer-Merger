@@ -1178,34 +1178,54 @@ return(<div>
     }} style={{fontSize:10}}>+ 케이스 추가</button>
   </div>
 
-  {/* 공통 컨트롤 — 그래프 설정 */}
-  <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:10,padding:'6px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-    <span style={{color:'var(--tx2)'}}>선 두께:</span>
-    <input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw(+e.target.value)} style={{width:60}}/>
-    <span style={{fontFamily:'var(--mono)',color:'var(--tx2)',minWidth:16}}>{lw}</span>
-    <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-    <span style={{color:'var(--tx2)'}}>높이:</span>
-    {[[400,'S'],[580,'M'],[750,'L'],[950,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH(h)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
-    <input type="range" min="300" max="1200" step="10" value={chartH} onChange={e=>setChartH(+e.target.value)} style={{width:60}}/>
-    <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartH}px</span>
-    <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-    <span style={{color:'var(--tx2)'}}>너비:</span>
-    {[[0,'자동'],[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW(w)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
-    <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW(+e.target.value)} style={{width:60}}/>
-    <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartW?chartW+'px':'자동'}</span>
-    <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-    <span style={{color:'var(--tx2)'}}>간격:</span>
-    <span style={{fontSize:9,color:'var(--tx3)'}}>X</span>
-    <input type="range" min="0.02" max="0.25" step=".01" value={xGap} onChange={e=>setXGap(+e.target.value)} style={{width:50}}/>
-    <span style={{fontSize:9,color:'var(--tx3)'}}>Y</span>
-    <input type="range" min="0.05" max="0.35" step=".01" value={yGap} onChange={e=>setYGap(+e.target.value)} style={{width:50}}/>
-    <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:9}}>{xGap.toFixed(2)}/{yGap.toFixed(2)}</span>
-    <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-    <button className="bt bs" onClick={async()=>{try{await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode})});alert('✅ Viewer 디폴트 저장')}catch(e){alert('실패')}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 디폴트 저장</button>
-    <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-viewer-settings`);const d=await r.json();if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);alert('디폴트 불러옴')}catch(e){alert('실패')}}} style={{color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 불러오기</button>
-    <SaveSlots category="viewer" label="슬롯"
-      getData={()=>({type:'viewer_settings',lw,xGap,yGap,chartH,chartW,dragMode})}
-      onLoad={d=>{if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode)}}/>
+  {/* 공통 컨트롤 — 그래프 설정 (행별 구역) */}
+  <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>
+
+    {/* 행1: 선 두께 */}
+    <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>선 두께</span>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+      <input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw(+e.target.value)} style={{width:80}}/>
+      <span style={{fontFamily:'var(--mono)',color:'var(--tx2)',minWidth:20}}>{lw}</span>
+    </div>
+
+    {/* 행2: 크기 (높이 + 너비) */}
+    <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>크기</span>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+      <span style={{color:'var(--tx3)',fontSize:10}}>높이</span>
+      {[[400,'S'],[580,'M'],[750,'L'],[950,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH(h)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
+      <input type="range" min="300" max="1200" step="10" value={chartH} onChange={e=>setChartH(+e.target.value)} style={{width:60}}/>
+      <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartH}px</span>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+      <span style={{color:'var(--tx3)',fontSize:10}}>너비</span>
+      {[[0,'자동'],[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW(w)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
+      <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW(+e.target.value)} style={{width:60}}/>
+      <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartW?chartW+'px':'자동'}</span>
+    </div>
+
+    {/* 행3: 간격 */}
+    <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>간격</span>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+      <span style={{fontSize:9,color:'var(--tx3)'}}>X</span>
+      <input type="range" min="0.02" max="0.25" step=".01" value={xGap} onChange={e=>setXGap(+e.target.value)} style={{width:70}}/>
+      <span style={{fontSize:9,color:'var(--tx3)'}}>Y</span>
+      <input type="range" min="0.05" max="0.35" step=".01" value={yGap} onChange={e=>setYGap(+e.target.value)} style={{width:70}}/>
+      <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:9}}>{xGap.toFixed(2)} / {yGap.toFixed(2)}</span>
+    </div>
+
+    {/* 행4: 설정 저장 */}
+    <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>설정</span>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+      <button className="bt bs" onClick={async()=>{try{await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode})});alert('✅ Viewer 디폴트 저장')}catch(e){alert('실패')}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 디폴트 저장</button>
+      <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-viewer-settings`);const d=await r.json();if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);alert('디폴트 불러옴')}catch(e){alert('실패')}}} style={{color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 불러오기</button>
+      <SaveSlots category="viewer" label="슬롯"
+        getData={()=>({type:'viewer_settings',lw,xGap,yGap,chartH,chartW,dragMode})}
+        onLoad={d=>{if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode)}}/>
+    </div>
+
   </div>
 
   <ErrorBound>
