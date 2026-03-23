@@ -23,11 +23,13 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 def health():
     return {"status": "ok"}
 
-BASE_DIR = Path(__file__).parent
 if getattr(sys, "frozen", False):
-    EXE_DIR = Path(sys.executable).parent
-else:
+    BASE_DIR = Path(sys.executable).parent
     EXE_DIR = BASE_DIR
+else:
+    BASE_DIR = Path(__file__).parent
+    EXE_DIR = BASE_DIR
+STATIC = BASE_DIR / "static"
 RESULT_DIR = EXE_DIR / "results"
 RESULT_DIR.mkdir(exist_ok=True)
 
@@ -967,7 +969,7 @@ def delete_session(sid: str):
 # ══════════════════════════════════════════════
 #  프론트엔드 서빙
 # ══════════════════════════════════════════════
-STATIC = Path(sys._MEIPASS) / "static" if getattr(sys, "frozen", False) else BASE_DIR / "static"
+# (STATIC은 상단에서 정의됨)
 # ══════════════════════════════════════════════
 #  Viewer 데이터 API
 # ══════════════════════════════════════════════
