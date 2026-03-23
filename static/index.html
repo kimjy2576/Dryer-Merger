@@ -953,8 +953,8 @@ const[caseColors,setCaseColors]=useState({}); // {caseName: '#hex'}
 const[loading,setLoading]=useState(false);
 const[sub,setSub]=useState('chart'); // chart | psych | ph
 const[lw,setLw]=useState(2);
-const[xGap,setXGap]=useState(.10);
-const[yGap,setYGap]=useState(.18);
+const[xGap,setXGap]=useState(.25);
+const[yGap,setYGap]=useState(.35);
 // 시작 시 디폴트 자동 로드
 useEffect(()=>{fetch(`${API}/api/default-viewer-settings`).then(r=>r.json()).then(d=>{
   if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);
@@ -1186,7 +1186,7 @@ return(<div>
       <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW(+e.target.value)} style={{width:60}}/>
       <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartW?chartW+'px':'자동'}</span>
       <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <button className="bt bs" onClick={()=>{setChartH(750);setChartW(0)}} style={{fontSize:9,padding:'2px 8px',color:'var(--tx3)'}}>↺ 초기화</button>
+      <button className="bt bs" onClick={()=>{setChartH(750);setChartW(0);setLw(2);setXGap(.25);setYGap(.35)}} style={{fontSize:9,padding:'2px 8px',color:'var(--tx3)'}}>↺ 초기화</button>
     </div>
 
     {/* 행3: 간격 */}
@@ -1194,9 +1194,9 @@ return(<div>
       <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>간격</span>
       <span style={{width:1,height:14,background:'var(--bd2)'}}/>
       <span style={{fontSize:9,color:'var(--tx3)'}}>X</span>
-      <input type="range" min="0.02" max="0.25" step=".01" value={xGap} onChange={e=>setXGap(+e.target.value)} style={{width:70}}/>
+      <input type="range" min="0.02" max="0.40" step=".01" value={xGap} onChange={e=>setXGap(+e.target.value)} style={{width:70}}/>
       <span style={{fontSize:9,color:'var(--tx3)'}}>Y</span>
-      <input type="range" min="0.05" max="0.35" step=".01" value={yGap} onChange={e=>setYGap(+e.target.value)} style={{width:70}}/>
+      <input type="range" min="0.05" max="0.50" step=".01" value={yGap} onChange={e=>setYGap(+e.target.value)} style={{width:70}}/>
       <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:9}}>{xGap.toFixed(2)} / {yGap.toFixed(2)}</span>
     </div>
 
