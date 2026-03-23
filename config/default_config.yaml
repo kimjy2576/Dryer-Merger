@@ -41,9 +41,9 @@ ftemp:
   moving_avg_window_min: 5
 
 outlier_thresholds:
-  "Po_": [0, 1000]
-  "T_":  [0, 100]
-  "P_":  [0, 10]
+  "Po_": [0, 3000]
+  "T_":  [-50, 200]
+  "P_":  [0, 50]
   "RH_": [0, 100]
 
 mx100:
