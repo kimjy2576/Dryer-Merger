@@ -1173,14 +1173,17 @@ return(<div>
       <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>크기</span>
       <span style={{width:1,height:14,background:'var(--bd2)'}}/>
       <span style={{color:'var(--tx3)',fontSize:10}}>높이</span>
-      {[[400,'S'],[580,'M'],[750,'L'],[950,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH(h)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
+      {[[450,'S'],[650,'M'],[850,'L'],[1100,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH(h)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
       <input type="range" min="300" max="1200" step="10" value={chartH} onChange={e=>setChartH(+e.target.value)} style={{width:60}}/>
       <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartH}px</span>
       <span style={{width:1,height:14,background:'var(--bd2)'}}/>
       <span style={{color:'var(--tx3)',fontSize:10}}>너비</span>
-      {[[0,'자동'],[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW(w)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
+      <button className={`bt bs ${chartW===0?'on':''}`} onClick={()=>setChartW(0)} style={{padding:'2px 6px',fontSize:10}}>자동</button>
+      {[[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW(w)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
       <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW(+e.target.value)} style={{width:60}}/>
       <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartW?chartW+'px':'자동'}</span>
+      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+      <button className="bt bs" onClick={()=>{setChartH(750);setChartW(0)}} style={{fontSize:9,padding:'2px 8px',color:'var(--tx3)'}}>↺ 초기화</button>
     </div>
 
     {/* 행3: 간격 */}
