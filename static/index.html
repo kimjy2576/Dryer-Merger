@@ -1154,10 +1154,8 @@ return(<div>
       </button>
       <button onClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n)setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}} title="이름 변경" style={{padding:'4px 5px',border:'1px solid var(--bd2)',borderRight:0,background:'var(--bg3)',color:'var(--tx3)',cursor:'pointer',fontSize:9}}>✏️</button>
       <button onClick={()=>{if(cases.length<=1){alert('최소 1개 케이스 필요');return}if(!confirm(`"${c.label||c.name}" 케이스를 삭제하시겠습니까?`))return;setCases(prev=>prev.filter(cc=>cc.name!==c.name));setCaseVis(p=>{const n={...p};delete n[c.name];return n})}} title="케이스 삭제" style={{padding:'4px 5px',borderRadius:'0 5px 5px 0',border:'1px solid var(--bd2)',background:'var(--bg3)',color:'var(--red)',cursor:'pointer',fontSize:9}}>×</button>
-    </div>)}
+    </div>)})}
   </div>
-
-  {/* 공통 컨트롤 — 그래프 설정 (행별 구역) */}
   <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>
 
     {/* 행1: 선 두께 */}
