@@ -1166,6 +1166,61 @@ return(<div>
   </>}
 </div>)}
 
+// 변수별 한글 설명 (단위 포함)
+const VL={
+  // 압력
+  P_Comp_In:'흡입 압력 [barg]',P_Comp_Out:'토출 압력 [barg]',P_Eva_In:'증발 압력 [barg]',P_Cond_Out:'응축 압력 [barg]',
+  // 온도 — 압축기
+  T_Comp_In:'압축기 흡입 온도 [°C]',T_Comp_Out:'압축기 토출 온도 [°C]',T_Comp_Body:'압축기 바디 온도 [°C]',
+  // 온도 — 응축기
+  T_Cond_In:'응축기 냉매 입구 온도 [°C]',T_Cond_Out:'응축기 냉매 출구 온도 [°C]',T_Cond_M1:'응축기 중간 온도 [°C]',
+  T_Air_Cond_Out:'응축기 공기 출구 온도 [°C]',T_Dew_ref:'응축 온도 (이슬점) [°C]',T_subcooling:'과냉도 [K]',
+  // 온도 — 증발기
+  T_Air_Eva_In:'증발기 공기 입구 온도 [°C]',T_Air_Eva_Out:'증발기 공기 출구 온도 [°C]',
+  T_Eva_In:'증발기 냉매 입구 온도 [°C]',T_Eva_Out:'증발기 냉매 출구 온도 [°C]',
+  T_Boiling_ref:'증발 온도 [°C]',T_Superheating:'과열도 [K]',T_SH_CompOut:'토출 과열도 [K]',
+  // 습도
+  RH_Eva_In:'증발기 입구 상대습도 [-]',RH_Cond_Out:'응축기 출구 상대습도 [-]',RH_Cond_In:'응축기 입구 상대습도 [-]',
+  AH_Eva_In:'증발기 입구 절대습도 [kg/kg]',AH_Cond_In:'응축기 입구 절대습도 [kg/kg]',AH_Cond_Out:'응축기 출구 절대습도 [kg/kg]',
+  // 유량
+  Flow_air_Cond_CMM:'응축기 풍량 [CMM]',Flow_air_Eva_CMM:'증발기 풍량 [CMM]',
+  Flow_Mair_Cond_kgH:'습공기 질량유량 [kg/h]',Flow_Dair_kgH:'건조공기 질량유량 [kg/h]',
+  Flow_ref_kgH:'냉매 유량 [kg/h]',Flow_ref_kgH_recalc:'냉매 유량 (보정) [kg/h]',
+  // 수분
+  Water_calc_gM:'응축수량 [g/min]',Water_calc_kg:'누적 응축수 [kg]',RMC_calc:'잔여수분율 [%]',
+  // 전력/에너지
+  Po_WD:'총 소비전력 [W]',Po_Comp:'압축기 전력 [W]',Po_Fan:'팬 전력 [W]',Po_Drum_calc:'드럼 전력 [W]',
+  E_WD:'총 에너지 [Wh]',E_Comp:'압축기 에너지 [Wh]',E_Fan:'팬 에너지 [Wh]',
+  // 성능
+  COP_heating:'난방 COP [-]',COP_cooling:'냉방 COP [-]',
+  COP_sys_heating:'시스템 난방 COP [-]',COP_sys_cooling:'시스템 냉방 COP [-]',
+  SMER:'에너지효율 SMER [kg/kWh]',Factor_SFH:'현열비 [-]',Factor_LFH:'잠열비 [-]',
+  Ratio_Compression:'압축비 [-]',Drum_SFH:'드럼 현열비 [-]',Drum_LFH:'드럼 잠열비 [-]',
+  // 열전달
+  Qrefr_Eva_recalc:'증발기 열량 [W]',Qrefr_Cond_recalc:'응축기 열량 [W]',
+  Q_sen_eva:'증발기 현열 [W]',Q_lat_eva:'증발기 잠열 [W]',
+  Q_Drum_Sen:'드럼 현열 [W]',Q_Drum_Lat:'드럼 잠열 [W]',Q_Drum_Total:'드럼 총 열량 [W]',
+  // 엔탈피/엔트로피
+  h_Comp_In_ref:'압축기 입구 엔탈피 [kJ/kg]',h_Comp_Out_ref:'압축기 출구 엔탈피 [kJ/kg]',
+  h_Cond_In_ref:'응축기 입구 엔탈피 [kJ/kg]',h_Cond_Out_ref:'응축기 출구 엔탈피 [kJ/kg]',
+  h_Eva_In_ref:'증발기 입구 엔탈피 [kJ/kg]',h_Eva_Out_ref:'증발기 출구 엔탈피 [kJ/kg]',
+  h_Cond_In_MAir:'응축기 입구 공기 엔탈피 [kJ/kg]',h_Cond_Out_MAir:'응축기 출구 공기 엔탈피 [kJ/kg]',
+  h_Eva_In_MAir:'증발기 입구 공기 엔탈피 [kJ/kg]',
+  s_Comp_In_ref:'압축기 입구 엔트로피 [kJ/kg·K]',s_Comp_Out_ref:'압축기 출구 엔트로피 [kJ/kg·K]',
+  v_Comp_In_ref:'압축기 입구 비체적 [m³/kg]',v_Comp_Out_ref:'압축기 출구 비체적 [m³/kg]',
+  Quality_x:'건도 [-]',
+  // 제어
+  Ctrl_Comp_Hz:'압축기 주파수 [Hz]',HP_CompCurrentHz:'압축기 주파수 [Hz]',HP_CompTargetHz:'압축기 목표 주파수 [Hz]',
+  HP_F_Temp:'F 온도 [°C]',HP_EEV_Position:'팽창밸브 개도 [pulse]',HP_FanSpeed:'팬 회전수 [rpm]',
+  'HP Fan Q Current':'팬 전류 [A]','HP Comp Current':'압축기 전류 [A]',
+  HP_SuperHeatDegree:'과열도 (센서) [K]',HP_CoolingFan:'쿨링팬 [-]',HP_CompIpmTemp:'IPM 온도 [°C]',HP_FanIpmTemp:'팬 IPM 온도 [°C]',
+  Ctrl_DryMotion:'건조 모션 [-]',
+  // 기타 merged
+  Current_RPM:'현재 RPM [rpm]',Request_RPM:'목표 RPM [rpm]',Wash_Temp:'세탁 온도 [°C]',Dry_Temp:'건조 온도 [°C]',
+  fTemp_calc:'F온도 계산 [°C]',Time_min:'시간 [min]',Time_sec:'시간 [sec]',
+};
+const yTitle=k=>VL[k]?`<b>${VL[k]}</b>`:`<b>${k}</b>`;
+
 // ═══ Viewer: 라인차트 ═══
 function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
   const allVars=useMemo(()=>{
@@ -1236,18 +1291,7 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       const tr=[];const shapes=[];
       const perRowH=Math.max(220,Math.round(chartH/Math.max(actR,1)));
       const totalH=actR*perRowH;
-      // 변수별 단위 매핑
-      const UNITS={P_Comp_In:'barg',P_Comp_Out:'barg',P_Eva_In:'barg',P_Cond_Out:'barg',
-        T_Comp_In:'°C',T_Comp_Out:'°C',T_Comp_Body:'°C',T_Cond_In:'°C',T_Cond_Out:'°C',T_Cond_M1:'°C',T_Air_Eva_In:'°C',T_Air_Eva_Out:'°C',T_Air_Cond_Out:'°C',T_Eva_In:'°C',T_Eva_Out:'°C',T_Boiling_ref:'°C',T_Dew_ref:'°C',T_subcooling:'K',T_Superheating:'K',T_SH_CompOut:'K',
-        RH_Eva_In:'-',RH_Cond_Out:'-',AH_Eva_In:'kg/kg',AH_Cond_In:'kg/kg',AH_Cond_Out:'kg/kg',
-        Flow_air_Cond_CMM:'CMM',Flow_air_Eva_CMM:'CMM',Flow_Mair_Cond_kgH:'kg/h',Flow_Dair_kgH:'kg/h',Flow_ref_kgH:'kg/h',Flow_ref_kgH_recalc:'kg/h',
-        Water_calc_gM:'g/min',Water_calc_kg:'kg',RMC_calc:'%',
-        Po_WD:'W',Po_Comp:'W',Po_Fan:'W',E_WD:'Wh',E_Comp:'Wh',E_Fan:'Wh',
-        COP_heating:'-',COP_cooling:'-',COP_sys_heating:'-',COP_sys_cooling:'-',SMER:'kg/kWh',
-        Factor_SFH:'-',Factor_LFH:'-',Ratio_Compression:'-',
-        Qrefr_Eva_recalc:'W',Qrefr_Cond_recalc:'W',Q_sen_eva:'W',Q_lat_eva:'W',Q_Drum_Sen:'W',Q_Drum_Lat:'W',Q_Drum_Total:'W',
-        Ctrl_Comp_Hz:'Hz',HP_F_Temp:'°C',HP_EEV_Position:'pulse',HP_FanSpeed:'rpm','HP Fan Q Current':'A',HP_CompCurrentHz:'Hz'};
-      const yTitle=k=>{const u=UNITS[k];return u?`<b>${k}</b> [${u}]`:`<b>${k}</b>`};
+
       const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:.10,ygap:.18},height:totalH,width:finalW,margin:{t:30,b:50,l:80,r:30},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:'var(--font)',color:'#3a3a4e',size:11},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:{size:11}},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
       nPlots.forEach((k,pi)=>{
         const xk='x'+(pi+1>1?pi+1:''),yk='y'+(pi+1>1?pi+1:'');
@@ -1327,8 +1371,8 @@ function VwChart({cases,caseVis,lw,chartH,chartW,dragMode}){
       {tab.plots.slice(0,tab.rows*tab.cols).map((k,i)=>{const yr=tab.yranges?.[k];const hasR=yr&&(yr[0]!=null||yr[1]!=null);
         return(<div key={i} style={{display:'flex',alignItems:'center',gap:2,padding:'2px 4px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:5}}>
         {i>0&&<button onClick={()=>movePlot(i,i-1)} style={{fontSize:9,border:0,background:0,color:'var(--tx3)',cursor:'pointer',padding:0}}>◀</button>}
-        <select value={k} onChange={e=>setPlotVar(i,e.target.value)} style={{fontSize:10,padding:'2px 3px',width:110,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
-          {allVars.map(v=><option key={v} value={v}>{v}</option>)}
+        <select value={k} onChange={e=>setPlotVar(i,e.target.value)} style={{fontSize:10,padding:'2px 3px',width:180,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
+          {allVars.map(v=><option key={v} value={v}>{VL[v]||v}</option>)}
         </select>
         <input value={yr?.[0]??''} onChange={e=>setYRange(k,0,e.target.value)} placeholder="min" title="Y축 최소" style={{width:40,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
         <input value={yr?.[1]??''} onChange={e=>setYRange(k,1,e.target.value)} placeholder="max" title="Y축 최대" style={{width:40,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
