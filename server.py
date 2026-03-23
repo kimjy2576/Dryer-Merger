@@ -443,9 +443,24 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                     dt, df_br_main, df_ams_proc, df_mx_proc)
                 _log(sid, f"  🔗 시간동기화: {time.perf_counter()-t1:.1f}s ({len(merged)}행)")
 
+                # 디버그: 압력/온도 컬럼 존재 여부
+                pcols = [c for c in merged.columns if 'P_Comp' in c or 'P_Cond' in c or 'P_Eva' in c]
+                tcols = [c for c in merged.columns if c.startswith('T_Cond') or c.startswith('T_Eva')]
+                _log(sid, f"  🔍 병합 후 압력컬럼: {pcols or '없음'}")
+                _log(sid, f"  🔍 병합 후 냉매온도: {tcols or '없음'}")
+                if 'P_Comp_Out' in merged.columns:
+                    v = merged['P_Comp_Out'].dropna()
+                    _log(sid, f"  🔍 P_Comp_Out 원본값: min={v.min():.3f}, max={v.max():.3f}, mean={v.mean():.3f}")
+                if 'T_Cond_M1' in merged.columns:
+                    v = merged['T_Cond_M1'].dropna()
+                    _log(sid, f"  🔍 T_Cond_M1 값: min={v.min():.1f}, max={v.max():.1f}")
+
                 t1 = time.perf_counter()
                 merged = add_time_columns(merged)
                 merged = run_stage1(merged, cfg)
+                if 'P_Comp_Out' in merged.columns:
+                    v = merged['P_Comp_Out'].dropna()
+                    _log(sid, f"  🔍 Stage1 후 P_Comp_Out: min={v.min():.3f}, max={v.max():.3f}")
                 _log(sid, f"  📐 Stage1: {time.perf_counter()-t1:.1f}s")
 
                 t1 = time.perf_counter()
