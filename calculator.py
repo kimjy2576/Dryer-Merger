@@ -44,26 +44,50 @@ def _calc_ftemp(df, cfg_ft):
 
 
 def _calc_pressures(df, props, patm):
+    print(f"  [_calc_pressures] 컬럼: P_Comp_Out={'Y' if 'P_Comp_Out' in df.columns else 'N'}, "
+          f"P_Cond_Out={'Y' if 'P_Cond_Out' in df.columns else 'N'}")
+
     if "P_Comp_Out" not in df.columns and "P_Cond_Out" not in df.columns:
-        for c in ["T_Cond_M1", "Heatpump_DuctOutTemp", "T_Air_Cond_Out"]:
+        # 우선순위: 냉매 온도 > 공기 온도
+        for c in ["T_Cond_M1", "T_Cond_Out", "T_Cond_In"]:
             if c in df.columns:
-                p = props.psat_t_barg(df[c].values); df["P_Comp_Out"] = p; df["P_Cond_Out"] = p; break
+                p = props.psat_t_barg(df[c].values)
+                df["P_Comp_Out"] = p; df["P_Cond_Out"] = p
+                print(f"  [P_Comp_Out] ← psat({c}), 범위: {p.min():.2f}~{p.max():.2f} barg")
+                break
+        else:
+            # 냉매 온도 없으면 공기 온도에 접근온도 보정 (+5K)
+            for c in ["Heatpump_DuctOutTemp", "T_Air_Cond_Out"]:
+                if c in df.columns:
+                    t_est = df[c].values + 5.0  # 접근온도 보정
+                    p = props.psat_t_barg(t_est)
+                    df["P_Comp_Out"] = p; df["P_Cond_Out"] = p
+                    print(f"  [P_Comp_Out] ← psat({c}+5K), 범위: {p.min():.2f}~{p.max():.2f} barg")
+                    break
     elif "P_Cond_Out" not in df.columns:
-        for c in ["T_Cond_M1", "Heatpump_DuctOutTemp", "T_Air_Cond_Out"]:
+        for c in ["T_Cond_M1", "T_Cond_Out"]:
             if c in df.columns:
                 df["P_Cond_Out"] = props.psat_t_barg(df[c].values); break
 
     if "P_Comp_In" not in df.columns and "P_Eva_In" not in df.columns:
-        p = props.psat_t_barg(df["Heatpump_EvaInTemp"].values)
-        df["P_Comp_In"] = p
-        df["P_Eva_In"] = p
+        # 우선순위: 냉매 온도 > 공기 온도
+        for c in ["T_Eva_In", "T_Eva_Out", "Heatpump_EvaInTemp"]:
+            if c in df.columns:
+                p = props.psat_t_barg(df[c].values)
+                df["P_Comp_In"] = p; df["P_Eva_In"] = p
+                print(f"  [P_Comp_In] ← psat({c}), 범위: {p.min():.2f}~{p.max():.2f} barg")
+                break
     elif "P_Eva_In" not in df.columns:
-        df["P_Eva_In"] = props.psat_t_barg(df["Heatpump_EvaInTemp"].values)
+        for c in ["T_Eva_In", "Heatpump_EvaInTemp"]:
+            if c in df.columns:
+                df["P_Eva_In"] = props.psat_t_barg(df[c].values); break
 
     if "T_Air_Eva_In" not in df.columns:
-        df["T_Air_Eva_In"] = np.round(df["Heatpump_DuctInTemp"].values * 0.8 + 9, 2)
+        if "Heatpump_DuctInTemp" in df.columns:
+            df["T_Air_Eva_In"] = np.round(df["Heatpump_DuctInTemp"].values * 0.8 + 9, 2)
     if "T_Air_Cond_Out" not in df.columns:
-        df["T_Air_Cond_Out"] = np.round(df["Heatpump_DuctOutTemp"].values * 0.8 + 9, 2)
+        if "Heatpump_DuctOutTemp" in df.columns:
+            df["T_Air_Cond_Out"] = np.round(df["Heatpump_DuctOutTemp"].values * 0.8 + 9, 2)
     return df
 
 
