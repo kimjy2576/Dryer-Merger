@@ -1189,6 +1189,12 @@ return(<div>
     <span style={{fontSize:9,color:'var(--tx3)'}}>Y</span>
     <input type="range" min="0.05" max="0.35" step=".01" value={yGap} onChange={e=>setYGap(+e.target.value)} style={{width:50}}/>
     <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:9}}>{xGap.toFixed(2)}/{yGap.toFixed(2)}</span>
+    <span style={{width:1,height:16,background:'var(--bd2)'}}/>
+    <button className="bt bs" onClick={async()=>{try{await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode})});alert('✅ Viewer 디폴트 저장')}catch(e){alert('실패')}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 디폴트 저장</button>
+    <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-viewer-settings`);const d=await r.json();if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);alert('디폴트 불러옴')}catch(e){alert('실패')}}} style={{color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 불러오기</button>
+    <SaveSlots category="viewer" label="슬롯"
+      getData={()=>({type:'viewer_settings',lw,xGap,yGap,chartH,chartW,dragMode})}
+      onLoad={d=>{if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode)}}/>
   </div>
 
   <ErrorBound>
@@ -1484,7 +1490,7 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
       pts.forEach(p=>{allT.push(p[0]);allW.push(p[1])});
       if(pts.length){
         const xs=[...pts.map(p=>p[0]),pts[0][0]],ys=[...pts.map(p=>p[1]),pts[0][1]],tx=[...pts.map(p=>p[2]),''];
-        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:10},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.label||cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
+        tr.push({x:xs,y:ys,mode:'lines+markers+text',text:tx,textposition:'top center',textfont:{size:12,color:VW_COLORS[ci%VW_COLORS.length],family:'var(--font)'},marker:{size:12,line:{width:1,color:'#fff'}},line:{color:VW_COLORS[ci%VW_COLORS.length],width:Math.max(lw,2.5)},name:cs.label||cs.name,hovertemplate:'T=%{x:.1f}°C<br>W=%{y:.4f}<extra></extra>'})}
     });
     // 데이터 기반 축 범위
     let xRange=[-5,70],yRange=[0,.032];
@@ -1497,7 +1503,16 @@ function VwPsych({cases,caseVis,lw,chartH,chartW,dragMode}){
       if(autoFit){xRange=calcX;yRange=calcY}
       else if(fixedRange){xRange=fixedRange.x;yRange=fixedRange.y}
     }
-    try{Plotly.react(ref.current,tr,{title:{text:'습공기 선도'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':' — 배경만'),font:{size:14}},xaxis:{title:'건구온도 [°C]',range:xRange,gridcolor:'rgba(0,0,0,0.08)'},yaxis:{title:'절대습도 [kg/kg]',range:yRange,gridcolor:'rgba(0,0,0,0.08)'},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:'var(--font)',color:'#5a5a6e',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
+    try{Plotly.react(ref.current,tr,{
+      title:{text:'<b>습공기 선도</b>'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':''),font:{size:14},y:.98,yanchor:'top'},
+      xaxis:{title:{text:'<b>건구온도</b> [°C]',font:{size:12}},range:xRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,tickfont:{size:11}},
+      yaxis:{title:{text:'<b>절대습도</b> [kg/kg]',font:{size:12}},range:yRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,tickfont:{size:11}},
+      height:chartH,width:fW,margin:{t:60,b:60,l:80,r:30},
+      paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',
+      font:{family:'var(--font)',color:'#3a3a4e',size:11},
+      legend:{orientation:'h',y:-.15,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,0.8)'},
+      hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'
+    },{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
   },[cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,dataStatus.anyPt,autoFit]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d)return null;
@@ -1571,7 +1586,11 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
   useEffect(()=>{if(!ref.current||!satData)return;
     const fW=chartW>0?chartW:undefined;
     const s=satData.sat,c=satData.critical;
-    const tr=[{x:s.hl,y:s.P,mode:'lines',line:{color:'#3b82f6',width:2.5},showlegend:false,hoverinfo:'skip'},{x:s.hv,y:s.P,mode:'lines',line:{color:'#ef4444',width:2.5},showlegend:false,hoverinfo:'skip'},{x:[c.h],y:[c.P],mode:'markers',marker:{size:10,color:'#1a1a2e',symbol:'diamond'},showlegend:false,hovertemplate:'임계점<br>'+c.P.toFixed(1)+'bar, '+c.T.toFixed(1)+'°C<extra></extra>'}];
+    const tr=[
+      {x:s.hl,y:s.P,mode:'lines',line:{color:'#2563eb',width:2},name:'포화액선',showlegend:false,hoverinfo:'skip'},
+      {x:s.hv,y:s.P,mode:'lines',line:{color:'#dc2626',width:2},name:'포화증기선',showlegend:false,hoverinfo:'skip'},
+      {x:[c.h],y:[c.P],mode:'markers',marker:{size:12,color:'#1a1a2e',symbol:'diamond',line:{width:2,color:'#fff'}},name:'임계점',showlegend:false,hovertemplate:'<b>임계점</b><br>'+c.P.toFixed(1)+' bar, '+c.T.toFixed(1)+'°C<extra></extra>'}
+    ];
     let hasOverlay=false;
     const cycleH=[],cycleP=[];
     cases.forEach((cs,ci)=>{if(!caseVis[cs.name])return;const i=timeIdx[ci];const d=cs.data;if(!d)return;
@@ -1584,7 +1603,7 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
       if(d.h_Eva_In_ref?.[i]!=null)pts.push({h:d.h_Eva_In_ref[i],P:d.P_Comp_In[i]+BA,lb:'④'});
       pts.forEach(p=>{cycleH.push(p.h);cycleP.push(p.P)});
       if(pts.length>1){pts.push(pts[0]);hasOverlay=true;
-        tr.push({x:pts.map(p=>p.h),y:pts.map(p=>p.P),mode:'lines+markers+text',text:pts.map(p=>p.lb),textfont:{size:10,color:VW_COLORS[ci%VW_COLORS.length]},marker:{size:9},line:{color:VW_COLORS[ci%VW_COLORS.length],width:lw},name:cs.label||cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})}
+        tr.push({x:pts.map(p=>p.h),y:pts.map(p=>p.P),mode:'lines+markers+text',text:pts.map(p=>p.lb),textposition:'top center',textfont:{size:12,color:VW_COLORS[ci%VW_COLORS.length],family:'var(--font)'},marker:{size:12,line:{width:1,color:'#fff'}},line:{color:VW_COLORS[ci%VW_COLORS.length],width:Math.max(lw,2.5)},name:cs.label||cs.name,hovertemplate:'h=%{x:.1f} kJ/kg<br>P=%{y:.2f} bar<extra></extra>'})}
     });
     // 축 범위
     let hRange,pRange;
@@ -1601,7 +1620,16 @@ function VwPh({cases,caseVis,lw,chartH,chartW,dragMode,cfg}){
       hRange=[Math.min(...s.hl)*.8,Math.max(...s.hv)*1.05];
       pRange=[Math.log10(.5),Math.log10(c.P*1.15)];
     }
-    try{Plotly.react(ref.current,tr,{title:{text:'P-h 선도 — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':' — 포화선만'),font:{size:14}},xaxis:{title:'엔탈피 [kJ/kg]',range:hRange,gridcolor:'rgba(0,0,0,0.08)'},yaxis:{title:'압력 [bar abs]',type:'log',range:pRange,gridcolor:'rgba(0,0,0,0.08)',dtick:.30103},height:chartH,width:fW,margin:{t:50,b:50,l:60,r:30},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:'var(--font)',color:'#5a5a6e',size:11},legend:{orientation:'h',y:1.08,x:.5,xanchor:'center'},hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'},{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
+    try{Plotly.react(ref.current,tr,{
+      title:{text:'<b>P-h 선도</b> — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':''),font:{size:14},y:.98,yanchor:'top'},
+      xaxis:{title:{text:'<b>엔탈피</b> [kJ/kg]',font:{size:12}},range:hRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,tickfont:{size:11}},
+      yaxis:{title:{text:'<b>압력</b> [bar abs]',font:{size:12}},type:'log',range:pRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,dtick:.30103,tickfont:{size:11}},
+      height:chartH,width:fW,margin:{t:60,b:60,l:80,r:30},
+      paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',
+      font:{family:'var(--font)',color:'#3a3a4e',size:11},
+      legend:{orientation:'h',y:-.15,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,0.8)'},
+      hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'
+    },{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
   },[satData,cases,caseVis,timeIdx,lw,chartH,chartW,dragMode,curT,autoFit]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d?.h_Comp_In_ref?.[i]||!d?.P_Comp_In?.[i])return null;const BA=1.01325;

@@ -192,6 +192,26 @@ def save_default_formula_settings(req: dict):
             "saved_custom": len(data["custom"]), "path": str(p)}
 
 
+@app.get("/api/default-viewer-settings")
+def get_default_viewer_settings():
+    """기본 Viewer 그래프 설정 반환."""
+    import json
+    p = BASE_DIR / "config" / "viewer_default.json"
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text("utf-8"))
+
+
+@app.post("/api/save-default-viewer-settings")
+def save_default_viewer_settings(req: dict):
+    """현재 Viewer 설정을 디폴트로 저장."""
+    import json
+    p = BASE_DIR / "config" / "viewer_default.json"
+    req["timestamp"] = pd.Timestamp.now().isoformat()
+    p.write_text(json.dumps(req, ensure_ascii=False, indent=2), "utf-8")
+    return {"saved": True, "path": str(p)}
+
+
 @app.get("/api/validate-refrigerant/{name}")
 def validate_ref(name: str, backend: str = "HEOS"):
     """냉매명이 CoolProp/REFPROP에서 유효한지 검증."""
