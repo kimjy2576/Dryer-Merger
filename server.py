@@ -918,8 +918,10 @@ def list_results():
              "source_dir": sources.get(f.name, "")}
             for f in files]
 
-@app.get("/api/results/{fn}")
+@app.get("/api/results/{fn:path}")
 def download(fn: str):
+    from urllib.parse import unquote
+    fn = unquote(fn)
     p = RESULT_DIR / fn
     if not p.exists(): raise HTTPException(404)
     return FileResponse(p, media_type="text/csv", filename=fn)
@@ -971,11 +973,16 @@ def delete_session(sid: str):
 # ══════════════════════════════════════════════
 #  Viewer 데이터 API
 # ══════════════════════════════════════════════
-@app.get("/api/viewer-data/{fn}")
+@app.get("/api/viewer-data/{fn:path}")
 def viewer_data(fn: str, max_rows: int = 7200):
     """calc/merged CSV를 컬럼별 배열 JSON으로 반환 (Viewer용)."""
+    from urllib.parse import unquote
+    fn = unquote(fn)
     p = RESULT_DIR / fn
-    if not p.exists(): raise HTTPException(404, f"파일 없음: {fn}")
+    if not p.exists():
+        print(f"  [viewer-data] 404: {fn}, RESULT_DIR={RESULT_DIR}")
+        print(f"  [viewer-data] 존재하는 파일: {[f.name for f in RESULT_DIR.iterdir() if f.is_file()][:10]}")
+        raise HTTPException(404, f"파일 없음: {fn}")
     try:
         df = pd.read_csv(p)
     except Exception as e:
@@ -983,6 +990,12 @@ def viewer_data(fn: str, max_rows: int = 7200):
     if len(df) > max_rows:
         step = max(1, len(df) // max_rows)
         df = df.iloc[::step].reset_index(drop=True)
+    
+    # 숫자 변환 시도 (문자열로 읽힌 컬럼 복구)
+    for c in df.columns:
+        if not pd.api.types.is_numeric_dtype(df[c]) and c != "Time":
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    
     # NaN → None 처리 + 숫자 컬럼만
     cols = {}
     for c in df.columns:
