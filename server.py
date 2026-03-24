@@ -925,10 +925,12 @@ def download(fn: str):
     return FileResponse(p, media_type="text/csv", filename=fn)
 
 
-@app.delete("/api/results/{fn}")
+@app.delete("/api/results/{fn:path}")
 def delete_result(fn: str):
     """결과 파일 삭제 + 출처 메타데이터 정리."""
     import json
+    from urllib.parse import unquote
+    fn = unquote(fn)
     p = RESULT_DIR / fn
     if not p.exists(): raise HTTPException(404, f"파일 없음: {fn}")
     p.unlink()

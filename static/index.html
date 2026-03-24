@@ -1114,7 +1114,9 @@ return(<div>
         <button className="bt bs" onClick={reloadFiles}>새로고침</button>
         <button className="bt bs" style={{borderColor:'rgba(239,68,68,.3)',color:'var(--red)'}} onClick={async()=>{
           if(!selFiles.size)return;if(!confirm(`선택된 ${selFiles.size}개 파일을 삭제하시겠습니까?`))return;
-          for(const fn of selFiles){try{await fetch(`${API}/api/results/${fn}`,{method:'DELETE'})}catch(e){}}
+          let ok=0,fail=0;
+          for(const fn of selFiles){try{const r=await fetch(`${API}/api/results/${encodeURIComponent(fn)}`,{method:'DELETE'});if(r.ok)ok++;else{fail++;console.error('삭제 실패:',fn,r.status)}}catch(e){fail++;console.error('삭제 에러:',fn,e)}}
+          if(fail)alert(`${ok}개 삭제, ${fail}개 실패`);
           setSelFiles(new Set());reloadFiles();
         }}>선택 삭제</button>
       </div>
