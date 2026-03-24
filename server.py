@@ -266,13 +266,11 @@ def select_cases(req: SelectRequest):
 
 def _classify_files(folder: Path) -> dict:
     files = {"br": [], "ams": [], "mx100": []}
-    skipped = []
     for f in sorted(folder.iterdir()):
         if not f.is_file(): continue
         n = f.name.lower()
-        # 생성 파일 제외
-        if any(tag in n for tag in ["_merged", "_calc", "_result", "_formula", ".cache.csv"]):
-            skipped.append(f.name)
+        # 생성 파일 제외 (대소문자 무관, 위치 무관)
+        if any(tag in n for tag in ["merged", "calc", "result", "formula", ".cache"]):
             continue
         if n.endswith((".xls", ".xlsx")) or "_temp." in n:
             files["mx100"].append(f.name)
@@ -280,9 +278,6 @@ def _classify_files(folder: Path) -> dict:
             files["ams"].append(f.name)
         elif n.endswith(".csv"):
             files["br"].append(f.name)
-    print(f"  [classify] {folder.name}: BR={[f for f in files['br']]} MX100={[f for f in files['mx100']]}")
-    if skipped:
-        print(f"  [classify] 제외: {skipped}")
     return files
 
 
