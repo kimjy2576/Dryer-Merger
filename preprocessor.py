@@ -73,6 +73,20 @@ def _align_datetime_to_base(df: pd.DataFrame, base_date) -> pd.DataFrame:
 # ══════════════════════════════════════════════
 #  BlackRose 전처리
 # ══════════════════════════════════════════════
+def _fuzzy_col_match(df_columns, wanted_columns):
+    """공백/언더스코어를 동일시하여 컬럼 매칭. 매칭된 실제 컬럼명 리스트 반환."""
+    # 정규화 맵: "HP Fan Q Current" → "hp_fan_q_current"
+    norm = lambda s: s.strip().replace(" ", "_").lower()
+    col_map = {norm(c): c for c in df_columns}  # 정규화 → 실제
+    result = []
+    for w in wanted_columns:
+        if w in df_columns:
+            result.append(w)  # 정확 매칭 우선
+        elif norm(w) in col_map:
+            result.append(col_map[norm(w)])  # 퍼지 매칭
+    return result
+
+
 def preprocess_blackrose(
     df_raw: pd.DataFrame,
     selected_columns: list,
@@ -80,7 +94,6 @@ def preprocess_blackrose(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     BlackRose 데이터 전처리.
-    [최적화] 시간 파싱에 str accessor 벡터화 사용 (.apply(lambda) 제거).
     """
     if df_raw.empty:
         dummy = pd.DataFrame({"Time": [0]})
@@ -95,7 +108,6 @@ def preprocess_blackrose(
         if candidate in df.columns:
             time_col = candidate; break
     if not time_col:
-        # 첫 번째 컬럼이 시간일 가능성
         first = df.columns[0]
         try:
             pd.to_datetime(df[first].iloc[0])
@@ -122,7 +134,8 @@ def preprocess_blackrose(
     df_main.rename(columns=column_mapping, inplace=True)
 
     add_columns = ["Time", "SubProcess", "RemainTime"]
-    df_main = df_main[[c for c in selected_columns if c in df_main.columns]]
+    matched = _fuzzy_col_match(df_main.columns, selected_columns)
+    df_main = df_main[matched]
     df_add  = df_sub[[c for c in add_columns if c in df_sub.columns]]
 
     return df_main, df_add
@@ -153,7 +166,7 @@ def preprocess_ams(
     if "SubProcess" in df.columns:
         df["SubProcess"] = df["SubProcess"].replace(subprocess_mapping)
 
-    available = [c for c in selected_columns if c in df.columns]
+    available = _fuzzy_col_match(df.columns, selected_columns)
     df = df[available].copy()
     df["Time"] = df["Time"].astype(str).str.slice(0, 8)
     return df

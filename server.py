@@ -502,40 +502,48 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
 def _apply_variable_settings(df: pd.DataFrame, var_settings: dict) -> pd.DataFrame:
     """
     변수별 Weight & Bias 적용 + 이름 변경 + 제외 컬럼 삭제.
-    var_settings: {"col_name": {"include": bool, "weight": float, "bias": float, "rename": str}}
-    수식: col = col * weight + bias
+    공백/언더스코어를 동일시하여 매칭.
     """
+    # 퍼지 매칭 맵: 설정 키 → 실제 컬럼명
+    norm = lambda s: s.strip().replace(" ", "_").lower()
+    col_map = {norm(c): c for c in df.columns}
+    def resolve(key):
+        if key in df.columns: return key
+        return col_map.get(norm(key))
+
     # 1. W&B 적용 (include=True인 것만)
     for col, s in var_settings.items():
-        if col not in df.columns:
-            continue
-        if not s.get("include", True):
-            continue
+        actual = resolve(col)
+        if not actual: continue
+        if not s.get("include", True): continue
         w = s.get("weight", 1.0)
         b = s.get("bias", 0.0)
         if w != 1.0 or b != 0.0:
-            if pd.api.types.is_numeric_dtype(df[col]):
-                df[col] = df[col] * w + b
+            if pd.api.types.is_numeric_dtype(df[actual]):
+                df[actual] = df[actual] * w + b
 
-    # 2. 이름 변경 (rename이 있고 원본과 다르면)
+    # 2. 이름 변경
     rename_map = {}
     for col, s in var_settings.items():
-        if col not in df.columns:
-            continue
-        if not s.get("include", True):
-            continue
+        actual = resolve(col)
+        if not actual: continue
+        if not s.get("include", True): continue
         rn = s.get("rename", "")
-        if rn and rn != col and rn not in df.columns:
-            rename_map[col] = rn
+        if rn and rn != actual and rn not in df.columns:
+            rename_map[actual] = rn
     if rename_map:
         df = df.rename(columns=rename_map)
 
     # 3. 제외 컬럼 삭제 (Time, Time_sec, Time_min은 항상 유지)
     protected = {"Time", "Time_sec", "Time_min"}
-    drop_cols = [col for col, s in var_settings.items()
-                 if not s.get("include", True) and col in df.columns and col not in protected]
+    drop_cols = []
+    for col, s in var_settings.items():
+        actual = resolve(col)
+        if not actual: continue
+        if not s.get("include", True) and actual not in protected:
+            drop_cols.append(actual)
     if drop_cols:
-        df = df.drop(columns=drop_cols)
+        df = df.drop(columns=drop_cols, errors="ignore")
 
     return df
 
