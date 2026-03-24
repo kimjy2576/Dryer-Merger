@@ -790,8 +790,8 @@ def get_columns(fn: str):
 # ══════════════════════════════════════════════
 CALC_VARIABLES = [
     # 압력 (필수)
-    {"key": "P_Comp_Out",      "label": "압축기 토출 압력",      "unit": "barg", "category": "압력", "required": True,  "default_match": ["P_Comp_Out", "P_Cond_In"]},
-    {"key": "P_Comp_In",       "label": "압축기 흡입 압력",      "unit": "barg", "category": "압력", "required": True,  "default_match": ["P_Comp_In", "P_Eva_Out"]},
+    {"key": "P_Comp_Out",      "label": "압축기 토출 압력",      "unit": "barg", "category": "압력", "required": False,  "default_match": ["P_Comp_Out", "P_Cond_In"]},
+    {"key": "P_Comp_In",       "label": "압축기 흡입 압력",      "unit": "barg", "category": "압력", "required": False,  "default_match": ["P_Comp_In", "P_Eva_Out"]},
     {"key": "P_Cond_Out",      "label": "응축기 출구 압력",      "unit": "barg", "category": "압력", "required": False, "default_match": ["P_Cond_Out"]},
     {"key": "P_Eva_In",        "label": "증발기 입구 압력",      "unit": "barg", "category": "압력", "required": False, "default_match": ["P_Eva_In"]},
     # 냉매 온도
