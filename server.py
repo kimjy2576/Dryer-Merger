@@ -269,24 +269,15 @@ def _classify_files(folder: Path) -> dict:
     for f in sorted(folder.iterdir()):
         if not f.is_file(): continue
         n = f.name.lower()
-        # 생성파일 제외: _merged, _calc, _result, _formula, .cache.csv
-        if any(tag in n for tag in ["_merged", "_calc", "_result", "_formula", ".cache.csv"]):
-            # 오래된 캐시 삭제 (이전 버전에서 잘못 생성됐을 수 있음)
-            if ".cache.csv" in n:
-                try: f.unlink(); print(f"  [캐시 삭제] {f.name}")
-                except: pass
+        # _merged, _calc, _result, _formula 파일은 원본이 아니므로 제외
+        if any(tag in n for tag in ["_merged", "_calc", "_result", "_formula"]):
             continue
-        if n.endswith((".xls", ".xlsx")):
-            files["mx100"].append(f.name)
-        elif "_temp." in n and not n.endswith(".csv"):
+        if n.endswith((".xls", ".xlsx")) or "_temp." in n:
             files["mx100"].append(f.name)
         elif "_ams.csv" in n or "_ams_" in n:
             files["ams"].append(f.name)
         elif n.endswith(".csv"):
             files["br"].append(f.name)
-    print(f"  [classify] {folder.name}: BR={len(files['br'])} AMS={len(files['ams'])} MX100={len(files['mx100'])}")
-    if files["mx100"]:
-        print(f"    MX100 파일: {files['mx100']}")
     return files
 
 
@@ -312,9 +303,6 @@ def scan_columns(req: BrowseRequest):
     # 첫 번째 케이스에서 샘플 읽기
     for case_name, cf in case_files.items():
         case_dir = category / case_name
-        # 최신 파일 목록으로 재분류 (세션 생성 이후 파일이 변했을 수 있음)
-        cf = _classify_files(case_dir)
-        print(f"  [scan-columns] {case_name}: BR={cf['br']} AMS={cf['ams']} MX100={cf['mx100']}")
         # BR
         if cf["br"]:
             try:
@@ -341,22 +329,14 @@ def scan_columns(req: BrowseRequest):
             except: pass
         # MX100
         if cf["mx100"]:
-            fp = case_dir / cf["mx100"][0]
-            print(f"  [scan] MX100 파일: {fp.name}")
             try:
-                df = pd.read_excel(fp, skiprows=24, header=0, nrows=10)
-                df.columns = [str(c).strip() for c in df.columns]
-                # Unnamed 컬럼 제거
-                df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
-                print(f"  [scan] MX100 컬럼({len(df.columns)}개): {list(df.columns)}")
+                fp = case_dir / cf["mx100"][0]
+                df = pd.read_excel(fp, skiprows=24, header=0, nrows=5)
+                df.columns = [c.strip() for c in df.columns]
                 for c in df.columns:
                     if c not in all_columns:
                         all_columns[c] = {"source": "MX100", "dtype": str(df[c].dtype)}
-                print(f"  [scan] MX100 성공! {len(df.columns)}개 변수 추가")
-            except Exception as e:
-                print(f"  [scan] MX100 읽기 실패: {e}")
-        else:
-            print(f"  [scan] MX100 파일 없음")
+            except: pass
         break  # 첫 번째 케이스만
 
     return {
@@ -892,17 +872,21 @@ def _read(ap, bp, mp, dt):
         cache_path = mp + ".cache.csv"
         if os.path.exists(cache_path) and os.path.getmtime(cache_path) >= os.path.getmtime(mp):
             df_m = pd.read_csv(cache_path)
-            df_m.columns = [str(c).strip() for c in df_m.columns]
+            df_m.columns = [c.strip() for c in df_m.columns]
         else:
             try:
                 df_m = pd.read_excel(mp, skiprows=24, header=0)
-                df_m.columns = [str(c).strip() for c in df_m.columns]
-                # Unnamed 컬럼 제거
-                df_m = df_m.loc[:, ~df_m.columns.str.startswith('Unnamed')]
-                print(f"  [MX100] 읽기 성공: {len(df_m)}행×{len(df_m.columns)}열")
-            except Exception as e:
-                print(f"  [MX100] 읽기 실패: {e}")
-                df_m = pd.DataFrame()
+                df_m.columns = [c.strip() for c in df_m.columns]
+            except Exception as e1:
+                try:
+                    df_m = pd.read_excel(mp, skiprows=24, header=[0,1])
+                    cols = [c[1] if "Unnamed" in str(c[0]) else c[0] for c in df_m.columns]
+                    df_m.columns = [c.strip() for c in cols]
+                    if "Date" in df_m.columns and "Time" in df_m.columns:
+                        df_m["Time"] = df_m["Date"].astype(str)+" "+df_m["Time"].astype(str)
+                        df_m.drop(columns=["Date"], inplace=True, errors="ignore")
+                except Exception as e2:
+                    print(f"[MX100] 읽기 실패: {e1} / {e2}")
             # 캐시 저장
             if not df_m.empty:
                 try: df_m.to_csv(cache_path, index=False)
