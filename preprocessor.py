@@ -87,7 +87,7 @@ def preprocess_blackrose(
         return dummy.copy(), dummy.copy()
 
     df = df_raw.copy()
-    df.columns = [col.strip().replace(" ", "", 1) for col in df.columns]
+    df.columns = [col.strip() for col in df.columns]
 
     # LogTime 폴백: 다양한 시간 컬럼명 지원
     time_col = None
