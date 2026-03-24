@@ -205,39 +205,65 @@ def sync_and_merge(
         return pd.DataFrame({"Time": [0]})
 
     start_time = parse_flexible_datetime(ref_df["Time"].iloc[0])
+    print(f"  [sync] 기준시간: {start_time}, data_time={data_time}")
 
-    # 중복 제거 + 시간 변환 (Time 없는 df 스킵)
+    # 중복 제거 + 시간 변환
     clean_dfs = []
-    ref_aligned = False
-    for df in dfs:
+    for i, df in enumerate(dfs):
         if df.empty or "Time" not in df.columns:
             continue
+        df = df.copy()
         df = df.drop_duplicates(subset="Time", keep="first").reset_index(drop=True)
         _align_datetime_to_base(df, start_time)
-        if df is ref_df:
-            ref_aligned = True
-        clean_dfs.append(df)
 
-    # ref_df가 dfs에 없었으면 별도 정렬
-    if not ref_aligned:
-        ref_df_copy = ref_df.drop_duplicates(subset="Time", keep="first").reset_index(drop=True)
-        _align_datetime_to_base(ref_df_copy, start_time)
-        end_time = ref_df_copy["Time"].iloc[-1]
-    else:
-        end_time = ref_df["Time"].iloc[-1]
+        # Time을 datetime으로 강제
+        if not pd.api.types.is_datetime64_any_dtype(df["Time"]):
+            df["Time"] = pd.to_datetime(df["Time"], errors="coerce")
+
+        # NaT/중복 제거
+        df = df.dropna(subset=["Time"]).reset_index(drop=True)
+        df = df[~df["Time"].duplicated(keep="first")].reset_index(drop=True)
+
+        if len(df) > 0:
+            print(f"  [sync] df[{i}]: {len(df)}행 {len(df.columns)}열, Time={df['Time'].iloc[0]}~{df['Time'].iloc[-1]}")
+            clean_dfs.append(df)
 
     if not clean_dfs:
         return pd.DataFrame({"Time": [0]})
 
-    # 1초 간격 시간축
-    time_index = pd.date_range(start=start_time, end=end_time, freq="s", name="Time")
+    # end_time: 첫 번째 clean_df에서
+    end_time = clean_dfs[0]["Time"].iloc[-1]
 
-    # [최적화] 모든 df를 한번에 concat 후 groupby reindex
+    # 1초 간격 시간축
+    try:
+        time_index = pd.date_range(start=start_time, end=end_time, freq="s", name="Time")
+        print(f"  [sync] time_index: {len(time_index)}초")
+    except Exception as e:
+        print(f"  [sync] date_range 실패: {e}")
+        return pd.DataFrame({"Time": [0]})
+
+    # reindex (각 df별 try/except)
     resampled = []
-    for df in clean_dfs:
-        rs = df.set_index("Time").reindex(time_index, method=None)
-        rs = rs.ffill(limit=30).bfill(limit=30)
-        resampled.append(rs)
+    for di, df in enumerate(clean_dfs):
+        try:
+            if not df["Time"].is_monotonic_increasing:
+                df = df.sort_values("Time").reset_index(drop=True)
+            rs = df.set_index("Time").reindex(time_index, method=None)
+            rs = rs.ffill(limit=30).bfill(limit=30)
+            resampled.append(rs)
+        except Exception as e:
+            print(f"  [sync] reindex 실패 df[{di}]: {e}")
+            try:
+                df = df.sort_values("Time")
+                dummy = pd.DataFrame({"Time": time_index})
+                merged_one = pd.merge_asof(dummy, df, on="Time", direction="nearest", tolerance=pd.Timedelta("30s"))
+                resampled.append(merged_one.set_index("Time"))
+                print(f"  [sync] df[{di}] merge_asof 폴백 성공")
+            except Exception as e2:
+                print(f"  [sync] df[{di}] 폴백도 실패: {e2}")
+
+    if not resampled:
+        return pd.DataFrame({"Time": [0]})
 
     # 병합 (중복 컬럼 제거)
     merged = pd.concat(resampled, axis=1)
@@ -260,6 +286,7 @@ def sync_and_merge(
     if not merged["Time"].is_monotonic_increasing:
         merged = merged.sort_values("Time").reset_index(drop=True)
 
+    print(f"  [sync] 최종: {len(merged)}행×{len(merged.columns)}열")
     return merged
 
 
