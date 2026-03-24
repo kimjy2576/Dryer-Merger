@@ -266,11 +266,13 @@ def select_cases(req: SelectRequest):
 
 def _classify_files(folder: Path) -> dict:
     files = {"br": [], "ams": [], "mx100": []}
+    skipped = []
     for f in sorted(folder.iterdir()):
         if not f.is_file(): continue
         n = f.name.lower()
-        # _merged, _calc, _result, _formula 파일은 원본이 아니므로 제외
-        if any(tag in n for tag in ["_merged", "_calc", "_result", "_formula"]):
+        # 생성 파일 제외
+        if any(tag in n for tag in ["_merged", "_calc", "_result", "_formula", ".cache.csv"]):
+            skipped.append(f.name)
             continue
         if n.endswith((".xls", ".xlsx")) or "_temp." in n:
             files["mx100"].append(f.name)
@@ -278,6 +280,9 @@ def _classify_files(folder: Path) -> dict:
             files["ams"].append(f.name)
         elif n.endswith(".csv"):
             files["br"].append(f.name)
+    print(f"  [classify] {folder.name}: BR={[f for f in files['br']]} MX100={[f for f in files['mx100']]}")
+    if skipped:
+        print(f"  [classify] 제외: {skipped}")
     return files
 
 
@@ -480,6 +485,9 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                 out_name = f"{prefix}_{i+1}_merged.csv"
                 result_path = RESULT_DIR / out_name
                 merged.to_csv(result_path, index=False)
+                import shutil
+                try: shutil.copy2(str(result_path), str(case_dir / out_name))
+                except: pass
                 results.append(out_name)
                 _log(sid, f"  💾 저장: {time.perf_counter()-t1:.1f}s")
 
@@ -737,9 +745,20 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
                 status = "수렴" if conv["converged"] else "미수렴"
                 _log(sid, f"  수렴 반복: {conv['iterations']}회, 잔차={conv['residual']:.6f} ({status})")
 
-            # _calc.csv 저장 (results 폴더에만)
+            # _calc.csv 저장
             out_name = fn.replace("_merged.csv", "_calc.csv")
             df_calc.to_csv(RESULT_DIR / out_name, index=False)
+
+            # 원본 폴더에도 저장
+            cat_path = s.get("category_path")
+            if cat_path:
+                for case_name in s.get("case_files", {}):
+                    if case_name.replace(" ", "_") in fn or fn.startswith(case_name[:10]):
+                        case_dir = Path(cat_path) / case_name
+                        if case_dir.exists():
+                            df_calc.to_csv(case_dir / out_name, index=False)
+                            _log(sid, f"  → {case_dir / out_name}")
+                        break
 
             results.append(out_name)
             el = time.perf_counter() - t0
