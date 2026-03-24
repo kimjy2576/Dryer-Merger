@@ -339,23 +339,30 @@ def scan_columns(req: BrowseRequest):
         if cf["mx100"]:
             fp = case_dir / cf["mx100"][0]
             mx_ok = False
+            print(f"  [scan] MX100 파일: {fp}")
+            print(f"  [scan] MX100 존재: {fp.exists()}, 크기: {fp.stat().st_size if fp.exists() else 'N/A'}bytes")
             # skiprows 여러 값 시도 (MX100 형식에 따라 다름)
             for skip in [24, 0, 1, 10]:
                 try:
                     df = pd.read_excel(fp, skiprows=skip, header=0, nrows=5)
                     df.columns = [c.strip() for c in df.columns]
+                    num_cols = df.select_dtypes(include='number').shape[1]
+                    print(f"  [scan] skiprows={skip}: {len(df.columns)}col, num={num_cols}, cols={list(df.columns[:5])}...")
                     # 유효 검증: 컬럼이 2개 이상이고 숫자 컬럼 존재
-                    if len(df.columns) >= 2 and df.select_dtypes(include='number').shape[1] >= 1:
+                    if len(df.columns) >= 2 and num_cols >= 1:
                         for c in df.columns:
                             if c not in all_columns:
                                 all_columns[c] = {"source": "MX100", "dtype": str(df[c].dtype)}
                         mx_ok = True
-                        print(f"  [scan] MX100 성공: {fp.name}, skiprows={skip}, {len(df.columns)}col")
+                        print(f"  [scan] MX100 성공! {len(df.columns)}개 컬럼 추가")
                         break
                 except Exception as e:
+                    print(f"  [scan] skiprows={skip} 실패: {e}")
                     continue
             if not mx_ok:
-                print(f"  [scan] MX100 실패: {fp.name} — 모든 skiprows 시도 실패")
+                print(f"  [scan] MX100 최종 실패: {fp.name}")
+        else:
+            print(f"  [scan] MX100 파일 없음")
         break  # 첫 번째 케이스만
 
     return {
