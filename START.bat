@@ -56,11 +56,11 @@ echo.
 
 :: 패키지 설치
 echo [2/4] 필수 패키지 확인 중...
-python -c "import fastapi, uvicorn, pandas, numpy, CoolProp, yaml, scipy" >nul 2>&1
+python -c "import fastapi, uvicorn, pandas, numpy, CoolProp, yaml, scipy, xlrd, openpyxl" >nul 2>&1
 if %errorlevel% neq 0 (
     echo       패키지 설치 중... (최초 1회, 2-3분 소요)
     echo.
-    pip install fastapi uvicorn[standard] pyyaml pandas numpy CoolProp scipy --quiet 2>nul
+    pip install fastapi uvicorn[standard] pyyaml pandas numpy CoolProp scipy openpyxl xlrd --quiet 2>nul
     if %errorlevel% neq 0 (
         echo.
         echo [오류] 패키지 설치 실패!
