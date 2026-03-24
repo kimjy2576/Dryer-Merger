@@ -14,7 +14,7 @@ from pathlib import Path
 # ── 설정 ──
 SRC_DIR = Path(__file__).parent           # 원본 소스 위치
 DIST_DIR = SRC_DIR / "dist_release"       # 난독화 결과
-DIST_REPO = "https://github.com/kimjy2576/HPWD-DataManager.git"
+DIST_REPO = "https://github.com/kimjy2576/Dryer-Merger.git"
 
 # 난독화할 Python 파일
 PY_FILES = [
