@@ -596,12 +596,18 @@ return(<div>
         <button className="bt bs" onClick={()=>setSelFiles(new Set(results.map(r=>r.name)))}>전체</button>
         <button className="bt bs" onClick={()=>setSelFiles(new Set())}>해제</button>
         <button className="bt bs" onClick={loadResults}>새로고침</button>
+        <button className="bt bs" style={{borderColor:'rgba(239,68,68,.3)',color:'var(--red)'}} onClick={async()=>{
+          if(!selFiles.size)return;if(!confirm(`선택된 ${selFiles.size}개 파일을 삭제하시겠습니까?`))return;
+          for(const fn of selFiles){try{await fetch(`${API}/api/results/${encodeURIComponent(fn)}`,{method:'DELETE'})}catch(e){}}
+          setSelFiles(new Set());loadResults();
+        }}>선택 삭제</button>
       </div>
     </div>
     {results.length>0?<div className="file-sel">{results.map(f=><div key={f.name} className="file-sel-item">
       <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>togFile(f.name)}/>
       <span style={{flex:1}}>{f.name}</span>
       <span className="it">{(f.size/1024).toFixed(0)} KB</span>
+      <button onClick={async()=>{if(!confirm(`"${f.name}" 삭제?`))return;try{await fetch(`${API}/api/results/${encodeURIComponent(f.name)}`,{method:'DELETE'})}catch(e){}setSelFiles(p=>{const s=new Set(p);s.delete(f.name);return s});loadResults()}} style={{fontSize:9,border:0,background:0,color:'var(--red)',cursor:'pointer',padding:'0 4px'}}>×</button>
     </div>)}</div>:<div className="it" style={{padding:16,textAlign:'center'}}>Merged 파일이 없습니다. 아래 경로에서 불러오거나 Merge를 먼저 실행하세요.</div>}
   </div>
 
