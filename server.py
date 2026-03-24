@@ -876,30 +876,19 @@ def _read(ap, bp, mp, dt):
     if ap and os.path.exists(ap):
         df_a = pd.read_csv(ap, encoding="utf-8", skiprows=[0]); df_a.columns=[c.strip() for c in df_a.columns]
     if mp and os.path.exists(mp):
-        # MX100 캐싱: .xls → .csv 캐시 (read_excel이 느려서)
-        cache_path = mp + ".cache.csv"
-        if os.path.exists(cache_path) and os.path.getmtime(cache_path) >= os.path.getmtime(mp):
-            df_m = pd.read_csv(cache_path)
+        try:
+            df_m = pd.read_excel(mp, skiprows=24, header=0)
             df_m.columns = [c.strip() for c in df_m.columns]
-        else:
+        except Exception as e1:
             try:
-                df_m = pd.read_excel(mp, skiprows=24, header=0)
-                df_m.columns = [c.strip() for c in df_m.columns]
-            except Exception as e1:
-                try:
-                    df_m = pd.read_excel(mp, skiprows=24, header=[0,1])
-                    cols = [c[1] if "Unnamed" in str(c[0]) else c[0] for c in df_m.columns]
-                    df_m.columns = [c.strip() for c in cols]
-                    if "Date" in df_m.columns and "Time" in df_m.columns:
-                        df_m["Time"] = df_m["Date"].astype(str)+" "+df_m["Time"].astype(str)
-                        df_m.drop(columns=["Date"], inplace=True, errors="ignore")
-                except Exception as e2:
-                    print(f"[MX100] 읽기 실패: {e1} / {e2}")
-            # 캐시 저장
-            if not df_m.empty:
-                try: df_m.to_csv(cache_path, index=False)
-                except: pass
-    return df_a, df_b, df_m
+                df_m = pd.read_excel(mp, skiprows=24, header=[0,1])
+                cols = [c[1] if "Unnamed" in str(c[0]) else c[0] for c in df_m.columns]
+                df_m.columns = [c.strip() for c in cols]
+                if "Date" in df_m.columns and "Time" in df_m.columns:
+                    df_m["Time"] = df_m["Date"].astype(str)+" "+df_m["Time"].astype(str)
+                    df_m.drop(columns=["Date"], inplace=True, errors="ignore")
+            except Exception as e2:
+                print(f"[MX100] 읽기 실패: {e1} / {e2}")
     return df_a, df_b, df_m
 
 def _log(sid, msg):
