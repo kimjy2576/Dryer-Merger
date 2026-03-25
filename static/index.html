@@ -65,6 +65,7 @@ return(<div className="app"><div className="hdr" style={{display:'flex',alignIte
   <h1>HPWD Data Manager</h1>
   <span className="bdg">{verDate||'...'}</span>
   <button onClick={doUpdate} disabled={updating} style={{fontSize:10,padding:'3px 10px',background:updating?'var(--bg3)':'rgba(59,130,246,.06)',border:'1px solid rgba(59,130,246,.25)',color:updating?'var(--tx3)':'#2563eb',borderRadius:5,cursor:updating?'wait':'pointer'}}>{updating?'⏳ 업데이트 중...':'🔄 업데이트'}</button>
+  <span style={{marginLeft:'auto',fontSize:10,color:'var(--tx3)'}}>리빙솔루션사업부 세탁기선행플랫폼Task 김진영 선임</span>
 </div>
 <div className="tabs">
   <button className={`tb ${tab==='merge'?'on':''}`} onClick={()=>setTab('merge')}>Merge</button>
@@ -79,7 +80,7 @@ return(<div className="app"><div className="hdr" style={{display:'flex',alignIte
 <div style={{display:tab==='viewer'?'block':'none'}}><ViewerTab cfg={cfg} autoLoad={viewerAutoLoad} clearAutoLoad={()=>setViewerAutoLoad(null)}/></div>
 <div style={{display:tab==='config'?'block':'none'}}>{cfg&&<CfgTab cfg={cfg} setCfg={setCfg}/>}</div>
 <div style={{marginTop:24,padding:'12px 16px',textAlign:'center',fontSize:10,color:'var(--tx3)',borderTop:'1px solid var(--bd)',opacity:.7}}>
-  © 2025 LG Electronics — 건조기선행연구팀 김진영 | HPWD Data Manager | 무단 복제 및 배포 금지
+  © 2025 LG Electronics — 리빙솔루션사업부 세탁기선행플랫폼Task 김진영 선임 | HPWD Data Manager
 </div>
 </div>)}
 
