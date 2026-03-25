@@ -327,14 +327,13 @@ def scan_columns(req: BrowseRequest):
         # 최신 파일 목록으로 재분류
         cf = _classify_files(case_dir, fr, active)
 
-        def _scan_csv(src_key, label, skip=1, enc_list=("cp949","utf-8")):
+        def _scan_csv(src_key, label, skip=1):
             if not cf.get(src_key): return
             fp = case_dir / cf[src_key][0]
             rule = fr.get(src_key, {})
             skip_r = rule.get("skip_rows", skip)
-            enc_l = [rule.get("encoding")] if rule.get("encoding") else list(enc_list)
             sep = '\t' if fp.suffix.lower() == '.tsv' else ','
-            for enc in enc_l:
+            for enc in ["utf-8", "cp949", "euc-kr", "latin1"]:
                 try:
                     skiparg = list(range(skip_r)) if skip_r > 0 else None
                     df = pd.read_csv(fp, encoding=enc, sep=sep, skiprows=skiparg, nrows=5)
@@ -345,12 +344,9 @@ def scan_columns(req: BrowseRequest):
                     break
                 except: continue
 
-        # BR
-        _scan_csv("br", "BR", skip=1, enc_list=("cp949","utf-8"))
-        # AMS
-        _scan_csv("ams", "AMS", skip=1, enc_list=("utf-8",))
-        # NI DAQ
-        _scan_csv("nidaq", "NIDAQ", skip=0, enc_list=("utf-8",))
+        _scan_csv("br", "BR", skip=1)
+        _scan_csv("ams", "AMS", skip=1)
+        _scan_csv("nidaq", "NIDAQ", skip=0)
         # MX100 (Excel)
         if cf.get("mx100"):
             try:
@@ -944,19 +940,22 @@ def auto_map(req: BrowseRequest):
 def _read(ap, bp, mp, dt, np_=None, file_rules=None):
     df_a, df_b, df_m, df_n = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     fr = file_rules or {}
-    if bp and os.path.exists(bp):
-        enc_l = [fr.get("br",{}).get("encoding","cp949")] if fr.get("br",{}).get("encoding") else ["cp949","utf-8"]
-        skip = fr.get("br",{}).get("skip_rows",1)
-        sep = '\t' if bp.lower().endswith('.tsv') else ','
-        for enc in enc_l:
-            try: df_b = pd.read_csv(bp, encoding=enc, sep=sep, skiprows=list(range(skip)) if skip else None); df_b.columns=[c.strip() for c in df_b.columns]; break
+    def _read_csv(path, src_key, default_skip=1):
+        """csv/tsv 읽기 — cp949/utf-8 자동 폴백"""
+        sep = '\t' if path.lower().endswith('.tsv') else ','
+        skip = fr.get(src_key,{}).get("skip_rows", default_skip)
+        skiparg = list(range(skip)) if skip else None
+        for enc in ["utf-8", "cp949", "euc-kr", "latin1"]:
+            try:
+                df = pd.read_csv(path, encoding=enc, sep=sep, skiprows=skiparg)
+                df.columns = [c.strip() for c in df.columns]
+                return df
             except: continue
+        return pd.DataFrame()
+    if bp and os.path.exists(bp):
+        df_b = _read_csv(bp, "br", 1)
     if ap and os.path.exists(ap):
-        enc = fr.get("ams",{}).get("encoding","utf-8")
-        skip = fr.get("ams",{}).get("skip_rows",1)
-        sep = '\t' if ap.lower().endswith('.tsv') else ','
-        try: df_a = pd.read_csv(ap, encoding=enc, sep=sep, skiprows=list(range(skip)) if skip else None); df_a.columns=[c.strip() for c in df_a.columns]
-        except: pass
+        df_a = _read_csv(ap, "ams", 1)
     if mp and os.path.exists(mp):
         skip = fr.get("mx100",{}).get("skip_rows",24)
         try:
@@ -973,14 +972,7 @@ def _read(ap, bp, mp, dt, np_=None, file_rules=None):
             except Exception as e2:
                 print(f"[MX100] 읽기 실패: {e1} / {e2}")
     if np_ and os.path.exists(np_):
-        enc = fr.get("nidaq",{}).get("encoding","utf-8")
-        skip = fr.get("nidaq",{}).get("skip_rows",0)
-        try:
-            sep = '\t' if np_.lower().endswith('.tsv') else ','
-            df_n = pd.read_csv(np_, encoding=enc, sep=sep, skiprows=list(range(skip)) if skip else None)
-            df_n.columns = [c.strip() for c in df_n.columns]
-        except Exception as e:
-            print(f"[NIDAQ] 읽기 실패: {e}")
+        df_n = _read_csv(np_, "nidaq", 0)
     return df_a, df_b, df_m, df_n
 
 def _log(sid, msg):
