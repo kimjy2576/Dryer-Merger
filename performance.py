@@ -730,6 +730,8 @@ def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf):
     # 열전달량
     out["Qrefr_Cond_recalc"] = flow["Q_cond"]
     out["Qrefr_Eva_recalc"] = flow["Q_eva_filtered"]
+    out["Qrefr_Cond"] = flow["Q_cond"]
+    out["Qrefr_Eva"] = flow["Q_eva"]
     out["Q_sen_eva"] = perf["Q_sen"]
     out["Q_lat_eva"] = perf["Q_lat"]
 

@@ -949,7 +949,7 @@ const VW_CATS=[
   {name:'유량',rows:3,cols:2,vars:['Flow_air_Cond_CMM','Flow_Mair_Cond_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH','Water_calc_gM','Water_calc_kg']},
   {name:'성능지표',rows:3,cols:3,vars:['COP_heating','SMER','COP_cooling','COP_sys_heating','COP_sys_cooling','Factor_LFH','Ratio_Compression','Factor_SFH']},
   {name:'소비전력',rows:2,cols:3,vars:['E_WD','E_Comp','E_Fan','Po_WD','Po_Comp','Po_Fan']},
-  {name:'열전달',rows:3,cols:3,vars:['Qrefr_Eva_recalc','Qrefr_Cond_recalc','Q_sen_eva','Q_lat_eva','Q_Drum_Sen','Q_Drum_Lat','Q_Drum_Total','Qrefr_Eva_recalc','Qrefr_Cond_recalc']},
+  {name:'열전달',rows:3,cols:3,vars:['Qrefr_Eva_recalc','Qrefr_Cond_recalc','Q_sen_eva','Q_lat_eva','Q_Drum_Sen','Q_Drum_Lat','Q_Drum_Total','Qrefr_Eva','Qrefr_Cond']},
   {name:'제어지표',rows:3,cols:2,vars:['Ctrl_Comp_Hz','HP_F_Temp','HP_EEV_Position','HP_FanSpeed','RMC_calc','HP Fan Q Current']},
 ];
 
@@ -1264,7 +1264,8 @@ const VL={
   SMER:'에너지효율 SMER [kg/kWh]',Factor_SFH:'현열비 [-]',Factor_LFH:'잠열비 [-]',
   Ratio_Compression:'압축비 [-]',Drum_SFH:'드럼 현열비 [-]',Drum_LFH:'드럼 잠열비 [-]',
   // 열전달
-  Qrefr_Eva_recalc:'증발기 열량 [W]',Qrefr_Cond_recalc:'응축기 열량 [W]',
+  Qrefr_Eva_recalc:'증발기 냉매 열량 (보정) [W]',Qrefr_Cond_recalc:'응축기 냉매 열량 (보정) [W]',
+  Qrefr_Eva:'증발기 냉매 열량 [W]',Qrefr_Cond:'응축기 냉매 열량 [W]',
   Q_sen_eva:'증발기 현열 [W]',Q_lat_eva:'증발기 잠열 [W]',
   Q_Drum_Sen:'드럼 현열 [W]',Q_Drum_Lat:'드럼 잠열 [W]',Q_Drum_Total:'드럼 총 열량 [W]',
   // 엔탈피/엔트로피
