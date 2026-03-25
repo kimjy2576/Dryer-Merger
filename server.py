@@ -269,9 +269,9 @@ def _classify_files(folder: Path, file_rules: dict = None, active_sources: list 
     if not file_rules:
         file_rules = {
             "mx100": {"extensions": [".xls", ".xlsx"], "include_patterns": []},
-            "nidaq": {"extensions": [".csv", ".tsv"], "include_patterns": []},
-            "ams":   {"extensions": [".csv", ".tsv"], "include_patterns": ["_ams"]},
-            "br":    {"extensions": [".csv", ".tsv"], "include_patterns": []},
+            "nidaq": {"extensions": [".tsv"], "include_patterns": []},
+            "ams":   {"extensions": [".csv"], "include_patterns": ["_ams"]},
+            "br":    {"extensions": [".csv"], "include_patterns": []},
         }
     # active_sources 필터: ["BR","MX100"] → {"br","mx100"}
     if active_sources:

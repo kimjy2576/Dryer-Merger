@@ -33,19 +33,19 @@ file_rules:
     skip_rows: 24
     encoding: ""
   nidaq:
-    extensions: [".csv", ".tsv"]
+    extensions: [".tsv"]
     include_patterns: []
     exclude_patterns: []
     skip_rows: 0
     encoding: "utf-8"
   ams:
-    extensions: [".csv", ".tsv"]
+    extensions: [".csv"]
     include_patterns: ["_ams"]
     exclude_patterns: []
     skip_rows: 1
     encoding: "utf-8"
   br:
-    extensions: [".csv", ".tsv"]
+    extensions: [".csv"]
     include_patterns: []
     exclude_patterns: []
     skip_rows: 1
