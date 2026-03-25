@@ -796,6 +796,45 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
             results.append(out_name)
             el = time.perf_counter() - t0
             _log(sid, f"  → {out_name} ({el:.1f}초)")
+
+            # ── Formula 자동 적용 ──
+            try:
+                import json
+                formula_path = BASE_DIR / "config" / "formula_default.json"
+                if formula_path.exists():
+                    fdata = json.loads(formula_path.read_text("utf-8"))
+                    overrides = fdata.get("overrides", {})
+                    custom = fdata.get("custom", [])
+                    # BUILTIN + custom 수식 수집
+                    all_formulas = []
+                    for c in custom:
+                        if c.get("enabled", True) and c.get("name") and c.get("expr"):
+                            all_formulas.append({"name": c["name"], "expr": c["expr"], "enabled": True})
+                    if all_formulas:
+                        n_applied = 0
+                        for f in all_formulas:
+                            try:
+                                dangerous = ["import", "exec", "eval", "__", "open", "os.", "sys."]
+                                if any(d in f["expr"].lower() for d in dangerous):
+                                    continue
+                                df_calc[f["name"]] = df_calc.eval(f["expr"])
+                                n_applied += 1
+                            except:
+                                pass
+                        if n_applied:
+                            # _calc.csv에 formula 변수 포함하여 덮어쓰기
+                            df_calc.to_csv(RESULT_DIR / out_name, index=False)
+                            if cat_path:
+                                for case_name in s.get("case_files", {}):
+                                    if case_name.replace(" ", "_") in fn or fn.startswith(case_name[:10]):
+                                        case_dir = Path(cat_path) / case_name
+                                        if case_dir.exists():
+                                            df_calc.to_csv(case_dir / out_name, index=False)
+                                        break
+                            _log(sid, f"  🧪 Formula: {n_applied}개 수식 적용")
+            except Exception as fe:
+                _log(sid, f"  [Formula 경고] {fe}")
+
             s["progress"] = int((i + 1) / total * 100)
 
         s.update(calc_results=results, status="done", progress=100)
