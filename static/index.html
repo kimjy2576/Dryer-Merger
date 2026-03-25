@@ -703,7 +703,8 @@ return(<div>
         // merged + calc 파일명 수집
         const calcFiles=st.calc_results||[];
         const mergedFiles=(st.merge_results||[]).length?st.merge_results:calcFiles.map(f=>f.replace('_calc.csv','_merged.csv'));
-        const allFiles=[...new Set([...calcFiles,...mergedFiles])];
+        const formulaFiles=calcFiles.map(f=>f.replace('_calc.csv','_calc_formula.csv'));
+        const allFiles=[...new Set([...calcFiles,...mergedFiles,...formulaFiles])];
         setViewerAutoLoad(allFiles);
         setTab('viewer');
       }} style={{background:'var(--teal)',borderColor:'var(--teal)'}}>📊 Viewer에서 보기 →</button>
@@ -1011,19 +1012,29 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
   }else{
     // auto: 1차 source_dir, 2차 base명으로 그룹핑
     const fileInfo=new Map();files.forEach(f=>fileInfo.set(f.name,f));
+    const getBase=fn=>fn.replace(/_calc_formula\.csv$/,'').replace(/_formula\.csv$/,'').replace(/_calc\.csv$/,'').replace(/_merged\.csv$/,'').replace(/\.csv$/,'');
     const baseMap=new Map(); // groupKey → [fn]
     for(const fn of selFiles){
       const f=fileInfo.get(fn);
       let key;
       if(f?.source_dir){
-        // source_dir 있으면 폴더 기준
         key='dir:'+f.source_dir;
       }else{
-        // source_dir 없으면 base명 기준 (_calc/_merged 제거)
-        key='base:'+fn.replace(/_calc_formula\.csv$/,'').replace(/_formula\.csv$/,'').replace(/_calc\.csv$/,'').replace(/_merged\.csv$/,'').replace(/\.csv$/,'');
+        key='base:'+getBase(fn);
       }
       if(!baseMap.has(key))baseMap.set(key,[]);
       baseMap.get(key).push(fn);
+    }
+    // 자동으로 매칭되는 formula 파일 포함 (선택 안 했어도)
+    for(const[key,fns] of baseMap){
+      if(key.startsWith('base:')){
+        const base=key.slice(5);
+        files.forEach(f=>{
+          if(f.name.includes('_formula')&&getBase(f.name)===base&&!fns.includes(f.name)){
+            fns.push(f.name);
+          }
+        });
+      }
     }
     for(const[key,fns] of baseMap){
       // 그룹명: 폴더명 또는 base명
