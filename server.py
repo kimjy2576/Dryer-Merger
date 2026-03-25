@@ -430,10 +430,10 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                 _log(sid, f"[{case_name}] {i+1}/{n} 병합 중...")
 
                 # 선택된 소스만 읽기
-                bp = str(case_dir / cf["br"][i]) if use_br and i < len(cf.get("br",[])) else None
-                ap = str(case_dir / cf["ams"][i]) if use_ams and i < len(cf.get("ams",[])) else None
-                mp = str(case_dir / cf["mx100"][i]) if use_mx and i < len(cf.get("mx100",[])) else None
-                np_ = str(case_dir / cf["nidaq"][i]) if use_ni and i < len(cf.get("nidaq",[])) else None
+                bp = str(case_dir / cf["br"][i]) if use_br and cf.get("br") and i < len(cf["br"]) else None
+                ap = str(case_dir / cf["ams"][i]) if use_ams and cf.get("ams") and i < len(cf["ams"]) else None
+                mp = str(case_dir / cf["mx100"][i]) if use_mx and cf.get("mx100") and i < len(cf["mx100"]) else None
+                np_ = str(case_dir / cf["nidaq"][i]) if use_ni and cf.get("nidaq") and i < len(cf["nidaq"]) else None
 
                 t1 = time.perf_counter()
                 df_ams, df_br, df_mx, df_ni = _read(ap, bp, mp, dt, np_=np_, file_rules=cfg.get("file_rules"))
