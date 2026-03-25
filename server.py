@@ -254,7 +254,7 @@ def select_cases(req: SelectRequest):
     for case in req.case_names:
         case_dir = category / case
         if not case_dir.is_dir(): continue
-        case_files[case] = _classify_files(case_dir, DEFAULT_CFG.get("file_rules"))
+        case_files[case] = _classify_files(case_dir, DEFAULT_CFG.get("file_rules"), DEFAULT_CFG.get("processing",{}).get("data_sources"))
     if not case_files: raise HTTPException(400, "유효한 케이스 없음")
     sessions[sid] = {
         "status": "ready", "progress": 0, "log": [], "error": None,
@@ -264,8 +264,8 @@ def select_cases(req: SelectRequest):
     return {"session_id": sid, "cases": case_files}
 
 
-def _classify_files(folder: Path, file_rules: dict = None) -> dict:
-    """파일 식별 규칙에 따라 소스별 분류."""
+def _classify_files(folder: Path, file_rules: dict = None, active_sources: list = None) -> dict:
+    """파일 식별 규칙에 따라 소스별 분류. active_sources로 필터."""
     if not file_rules:
         file_rules = {
             "mx100": {"extensions": [".xls", ".xlsx"], "include_patterns": []},
@@ -273,6 +273,10 @@ def _classify_files(folder: Path, file_rules: dict = None) -> dict:
             "ams":   {"extensions": [".csv"], "include_patterns": ["_ams"]},
             "br":    {"extensions": [".csv"], "include_patterns": []},
         }
+    # active_sources 필터: ["BR","MX100"] → {"br","mx100"}
+    if active_sources:
+        enabled = {s.lower() for s in active_sources}
+        file_rules = {k: v for k, v in file_rules.items() if k in enabled}
     files = {k: [] for k in file_rules}
     order = [k for k in file_rules if k != "br"] + (["br"] if "br" in file_rules else [])
     for f in sorted(folder.iterdir()):
@@ -315,12 +319,13 @@ def scan_columns(req: BrowseRequest):
     all_columns = {}
     dt = DEFAULT_CFG["processing"]["data_time"]
     fr = DEFAULT_CFG.get("file_rules", {})
+    active = DEFAULT_CFG.get("processing",{}).get("data_sources")
 
     # 첫 번째 케이스에서 샘플 읽기
     for case_name, cf in case_files.items():
         case_dir = category / case_name
         # 최신 파일 목록으로 재분류
-        cf = _classify_files(case_dir, fr)
+        cf = _classify_files(case_dir, fr, active)
 
         def _scan_csv(src_key, label, skip=1, enc_list=("cp949","utf-8")):
             if not cf.get(src_key): return
@@ -421,7 +426,7 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
         for case_name, cf in case_files.items():
             case_dir = category / case_name
             rename_files_in_folder(str(case_dir))
-            cf = _classify_files(case_dir, cfg.get("file_rules"))
+            cf = _classify_files(case_dir, cfg.get("file_rules"), sources)
             ref_key = {"BR":"br","AMS":"ams","MX100":"mx100","NIDAQ":"nidaq"}.get(dt,"br")
             n = len(cf.get(ref_key, []))
 
