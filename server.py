@@ -333,10 +333,11 @@ def scan_columns(req: BrowseRequest):
             rule = fr.get(src_key, {})
             skip_r = rule.get("skip_rows", skip)
             enc_l = [rule.get("encoding")] if rule.get("encoding") else list(enc_list)
+            sep = '\t' if fp.suffix.lower() == '.tsv' else ','
             for enc in enc_l:
                 try:
                     skiparg = list(range(skip_r)) if skip_r > 0 else None
-                    df = pd.read_csv(fp, encoding=enc, skiprows=skiparg, nrows=5)
+                    df = pd.read_csv(fp, encoding=enc, sep=sep, skiprows=skiparg, nrows=5)
                     df.columns = [c.strip() for c in df.columns]
                     for c in df.columns:
                         if c not in all_columns:

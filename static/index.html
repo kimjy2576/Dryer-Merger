@@ -101,7 +101,7 @@ return(<div className="cd"><div className="ct">데이터 경로</div>
 </div>
 
 {/* 파일 분류 요약 */}
-{Object.keys(cf).length>0&&<div style={{marginTop:12}}>{Object.entries(cf).map(([c,f])=><div key={c} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 0',fontSize:12}}><span style={{color:'var(--tx2)',minWidth:200}}>{c}</span><div style={{display:'flex',gap:4}}>{f.br?.length>0&&<span className="ft fb">BR×{f.br.length}</span>}{f.ams?.length>0&&<span className="ft fa">AMS×{f.ams.length}</span>}{f.mx100?.length>0&&<span className="ft fm">MX×{f.mx100.length}</span>}</div></div>)}</div>}
+{Object.keys(cf).length>0&&<div style={{marginTop:12}}>{Object.entries(cf).map(([c,f])=><div key={c} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 0',fontSize:12}}><span style={{color:'var(--tx2)',minWidth:200}}>{c}</span><div style={{display:'flex',gap:4}}>{f.br?.length>0&&<span className="ft fb">BR×{f.br.length}</span>}{f.ams?.length>0&&<span className="ft fa">AMS×{f.ams.length}</span>}{f.mx100?.length>0&&<span className="ft fm">MX×{f.mx100.length}</span>}{f.nidaq?.length>0&&<span style={{fontSize:9,padding:'1px 6px',borderRadius:4,background:'rgba(168,85,247,.1)',color:'#a855f7'}}>NIDAQ×{f.nidaq.length}</span>}</div></div>)}</div>}
 </>}
 </div>)}
 
