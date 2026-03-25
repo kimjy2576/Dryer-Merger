@@ -479,11 +479,13 @@ def _calc_mass_flow(df, cfg, air_cond, ref_cond, ref_eva, ref_comp, dt):
     # 필터링 (경험적)
     mdot_filtered = _filter_mass_flow(mdot_ref, df["Time_min"].values, ref_cond["dh"])
     Q_eva_filtered = mdot_filtered / 3600 * ref_eva["dh"] * 1000
+    Q_cond_filtered = mdot_filtered / 3600 * ref_cond["dh"] * 1000
 
     return {
         "cmm_cond": cmm, "mdot_mair": mdot_mair, "mdot_dair": mdot_dair,
         "mdot_ref": mdot_ref, "mdot_ref_filtered": mdot_filtered,
-        "Q_cond": Q_cond, "Q_eva": Q_eva, "Q_eva_filtered": Q_eva_filtered,
+        "Q_cond": Q_cond, "Q_cond_filtered": Q_cond_filtered,
+        "Q_eva": Q_eva, "Q_eva_filtered": Q_eva_filtered,
     }
 
 
@@ -728,7 +730,7 @@ def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf):
     out["Flow_ref_kgH_recalc"] = flow["mdot_ref_filtered"]
 
     # 열전달량
-    out["Qrefr_Cond_recalc"] = flow["Q_cond"]
+    out["Qrefr_Cond_recalc"] = flow["Q_cond_filtered"]
     out["Qrefr_Eva_recalc"] = flow["Q_eva_filtered"]
     out["Qrefr_Cond"] = flow["Q_cond"]
     out["Qrefr_Eva"] = flow["Q_eva"]
