@@ -269,9 +269,9 @@ def _classify_files(folder: Path, file_rules: dict = None, active_sources: list 
     if not file_rules:
         file_rules = {
             "mx100": {"extensions": [".xls", ".xlsx"], "include_patterns": []},
-            "nidaq": {"extensions": [".tsv"], "include_patterns": []},
-            "ams":   {"extensions": [".csv"], "include_patterns": ["_ams"]},
-            "br":    {"extensions": [".csv"], "include_patterns": []},
+            "nidaq": {"extensions": [".csv", ".tsv"], "include_patterns": []},
+            "ams":   {"extensions": [".csv", ".tsv"], "include_patterns": ["_ams"]},
+            "br":    {"extensions": [".csv", ".tsv"], "include_patterns": []},
         }
     # active_sources 필터: ["BR","MX100"] → {"br","mx100"}
     if active_sources:
@@ -947,13 +947,15 @@ def _read(ap, bp, mp, dt, np_=None, file_rules=None):
     if bp and os.path.exists(bp):
         enc_l = [fr.get("br",{}).get("encoding","cp949")] if fr.get("br",{}).get("encoding") else ["cp949","utf-8"]
         skip = fr.get("br",{}).get("skip_rows",1)
+        sep = '\t' if bp.lower().endswith('.tsv') else ','
         for enc in enc_l:
-            try: df_b = pd.read_csv(bp, encoding=enc, skiprows=list(range(skip)) if skip else None); df_b.columns=[c.strip() for c in df_b.columns]; break
+            try: df_b = pd.read_csv(bp, encoding=enc, sep=sep, skiprows=list(range(skip)) if skip else None); df_b.columns=[c.strip() for c in df_b.columns]; break
             except: continue
     if ap and os.path.exists(ap):
         enc = fr.get("ams",{}).get("encoding","utf-8")
         skip = fr.get("ams",{}).get("skip_rows",1)
-        try: df_a = pd.read_csv(ap, encoding=enc, skiprows=list(range(skip)) if skip else None); df_a.columns=[c.strip() for c in df_a.columns]
+        sep = '\t' if ap.lower().endswith('.tsv') else ','
+        try: df_a = pd.read_csv(ap, encoding=enc, sep=sep, skiprows=list(range(skip)) if skip else None); df_a.columns=[c.strip() for c in df_a.columns]
         except: pass
     if mp and os.path.exists(mp):
         skip = fr.get("mx100",{}).get("skip_rows",24)
