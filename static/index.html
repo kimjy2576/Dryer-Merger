@@ -459,7 +459,7 @@ return(<div>
         <button className="bt bg" onClick={runMerge} disabled={st.status==='processing'}>{st.status==='processing'?'처리 중...':'Merge 실행'}</button>
       </div>
     </div>
-    <div className="it" style={{marginBottom:8}}>BR + AMS + MX100 → 시간 동기화 → 전처리 → 필터{varCols?` → W&B (${wbCount}개) → ${includedCount}개 변수`:''} → <strong>_merged.csv</strong></div>
+    <div className="it" style={{marginBottom:8}}>BR + AMS + MX100 + NIDAQ → 시간 동기화 → 전처리 → 필터{varCols?` → W&B (${wbCount}개) → ${includedCount}개 변수`:''} → <strong>_merged.csv</strong></div>
     <StatusPanel st={st} resultKey="merge_results"/>
     {st?.status==='done'&&st?.merge_results?.length>0&&<div style={{marginTop:10}}>
       <button className="bt bg" onClick={()=>{
@@ -1788,9 +1788,31 @@ return(<div><div className="fg"><div>
 <CfgField lb="대기압" p="environment.patm" t="number" st="0.001" u="kPa" {...fp}/><CfgField lb="백엔드" p="environment.backend" o={['HEOS','REFPROP']} {...fp}/></div>
 <div className="cd"><div className="ct">처리 모드</div>
 <div className="fr"><div className="fl">사용 소스</div><div className="fi" style={{display:'flex',gap:12}}>
-{['BR','AMS','MX100'].map(src=>{const ds=l?.processing?.data_sources||[];const on=ds.includes(src);return<label key={src} style={{display:'flex',alignItems:'center',gap:4,fontSize:13,cursor:'pointer'}}><input type="checkbox" checked={on} onChange={()=>{const cur=l?.processing?.data_sources||[];s('processing.data_sources',on?cur.filter(x=>x!==src):[...cur,src])}} style={{accentColor:'var(--teal)',width:15,height:15}}/>{src}</label>})}
+{['BR','AMS','MX100','NIDAQ'].map(src=>{const ds=l?.processing?.data_sources||[];const on=ds.includes(src);return<label key={src} style={{display:'flex',alignItems:'center',gap:4,fontSize:13,cursor:'pointer'}}><input type="checkbox" checked={on} onChange={()=>{const cur=l?.processing?.data_sources||[];s('processing.data_sources',on?cur.filter(x=>x!==src):[...cur,src])}} style={{accentColor:'var(--teal)',width:15,height:15}}/>{src}</label>})}
 </div></div>
-<CfgField lb="기준 시간축" p="processing.data_time" o={['BR','AMS','MX100']} {...fp}/><CfgField lb="필터 모드" p="processing.filter_mode" o={['Dry_Only','Wash_and_Dry']} {...fp}/><CfgField lb="리샘플링" p="processing.time_interval" t="number" u="초" {...fp}/></div>
+<CfgField lb="기준 시간축" p="processing.data_time" o={['BR','AMS','MX100','NIDAQ']} {...fp}/><CfgField lb="필터 모드" p="processing.filter_mode" o={['Dry_Only','Wash_and_Dry']} {...fp}/><CfgField lb="리샘플링" p="processing.time_interval" t="number" u="초" {...fp}/></div>
+
+<div className="cd"><div className="ct">파일 식별 규칙</div>
+<div style={{fontSize:11,color:'var(--tx3)',marginBottom:8}}>각 소스별로 파일을 구별하는 규칙을 설정합니다. 우선순위: MX100 → NIDAQ → AMS → BR (마지막 폴백)</div>
+{['mx100','nidaq','ams','br'].map(src=>{
+  const rule=l?.file_rules?.[src]||{};
+  const setRule=(k,v)=>{const fr=JSON.parse(JSON.stringify(l?.file_rules||{}));if(!fr[src])fr[src]={};fr[src][k]=v;s('file_rules',fr)};
+  return<div key={src} style={{padding:'6px 10px',marginBottom:4,background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:6}}>
+    <div style={{fontWeight:600,fontSize:11,color:'var(--teal)',marginBottom:4}}>{src.toUpperCase()}</div>
+    <div style={{display:'grid',gridTemplateColumns:'80px 1fr',gap:'4px 8px',fontSize:11,alignItems:'center'}}>
+      <span style={{color:'var(--tx2)'}}>확장자</span>
+      <input value={(rule.extensions||[]).join(', ')} onChange={e=>setRule('extensions',e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder=".csv, .tsv, .xls" style={{fontSize:11,padding:'3px 6px'}}/>
+      <span style={{color:'var(--tx2)'}}>포함 패턴</span>
+      <input value={(rule.include_patterns||[]).join(', ')} onChange={e=>setRule('include_patterns',e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="_ams, _nidaq (비어있으면 모든 파일)" style={{fontSize:11,padding:'3px 6px'}}/>
+      <span style={{color:'var(--tx2)'}}>제외 패턴</span>
+      <input value={(rule.exclude_patterns||[]).join(', ')} onChange={e=>setRule('exclude_patterns',e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="비어있으면 제외 없음" style={{fontSize:11,padding:'3px 6px'}}/>
+      <span style={{color:'var(--tx2)'}}>스킵 행</span>
+      <input type="number" value={rule.skip_rows??0} onChange={e=>setRule('skip_rows',+e.target.value)} min={0} style={{fontSize:11,padding:'3px 6px',width:60}}/>
+      <span style={{color:'var(--tx2)'}}>인코딩</span>
+      <input value={rule.encoding||''} onChange={e=>setRule('encoding',e.target.value)} placeholder="cp949, utf-8 (비어있으면 자동)" style={{fontSize:11,padding:'3px 6px'}}/>
+    </div>
+  </div>})}
+</div>
 </div><div>
 <div className="cd"><div className="ct">후처리 필터</div><CfgField lb="LPF τ" p="filtering.lpf_tau" t="number" st="0.1" {...fp}/><CfgField lb="노이즈 윈도우" p="filtering.noise_window" t="number" {...fp}/><CfgField lb="노이즈 임계값" p="filtering.noise_threshold" t="number" st="0.1" {...fp}/><CfgField lb="최소 Hz" p="filtering.min_hz" t="number" u="Hz" {...fp}/><CfgField lb="종료 탐색" p="filtering.last_min" t="number" st="0.5" u="분" {...fp}/></div>
 <div className="cd"><div className="ct">RH 수렴 계산</div><CfgField lb="증발기 출구 RH" p="calculation.rh_eva_out_assumed" t="number" st="0.01" {...fp}/><CfgField lb="최대 반복" p="calculation.rh_iteration.max_iter" t="number" {...fp}/><CfgField lb="수렴 임계값" p="calculation.rh_iteration.tolerance" t="number" st="0.001" {...fp}/><CfgField lb="감쇠 계수" p="calculation.rh_iteration.damping" t="number" st="0.05" {...fp}/></div>

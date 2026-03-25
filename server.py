@@ -254,7 +254,7 @@ def select_cases(req: SelectRequest):
     for case in req.case_names:
         case_dir = category / case
         if not case_dir.is_dir(): continue
-        case_files[case] = _classify_files(case_dir)
+        case_files[case] = _classify_files(case_dir, DEFAULT_CFG.get("file_rules"))
     if not case_files: raise HTTPException(400, "유효한 케이스 없음")
     sessions[sid] = {
         "status": "ready", "progress": 0, "log": [], "error": None,
@@ -264,20 +264,35 @@ def select_cases(req: SelectRequest):
     return {"session_id": sid, "cases": case_files}
 
 
-def _classify_files(folder: Path) -> dict:
-    files = {"br": [], "ams": [], "mx100": []}
+def _classify_files(folder: Path, file_rules: dict = None) -> dict:
+    """파일 식별 규칙에 따라 소스별 분류."""
+    if not file_rules:
+        file_rules = {
+            "mx100": {"extensions": [".xls", ".xlsx"], "include_patterns": []},
+            "nidaq": {"extensions": [".tsv"], "include_patterns": []},
+            "ams":   {"extensions": [".csv"], "include_patterns": ["_ams"]},
+            "br":    {"extensions": [".csv"], "include_patterns": []},
+        }
+    files = {k: [] for k in file_rules}
+    order = [k for k in file_rules if k != "br"] + (["br"] if "br" in file_rules else [])
     for f in sorted(folder.iterdir()):
         if not f.is_file(): continue
         n = f.name.lower()
-        # 생성 파일 제외 (대소문자 무관, 위치 무관)
         if any(tag in n for tag in ["merged", "calc", "result", "formula", ".cache"]):
             continue
-        if n.endswith((".xls", ".xlsx")) or "_temp." in n:
-            files["mx100"].append(f.name)
-        elif "_ams.csv" in n or "_ams_" in n:
-            files["ams"].append(f.name)
-        elif n.endswith(".csv"):
-            files["br"].append(f.name)
+        for src in order:
+            rule = file_rules[src]
+            exts = rule.get("extensions", [])
+            inc = rule.get("include_patterns", [])
+            exc = rule.get("exclude_patterns", [])
+            if exts and not any(n.endswith(e) for e in exts):
+                continue
+            if inc and not any(p.lower() in n for p in inc):
+                continue
+            if exc and any(p.lower() in n for p in exc):
+                continue
+            files[src].append(f.name)
+            break
     return files
 
 
@@ -297,41 +312,45 @@ def scan_columns(req: BrowseRequest):
     category = Path(s["category_path"])
     case_files = s["case_files"]
 
-    all_columns = {}  # {"col_name": {"source": "BR"|"AMS"|"MX100", "dtype": str}}
+    all_columns = {}
     dt = DEFAULT_CFG["processing"]["data_time"]
+    fr = DEFAULT_CFG.get("file_rules", {})
 
     # 첫 번째 케이스에서 샘플 읽기
     for case_name, cf in case_files.items():
         case_dir = category / case_name
+        # 최신 파일 목록으로 재분류
+        cf = _classify_files(case_dir, fr)
+
+        def _scan_csv(src_key, label, skip=1, enc_list=("cp949","utf-8")):
+            if not cf.get(src_key): return
+            fp = case_dir / cf[src_key][0]
+            rule = fr.get(src_key, {})
+            skip_r = rule.get("skip_rows", skip)
+            enc_l = [rule.get("encoding")] if rule.get("encoding") else list(enc_list)
+            for enc in enc_l:
+                try:
+                    skiparg = list(range(skip_r)) if skip_r > 0 else None
+                    df = pd.read_csv(fp, encoding=enc, skiprows=skiparg, nrows=5)
+                    df.columns = [c.strip() for c in df.columns]
+                    for c in df.columns:
+                        if c not in all_columns:
+                            all_columns[c] = {"source": label, "dtype": str(df[c].dtype)}
+                    break
+                except: continue
+
         # BR
-        if cf["br"]:
-            try:
-                fp = case_dir / cf["br"][0]
-                for enc in ("cp949", "utf-8"):
-                    try:
-                        df = pd.read_csv(fp, encoding=enc, skiprows=[0], nrows=5)
-                        df.columns = [c.strip() for c in df.columns]  # 공백 제거
-                        for c in df.columns:
-                            if c not in all_columns:
-                                all_columns[c] = {"source": "BR", "dtype": str(df[c].dtype)}
-                        break
-                    except: continue
-            except: pass
+        _scan_csv("br", "BR", skip=1, enc_list=("cp949","utf-8"))
         # AMS
-        if cf["ams"]:
-            try:
-                fp = case_dir / cf["ams"][0]
-                df = pd.read_csv(fp, encoding="utf-8", skiprows=[0], nrows=5)
-                df.columns = [c.strip() for c in df.columns]
-                for c in df.columns:
-                    if c not in all_columns:
-                        all_columns[c] = {"source": "AMS", "dtype": str(df[c].dtype)}
-            except: pass
-        # MX100
-        if cf["mx100"]:
+        _scan_csv("ams", "AMS", skip=1, enc_list=("utf-8",))
+        # NI DAQ
+        _scan_csv("nidaq", "NIDAQ", skip=0, enc_list=("utf-8",))
+        # MX100 (Excel)
+        if cf.get("mx100"):
             try:
                 fp = case_dir / cf["mx100"][0]
-                df = pd.read_excel(fp, skiprows=24, header=0, nrows=5)
+                skip_r = fr.get("mx100", {}).get("skip_rows", 24)
+                df = pd.read_excel(fp, skiprows=skip_r, header=0, nrows=5)
                 df.columns = [c.strip() for c in df.columns]
                 for c in df.columns:
                     if c not in all_columns:
@@ -382,6 +401,7 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
         use_br = "BR" in sources
         use_ams = "AMS" in sources
         use_mx = "MX100" in sources
+        use_ni = "NIDAQ" in sources
         _log(sid, f"  사용 소스: {', '.join(sources)} / 기준 시간축: {dt}")
 
         # 변수 설정 로그
@@ -394,28 +414,30 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                        if v.get("include", True) and v.get("rename") and v.get("rename") != k]
             _log(sid, f"  변수 설정: {len(included)}개 포함, {len(excluded)}개 제외, {len(wb_applied)}개 W&B, {len(renamed)}개 이름변경")
 
-        total = sum(len(cf[{"BR":"br","AMS":"ams","MX100":"mx100"}[dt]]) for cf in case_files.values())
+        ref_map = {"BR":"br","AMS":"ams","MX100":"mx100","NIDAQ":"nidaq"}
+        total = sum(len(cf.get(ref_map.get(dt,"br"), [])) for cf in case_files.values())
         done, results = 0, []
 
         for case_name, cf in case_files.items():
             case_dir = category / case_name
             rename_files_in_folder(str(case_dir))
-            cf = _classify_files(case_dir)
-            ref_key = {"BR":"br","AMS":"ams","MX100":"mx100"}[dt]
-            n = len(cf[ref_key])
+            cf = _classify_files(case_dir, cfg.get("file_rules"))
+            ref_key = {"BR":"br","AMS":"ams","MX100":"mx100","NIDAQ":"nidaq"}.get(dt,"br")
+            n = len(cf.get(ref_key, []))
 
             for i in range(n):
                 t0 = time.perf_counter()
                 _log(sid, f"[{case_name}] {i+1}/{n} 병합 중...")
 
                 # 선택된 소스만 읽기
-                bp = str(case_dir / cf["br"][i]) if use_br and i < len(cf["br"]) else None
-                ap = str(case_dir / cf["ams"][i]) if use_ams and i < len(cf["ams"]) else None
-                mp = str(case_dir / cf["mx100"][i]) if use_mx and i < len(cf["mx100"]) else None
+                bp = str(case_dir / cf["br"][i]) if use_br and i < len(cf.get("br",[])) else None
+                ap = str(case_dir / cf["ams"][i]) if use_ams and i < len(cf.get("ams",[])) else None
+                mp = str(case_dir / cf["mx100"][i]) if use_mx and i < len(cf.get("mx100",[])) else None
+                np_ = str(case_dir / cf["nidaq"][i]) if use_ni and i < len(cf.get("nidaq",[])) else None
 
                 t1 = time.perf_counter()
-                df_ams, df_br, df_mx = _read(ap, bp, mp, dt)
-                _log(sid, f"  📖 읽기: {time.perf_counter()-t1:.1f}s (BR={len(df_br)}행 MX100={len(df_mx)}행)")
+                df_ams, df_br, df_mx, df_ni = _read(ap, bp, mp, dt, np_=np_, file_rules=cfg.get("file_rules"))
+                _log(sid, f"  📖 읽기: {time.perf_counter()-t1:.1f}s (BR={len(df_br)}행 MX100={len(df_mx)}행 NIDAQ={len(df_ni)}행)")
 
                 t1 = time.perf_counter()
                 # 선택된 소스만 전처리
@@ -437,11 +459,27 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                     df_mx_proc = preprocess_mx100(df_mx, cfg["mx100"]["useless_columns"])
                 else:
                     df_mx_proc = pd.DataFrame()
+
+                # NI DAQ 전처리 (Time 컬럼 + 숫자 변환)
+                if use_ni and not df_ni.empty:
+                    df_ni_proc = df_ni.copy()
+                    # Time 컬럼 확인/변환
+                    if "Time" not in df_ni_proc.columns:
+                        for alt in ["time","DateTime","Timestamp","Date_Time"]:
+                            if alt in df_ni_proc.columns:
+                                df_ni_proc.rename(columns={alt:"Time"}, inplace=True); break
+                        else:
+                            df_ni_proc.rename(columns={df_ni_proc.columns[0]:"Time"}, inplace=True)
+                    num_cols = df_ni_proc.columns.difference(["Time"])
+                    for col in num_cols:
+                        df_ni_proc[col] = pd.to_numeric(df_ni_proc[col], errors="coerce")
+                else:
+                    df_ni_proc = pd.DataFrame()
                 _log(sid, f"  ⚙️ 전처리: {time.perf_counter()-t1:.1f}s")
 
                 t1 = time.perf_counter()
                 merged = sync_and_merge(
-                    [df_br_main, df_br_add, df_mx_proc, df_ams_proc],
+                    [df_br_main, df_br_add, df_mx_proc, df_ams_proc, df_ni_proc],
                     dt, df_br_main, df_ams_proc, df_mx_proc)
                 _log(sid, f"  🔗 시간동기화: {time.perf_counter()-t1:.1f}s ({len(merged)}행)")
 
@@ -866,21 +904,28 @@ def auto_map(req: BrowseRequest):
 # ══════════════════════════════════════════════
 #  공통 유틸
 # ══════════════════════════════════════════════
-def _read(ap, bp, mp, dt):
-    df_a, df_b, df_m = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+def _read(ap, bp, mp, dt, np_=None, file_rules=None):
+    df_a, df_b, df_m, df_n = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    fr = file_rules or {}
     if bp and os.path.exists(bp):
-        for enc in ("cp949", "utf-8"):
-            try: df_b = pd.read_csv(bp, encoding=enc, skiprows=[0]); df_b.columns=[c.strip() for c in df_b.columns]; break
+        enc_l = [fr.get("br",{}).get("encoding","cp949")] if fr.get("br",{}).get("encoding") else ["cp949","utf-8"]
+        skip = fr.get("br",{}).get("skip_rows",1)
+        for enc in enc_l:
+            try: df_b = pd.read_csv(bp, encoding=enc, skiprows=list(range(skip)) if skip else None); df_b.columns=[c.strip() for c in df_b.columns]; break
             except: continue
     if ap and os.path.exists(ap):
-        df_a = pd.read_csv(ap, encoding="utf-8", skiprows=[0]); df_a.columns=[c.strip() for c in df_a.columns]
+        enc = fr.get("ams",{}).get("encoding","utf-8")
+        skip = fr.get("ams",{}).get("skip_rows",1)
+        try: df_a = pd.read_csv(ap, encoding=enc, skiprows=list(range(skip)) if skip else None); df_a.columns=[c.strip() for c in df_a.columns]
+        except: pass
     if mp and os.path.exists(mp):
+        skip = fr.get("mx100",{}).get("skip_rows",24)
         try:
-            df_m = pd.read_excel(mp, skiprows=24, header=0)
+            df_m = pd.read_excel(mp, skiprows=skip, header=0)
             df_m.columns = [c.strip() for c in df_m.columns]
         except Exception as e1:
             try:
-                df_m = pd.read_excel(mp, skiprows=24, header=[0,1])
+                df_m = pd.read_excel(mp, skiprows=skip, header=[0,1])
                 cols = [c[1] if "Unnamed" in str(c[0]) else c[0] for c in df_m.columns]
                 df_m.columns = [c.strip() for c in cols]
                 if "Date" in df_m.columns and "Time" in df_m.columns:
@@ -888,7 +933,16 @@ def _read(ap, bp, mp, dt):
                     df_m.drop(columns=["Date"], inplace=True, errors="ignore")
             except Exception as e2:
                 print(f"[MX100] 읽기 실패: {e1} / {e2}")
-    return df_a, df_b, df_m
+    if np_ and os.path.exists(np_):
+        enc = fr.get("nidaq",{}).get("encoding","utf-8")
+        skip = fr.get("nidaq",{}).get("skip_rows",0)
+        try:
+            sep = '\t' if np_.lower().endswith('.tsv') else ','
+            df_n = pd.read_csv(np_, encoding=enc, sep=sep, skiprows=list(range(skip)) if skip else None)
+            df_n.columns = [c.strip() for c in df_n.columns]
+        except Exception as e:
+            print(f"[NIDAQ] 읽기 실패: {e}")
+    return df_a, df_b, df_m, df_n
 
 def _log(sid, msg):
     if sid in sessions: sessions[sid]["log"].append(msg)

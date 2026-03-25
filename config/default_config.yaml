@@ -16,7 +16,40 @@ processing:
   time_interval: 1
   setup_type: "BR"                     # 실험 소스 타입: "BR" | "MX100"
   data_time: "BR"                      # 시간 동기화 기준 소스
-  data_sources: ["BR", "AMS", "MX100"] # 사용할 소스 (체크박스)
+  data_sources: ["BR", "AMS", "MX100", "NIDAQ"] # 사용할 소스 (체크박스)
+
+# --- 파일 식별 규칙 ---
+# 각 소스별로 파일을 어떻게 구별할지 정의
+# extensions: 확장자 매칭 (소문자)
+# include_patterns: 파일명에 포함되어야 하는 문자열 (하나라도 매칭)
+# exclude_patterns: 파일명에 포함되면 제외
+# skip_rows: 헤더 스킵 행 수
+# encoding: 파일 인코딩
+file_rules:
+  mx100:
+    extensions: [".xls", ".xlsx"]
+    include_patterns: []
+    exclude_patterns: []
+    skip_rows: 24
+    encoding: ""
+  nidaq:
+    extensions: [".tsv"]
+    include_patterns: []
+    exclude_patterns: []
+    skip_rows: 0
+    encoding: "utf-8"
+  ams:
+    extensions: [".csv"]
+    include_patterns: ["_ams"]
+    exclude_patterns: []
+    skip_rows: 1
+    encoding: "utf-8"
+  br:
+    extensions: [".csv"]
+    include_patterns: []
+    exclude_patterns: []
+    skip_rows: 1
+    encoding: "cp949"
 
 filtering:
   noise_columns: []
