@@ -804,42 +804,31 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
 
             # ── Formula 자동 적용 ──
             try:
-                import json
+                import json as _json
                 formula_path = BASE_DIR / "config" / "formula_default.json"
                 if formula_path.exists():
-                    fdata = json.loads(formula_path.read_text("utf-8"))
-                    overrides = fdata.get("overrides", {})
+                    fdata = _json.loads(formula_path.read_text("utf-8"))
                     custom = fdata.get("custom", [])
-                    all_formulas = []
-                    for c in custom:
-                        if c.get("enabled", True) and c.get("name") and c.get("expr"):
-                            all_formulas.append({"name": c["name"], "expr": c["expr"]})
-                    if all_formulas:
-                        n_applied = 0
-                        n_failed = 0
-                        for f in all_formulas:
-                            try:
-                                dangerous = ["import", "exec", "eval", "__", "open", "os.", "sys."]
-                                if any(d in f["expr"].lower() for d in dangerous):
-                                    _log(sid, f"    ❌ {f['name']}: 위험 키워드")
-                                    n_failed += 1
-                                    continue
-                                df_calc[f["name"]] = df_calc.eval(f["expr"])
-                                n_applied += 1
-                            except Exception as fe:
-                                _log(sid, f"    ❌ {f['name']}: {fe}")
-                                n_failed += 1
-                        if n_applied > 0:
-                            df_calc.to_csv(RESULT_DIR / out_name, index=False)
-                            if cat_path:
-                                for cn2 in s.get("case_files", {}):
-                                    if cn2.replace(" ", "_") in fn or fn.startswith(cn2[:10]):
-                                        cd2 = Path(cat_path) / cn2
-                                        if cd2.exists():
-                                            df_calc.to_csv(cd2 / out_name, index=False)
-                                        break
-                        _log(sid, f"  🧪 Formula: {n_applied}개 적용, {n_failed}개 실패 (총 {len(all_formulas)}개)")
-                        _log(sid, f"  📊 최종 컬럼 수: {len(df_calc.columns)}")
+                    all_formulas = [{"name": c["name"], "expr": c["expr"]}
+                                    for c in custom
+                                    if c.get("enabled", True) and c.get("name") and c.get("expr")]
+                    _log(sid, f"  🧪 Formula: {len(all_formulas)}개 수식 로드")
+                    n_applied, n_failed = 0, 0
+                    for fm in all_formulas:
+                        try:
+                            # 위험 키워드 차단 (import문, exec/open 함수 호출, 던더)
+                            if any(d in fm["expr"] for d in ["import ", "exec(", "__(", "open(", "os.", "sys."]):
+                                _log(sid, f"    ⛔ {fm['name']}: 차단된 키워드")
+                                n_failed += 1; continue
+                            df_calc[fm["name"]] = df_calc.eval(fm["expr"])
+                            _log(sid, f"    ✅ {fm['name']} = {fm['expr'][:60]}")
+                            n_applied += 1
+                        except Exception as fe:
+                            _log(sid, f"    ❌ {fm['name']}: {fe}")
+                            n_failed += 1
+                    # 항상 재저장 (formula 컬럼 포함)
+                    df_calc.to_csv(RESULT_DIR / out_name, index=False)
+                    _log(sid, f"  🧪 결과: {n_applied}개 성공, {n_failed}개 실패, 총 {len(df_calc.columns)}열 저장")
             except Exception as fe:
                 _log(sid, f"  [Formula 경고] {fe}")
 
@@ -1220,7 +1209,7 @@ def eval_formulas(req: dict):
             continue
         try:
             # 안전성: 위험 키워드 차단
-            dangerous = ["import", "exec", "eval", "__", "open", "os.", "sys.", "subprocess"]
+            dangerous = ["import ", "exec(", "__(", "open(", "os.", "sys.", "subprocess"]
             if any(d in expr.lower() for d in dangerous):
                 errors.append({"name": name, "error": "허용되지 않는 키워드"})
                 continue
@@ -1256,7 +1245,7 @@ def preview_formula(req: dict):
 
     try:
         df = pd.read_csv(p, nrows=100)
-        dangerous = ["import", "exec", "eval", "__", "open", "os.", "sys.", "subprocess"]
+        dangerous = ["import ", "exec(", "__(", "open(", "os.", "sys.", "subprocess"]
         if any(d in expr.lower() for d in dangerous):
             raise HTTPException(400, "허용되지 않는 키워드")
         result = df.eval(expr)
