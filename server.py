@@ -968,7 +968,7 @@ def list_results():
         try: sources = json.loads(meta_path.read_text("utf-8"))
         except: pass
     return [{"name": f.name, "size": f.stat().st_size,
-             "type": "merged" if "_merged" in f.name else "calc" if "_calc" in f.name else "other",
+             "type": "merged" if "_merged" in f.name else "formula" if "_formula" in f.name else "calc" if "_calc" in f.name else "other",
              "source_dir": sources.get(f.name, "")}
             for f in files]
 

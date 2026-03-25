@@ -1020,7 +1020,7 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
         key='dir:'+f.source_dir;
       }else{
         // source_dir 없으면 base명 기준 (_calc/_merged 제거)
-        key='base:'+fn.replace(/_calc\.csv$/,'').replace(/_merged\.csv$/,'').replace(/\.csv$/,'');
+        key='base:'+fn.replace(/_calc_formula\.csv$/,'').replace(/_formula\.csv$/,'').replace(/_calc\.csv$/,'').replace(/_merged\.csv$/,'').replace(/\.csv$/,'');
       }
       if(!baseMap.has(key))baseMap.set(key,[]);
       baseMap.get(key).push(fn);
@@ -1045,7 +1045,11 @@ const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg(''
     logs.push(`\n[${groupName}] 파일 ${fileList.length}개`);
     const merged={};let totalRows=0;const allCols=new Set();
     // calc 먼저 (계산 결과 우선)
-    const sorted=[...fileList].sort((a,b)=>(b.includes('_calc')?1:0)-(a.includes('_calc')?1:0));
+    const sorted=[...fileList].sort((a,b)=>{
+      const pa=a.includes('_formula')?2:a.includes('_calc')?1:0;
+      const pb=b.includes('_formula')?2:b.includes('_calc')?1:0;
+      return pb-pa; // formula > calc > merged
+    });
     for(const fn of sorted){
       try{
         const r=await fetch(`${API}/api/viewer-data/${encodeURIComponent(fn)}`);
@@ -1102,8 +1106,9 @@ useEffect(()=>{if(pendingLoad&&selFiles.size>0){setPendingLoad(false);loadData()
 
 const[filterMode,setFilterMode]=useState('');
 const selAll=useCallback(()=>{const s=new Set();files.forEach(f=>s.add(f.name));setSelFiles(s);setFilterMode('all')},[files]);
-const selCalc=useCallback(()=>{const s=new Set();files.forEach(f=>{if(f.name.includes('_calc'))s.add(f.name)});setSelFiles(s);setFilterMode('calc')},[files]);
+const selCalc=useCallback(()=>{const s=new Set();files.forEach(f=>{if(f.name.includes('_calc')&&!f.name.includes('_formula'))s.add(f.name)});setSelFiles(s);setFilterMode('calc')},[files]);
 const selMerged=useCallback(()=>{const s=new Set();files.forEach(f=>{if(f.name.includes('_merged'))s.add(f.name)});setSelFiles(s);setFilterMode('merged')},[files]);
+const selFormula=useCallback(()=>{const s=new Set();files.forEach(f=>{if(f.name.includes('_formula'))s.add(f.name)});setSelFiles(s);setFilterMode('formula')},[files]);
 const selNone=useCallback(()=>{setSelFiles(new Set());setFilterMode('')},[]);
 
 return(<div>
@@ -1118,8 +1123,9 @@ return(<div>
       <span className="it">{files.length}개 파일 — {selFiles.size}개 선택</span>
       <div style={{display:'flex',gap:6}}>
         <button className={`bt bs ${filterMode==='all'?'on':''}`} style={filterMode==='all'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selAll}>전체</button>
-        <button className={`bt bs ${filterMode==='calc'?'on':''}`} style={filterMode==='calc'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selCalc}>calc만</button>
-        <button className={`bt bs ${filterMode==='merged'?'on':''}`} style={filterMode==='merged'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selMerged}>merged만</button>
+        <button className={`bt bs ${filterMode==='calc'?'on':''}`} style={filterMode==='calc'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selCalc}>calc</button>
+        <button className={`bt bs ${filterMode==='merged'?'on':''}`} style={filterMode==='merged'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selMerged}>merged</button>
+        <button className={`bt bs ${filterMode==='formula'?'on':''}`} style={filterMode==='formula'?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff'}:{}} onClick={selFormula}>formula</button>
         <button className="bt bs" onClick={selNone}>해제</button>
         <button className="bt bs" onClick={reloadFiles}>새로고침</button>
         <button className="bt bs" style={{borderColor:'rgba(239,68,68,.3)',color:'var(--red)'}} onClick={async()=>{
@@ -1131,12 +1137,13 @@ return(<div>
         }}>선택 삭제</button>
       </div>
     </div>
-    <div className="it" style={{marginBottom:6}}>💡 "자동" 모드: 같은 폴더에서 온 merged+calc를 자동으로 하나의 케이스로 병합합니다.</div>
+    <div className="it" style={{marginBottom:6}}>💡 "자동" 모드: 같은 base명의 merged+calc+formula를 자동으로 하나의 케이스로 병합합니다.</div>
     {files.length>0?<div className="file-sel" style={{maxHeight:200}}>
       {files.map(f=><div key={f.name} className="file-sel-item" style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px',borderBottom:'1px solid var(--bd)'}}>
         <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>{setSelFiles(p=>{const s=new Set(p);s.has(f.name)?s.delete(f.name):s.add(f.name);return s});setFilterMode('')}} style={{accentColor:'var(--teal)'}}/>
         <span style={{flex:1,fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
-        {f.name.includes('_calc')&&<span className="rt rt-c">calc</span>}
+        {f.name.includes('_formula')&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:4,background:'rgba(168,85,247,.1)',color:'#a855f7'}}>formula</span>}
+        {f.name.includes('_calc')&&!f.name.includes('_formula')&&<span className="rt rt-c">calc</span>}
         {f.name.includes('_merged')&&<span className="rt rt-m">merged</span>}
         {f.source_dir&&<span className="it" title={f.source_dir} style={{fontSize:9,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>📁{f.source_dir.split(/[\\/]/).pop()}</span>}
         <span className="it">{(f.size/1024).toFixed(0)}KB</span>
