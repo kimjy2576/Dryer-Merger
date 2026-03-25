@@ -810,33 +810,36 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
                     fdata = json.loads(formula_path.read_text("utf-8"))
                     overrides = fdata.get("overrides", {})
                     custom = fdata.get("custom", [])
-                    # BUILTIN + custom 수식 수집
                     all_formulas = []
                     for c in custom:
                         if c.get("enabled", True) and c.get("name") and c.get("expr"):
-                            all_formulas.append({"name": c["name"], "expr": c["expr"], "enabled": True})
+                            all_formulas.append({"name": c["name"], "expr": c["expr"]})
                     if all_formulas:
                         n_applied = 0
+                        n_failed = 0
                         for f in all_formulas:
                             try:
                                 dangerous = ["import", "exec", "eval", "__", "open", "os.", "sys."]
                                 if any(d in f["expr"].lower() for d in dangerous):
+                                    _log(sid, f"    ❌ {f['name']}: 위험 키워드")
+                                    n_failed += 1
                                     continue
                                 df_calc[f["name"]] = df_calc.eval(f["expr"])
                                 n_applied += 1
-                            except:
-                                pass
-                        if n_applied:
-                            # _calc.csv에 formula 변수 포함하여 덮어쓰기
+                            except Exception as fe:
+                                _log(sid, f"    ❌ {f['name']}: {fe}")
+                                n_failed += 1
+                        if n_applied > 0:
                             df_calc.to_csv(RESULT_DIR / out_name, index=False)
                             if cat_path:
-                                for case_name in s.get("case_files", {}):
-                                    if case_name.replace(" ", "_") in fn or fn.startswith(case_name[:10]):
-                                        case_dir = Path(cat_path) / case_name
-                                        if case_dir.exists():
-                                            df_calc.to_csv(case_dir / out_name, index=False)
+                                for cn2 in s.get("case_files", {}):
+                                    if cn2.replace(" ", "_") in fn or fn.startswith(cn2[:10]):
+                                        cd2 = Path(cat_path) / cn2
+                                        if cd2.exists():
+                                            df_calc.to_csv(cd2 / out_name, index=False)
                                         break
-                            _log(sid, f"  🧪 Formula: {n_applied}개 수식 적용")
+                        _log(sid, f"  🧪 Formula: {n_applied}개 적용, {n_failed}개 실패 (총 {len(all_formulas)}개)")
+                        _log(sid, f"  📊 최종 컬럼 수: {len(df_calc.columns)}")
             except Exception as fe:
                 _log(sid, f"  [Formula 경고] {fe}")
 
