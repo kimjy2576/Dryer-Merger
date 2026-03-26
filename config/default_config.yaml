@@ -87,6 +87,7 @@ calculation:
   enabled: true
   compressor_volume_cc: 7.5       # 압축기 체적 [cc]
   rh_eva_out_assumed: 0.80        # 증발기 출구 예측 RH [-] (초기값)
+  use_imc_correction: true       # IMC/FMC 기반 유량 보정 (true: IMC 입력 시 보정, false: 비보정만)
 
   # RH 미측정 시 수렴 반복 설정
   rh_iteration:

@@ -687,6 +687,19 @@ return(<div>
     </div>
   </div>}
 
+  {/* IMC 보정 옵션 */}
+  <div className="cd" style={{padding:'10px 14px'}}>
+    <label style={{display:'flex',alignItems:'center',gap:8,fontSize:12,cursor:'pointer'}}>
+      <input type="checkbox" checked={cfg?.calculation?.use_imc_correction!==false} onChange={e=>{
+        const v=e.target.checked;
+        fetch(`${API}/api/config`).then(r=>r.json()).then(c=>{c.calculation.use_imc_correction=v;
+          fetch(`${API}/api/config`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})})
+      }} style={{accentColor:'var(--teal)',width:15,height:15}}/>
+      <span style={{fontWeight:500}}>🔧 IMC/FMC 기반 유량 보정</span>
+      <span style={{fontSize:10,color:'var(--tx3)'}}>체크 시: 응축수량을 실측값(IMC-FMC)에 맞춰 비례보정 → 냉매 유량 역산 → COP 등 재계산 (IMC/FMC 입력 필요)</span>
+    </label>
+  </div>
+
   {/* Calc 실행 */}
   <div className="cd">
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
