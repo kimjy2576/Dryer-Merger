@@ -28,21 +28,32 @@ def find_files(data_path: str) -> dict:
 def rename_files_in_folder(folder_path: str) -> None:
     """
     폴더 내 .csv → _br.csv, .xls → _temp.xls 로 이름 변경.
-    이미 접미사가 붙어 있거나 _merged / _calc_origin 파일은 건너뜀.
+    - 이미 BR/_br 또는 MX100/_temp 파일이 존재하면 변환하지 않음
+    - _merged, _calc, _formula, _result 파일은 절대 변환하지 않음
     """
-    for filename in os.listdir(folder_path):
+    files = os.listdir(folder_path)
+    files_lower = [f.lower() for f in files]
+
+    # 이미 분류된 파일이 있으면 변환 불필요
+    has_br = any(f.endswith("_br.csv") for f in files_lower)
+    has_mx = any(f.endswith("_temp.xls") or f.endswith("_temp.xlsx") for f in files_lower)
+
+    for filename in files:
         filepath = os.path.join(folder_path, filename)
         if not os.path.isfile(filepath):
             continue
 
         name, ext = os.path.splitext(filename)
-        if "_merged" in name or "_calc_origin" in name:
+        nl = name.lower()
+
+        # 생성 파일은 절대 변환하지 않음
+        if any(tag in nl for tag in ["merged", "calc", "formula", "result", ".cache"]):
             continue
 
         new_name = None
-        if ext.lower() == ".csv" and not name.endswith("_br"):
+        if ext.lower() == ".csv" and not has_br and not nl.endswith("_br") and "_ams" not in nl:
             new_name = f"{name}_br{ext}"
-        elif ext.lower() == ".xls" and not name.endswith("_temp"):
+        elif ext.lower() in (".xls", ".xlsx") and not has_mx and not nl.endswith("_temp"):
             new_name = f"{name}_temp{ext}"
 
         if new_name:
