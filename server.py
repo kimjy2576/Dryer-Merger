@@ -277,6 +277,7 @@ def _classify_files(folder: Path, file_rules: dict = None, active_sources: list 
     if active_sources:
         enabled = {s.lower() for s in active_sources}
         file_rules = {k: v for k, v in file_rules.items() if k in enabled}
+    print(f"  [classify] active={active_sources}, rules={list(file_rules.keys())}")
     files = {k: [] for k in file_rules}
     order = [k for k in file_rules if k != "br"] + (["br"] if "br" in file_rules else [])
     for f in sorted(folder.iterdir()):
@@ -284,6 +285,7 @@ def _classify_files(folder: Path, file_rules: dict = None, active_sources: list 
         n = f.name.lower()
         if any(tag in n for tag in ["merged", "calc", "result", "formula", ".cache"]):
             continue
+        matched = False
         for src in order:
             rule = file_rules[src]
             exts = rule.get("extensions", [])
@@ -296,7 +298,11 @@ def _classify_files(folder: Path, file_rules: dict = None, active_sources: list 
             if exc and any(p.lower() in n for p in exc):
                 continue
             files[src].append(f.name)
+            matched = True
             break
+        if not matched and n.endswith(('.csv','.tsv','.xls','.xlsx')):
+            print(f"  [classify] 미분류: {f.name} (ext={f.suffix})")
+    print(f"  [classify] 결과: {{{', '.join(f'{k}={len(v)}' for k,v in files.items())}}}")
     return files
 
 
