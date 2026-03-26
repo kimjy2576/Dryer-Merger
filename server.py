@@ -780,6 +780,19 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
                 status = "수렴" if conv["converged"] else "미수렴"
                 _log(sid, f"  수렴 반복: {conv['iterations']}회, 잔차={conv['residual']:.6f} ({status})")
 
+            # IMC 보정 정보 로그
+            imc = df_calc.attrs.get("imc_correction")
+            if imc:
+                status = "수렴" if imc.get("converged") else "미수렴"
+                _log(sid, f"  🔧 IMC 보정: {imc.get('iterations',0)}회 반복, "
+                     f"스케일={imc.get('scale_factor',1):.4f}, "
+                     f"실제={imc.get('total_real_kg',0):.3f}kg, "
+                     f"계산={imc.get('total_calc_kg',0):.3f}kg ({status})")
+            elif file_exp and file_exp.get("imc_kg"):
+                _log(sid, f"  🔧 IMC 보정: 비활성 (응축수 계산 블록 스킵)")
+            else:
+                _log(sid, f"  🔧 IMC 보정: 비활성 (IMC/FMC 미입력)")
+
             # _calc.csv 저장
             out_name = fn.replace("_merged.csv", "_calc.csv")
             df_calc.to_csv(RESULT_DIR / out_name, index=False)

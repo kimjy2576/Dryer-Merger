@@ -945,13 +945,14 @@ const PSYCH_BG=(()=>{const out=[];
 
 const VW_CATS=[
   {name:'압축기 상태량',rows:3,cols:2,vars:['P_Comp_In','P_Comp_Out','T_Comp_In','T_Comp_Body','T_Superheating','T_SH_CompOut']},
-  {name:'증발기 상태량',rows:3,cols:3,vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_In','T_Eva_Out','T_Boiling_ref','T_Superheating','RH_Eva_In','AH_Eva_In']},
+  {name:'증발기 상태량',rows:3,cols:3,vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_In','T_Eva_Out','T_Boiling_ref','T_Superheating','RH_Eva_In','AH_Eva_In','AH_Eva_In_corrected']},
   {name:'응축기 상태량',rows:3,cols:3,vars:['T_Air_Eva_Out','T_Air_Cond_Out','T_Cond_In','T_Cond_Out','T_Cond_M1','T_subcooling','RH_Cond_Out','AH_Cond_Out']},
-  {name:'유량',rows:3,cols:2,vars:['Flow_air_Cond_CMM','Flow_Mair_Cond_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH','Water_calc_gM','Water_calc_kg']},
-  {name:'성능지표',rows:3,cols:3,vars:['COP_heating','SMER','COP_cooling','COP_sys_heating','COP_sys_cooling','Factor_LFH','Ratio_Compression','Factor_SFH']},
+  {name:'유량',rows:3,cols:3,vars:['Flow_air_Cond_CMM','Flow_Mair_Cond_kgH','Flow_ref_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH_corrected','Water_calc_gM','Water_calc_gM_corrected','Water_calc_kg','Water_calc_kg_corrected']},
+  {name:'성능지표',rows:3,cols:3,vars:['COP_heating','COP_heating_corrected','COP_cooling','COP_cooling_corrected','COP_sys_heating','COP_sys_cooling','SMER','SMER_corrected','Ratio_Compression']},
   {name:'소비전력',rows:2,cols:3,vars:['E_WD','E_Comp','E_Fan','Po_WD','Po_Comp','Po_Fan']},
-  {name:'열전달',rows:3,cols:3,vars:['Qrefr_Eva_recalc','Qrefr_Cond_recalc','Q_sen_eva','Q_lat_eva','Q_Drum_Sen','Q_Drum_Lat','Q_Drum_Total','Qrefr_Eva','Qrefr_Cond']},
+  {name:'열전달',rows:3,cols:3,vars:['Qrefr_Eva','Qrefr_Eva_corrected','Qrefr_Cond','Qrefr_Cond_corrected','Q_sen_eva','Q_sen_eva_corrected','Q_lat_eva','Q_lat_eva_corrected','Q_Drum_Total']},
   {name:'제어지표',rows:3,cols:2,vars:['Ctrl_Comp_Hz','HP_F_Temp','HP_EEV_Position','HP_FanSpeed','RMC_calc','HP Fan Q Current']},
+  {name:'건조성능',rows:3,cols:3,vars:['Water_calc_kg','Water_calc_kg_corrected','RMC_calc','RMC_calc_corrected','Factor_SFH','Factor_SFH_corrected','Factor_LFH','Factor_LFH_corrected','SMER']},
 ];
 
 // ═══ Viewer 탭 ═══
@@ -1266,25 +1267,32 @@ const VL={
   T_Boiling_ref:'증발 온도 [°C]',T_Superheating:'과열도 [K]',T_SH_CompOut:'토출 과열도 [K]',
   // 습도
   RH_Eva_In:'증발기 입구 상대습도 [-]',RH_Cond_Out:'응축기 출구 상대습도 [-]',RH_Cond_In:'응축기 입구 상대습도 [-]',
-  AH_Eva_In:'증발기 입구 절대습도 [kg/kg]',AH_Cond_In:'응축기 입구 절대습도 [kg/kg]',AH_Cond_Out:'응축기 출구 절대습도 [kg/kg]',
+  AH_Eva_In:'증발기 입구 절대습도 [kg/kg]',AH_Eva_In_corrected:'증발기 입구 절대습도 (IMC보정) [kg/kg]',AH_Cond_In:'응축기 입구 절대습도 [kg/kg]',AH_Cond_Out:'응축기 출구 절대습도 [kg/kg]',
   // 유량
   Flow_air_Cond_CMM:'응축기 풍량 [CMM]',Flow_air_Eva_CMM:'증발기 풍량 [CMM]',
   Flow_Mair_Cond_kgH:'습공기 질량유량 [kg/h]',Flow_Dair_kgH:'건조공기 질량유량 [kg/h]',
-  Flow_ref_kgH:'냉매 유량 [kg/h]',Flow_ref_kgH_recalc:'냉매 유량 (보정) [kg/h]',
+  Flow_ref_kgH:'냉매 유량 [kg/h]',Flow_ref_kgH_recalc:'냉매 유량 (필터) [kg/h]',Flow_ref_kgH_corrected:'냉매 유량 (IMC보정) [kg/h]',
   // 수분
   Water_calc_gM:'응축수량 [g/min]',Water_calc_kg:'누적 응축수 [kg]',RMC_calc:'잔여수분율 [%]',
+  Water_calc_gM_corrected:'응축수량 (IMC보정) [g/min]',Water_calc_kg_corrected:'누적 응축수 (IMC보정) [kg]',RMC_calc_corrected:'잔여수분율 (IMC보정) [%]',
   // 전력/에너지
   Po_WD:'총 소비전력 [W]',Po_Comp:'압축기 전력 [W]',Po_Fan:'팬 전력 [W]',Po_Drum_calc:'드럼 전력 [W]',
   E_WD:'총 에너지 [Wh]',E_Comp:'압축기 에너지 [Wh]',E_Fan:'팬 에너지 [Wh]',
   // 성능
   COP_heating:'난방 COP [-]',COP_cooling:'냉방 COP [-]',
   COP_sys_heating:'시스템 난방 COP [-]',COP_sys_cooling:'시스템 냉방 COP [-]',
-  SMER:'에너지효율 SMER [kg/kWh]',Factor_SFH:'현열비 [-]',Factor_LFH:'잠열비 [-]',
+  COP_heating_corrected:'난방 COP (IMC보정) [-]',COP_cooling_corrected:'냉방 COP (IMC보정) [-]',
+  COP_sys_heating_corrected:'시스템 난방 COP (IMC보정) [-]',COP_sys_cooling_corrected:'시스템 냉방 COP (IMC보정) [-]',
+  SMER:'에너지효율 SMER [kg/kWh]',SMER_corrected:'에너지효율 SMER (IMC보정) [kg/kWh]',
+  Factor_SFH:'현열비 [-]',Factor_LFH:'잠열비 [-]',
+  Factor_SFH_corrected:'현열비 (IMC보정) [-]',Factor_LFH_corrected:'잠열비 (IMC보정) [-]',
   Ratio_Compression:'압축비 [-]',Drum_SFH:'드럼 현열비 [-]',Drum_LFH:'드럼 잠열비 [-]',
   // 열전달
-  Qrefr_Eva_recalc:'증발기 냉매 열량 (보정) [W]',Qrefr_Cond_recalc:'응축기 냉매 열량 (보정) [W]',
+  Qrefr_Eva_recalc:'증발기 냉매 열량 (필터) [W]',Qrefr_Cond_recalc:'응축기 냉매 열량 (필터) [W]',
   Qrefr_Eva:'증발기 냉매 열량 [W]',Qrefr_Cond:'응축기 냉매 열량 [W]',
+  Qrefr_Eva_corrected:'증발기 냉매 열량 (IMC보정) [W]',Qrefr_Cond_corrected:'응축기 냉매 열량 (IMC보정) [W]',
   Q_sen_eva:'증발기 현열 [W]',Q_lat_eva:'증발기 잠열 [W]',
+  Q_sen_eva_corrected:'증발기 현열 (IMC보정) [W]',Q_lat_eva_corrected:'증발기 잠열 (IMC보정) [W]',
   Q_Drum_Sen:'드럼 현열 [W]',Q_Drum_Lat:'드럼 잠열 [W]',Q_Drum_Total:'드럼 총 열량 [W]',
   // 엔탈피/엔트로피
   h_Comp_In_ref:'압축기 입구 엔탈피 [kJ/kg]',h_Comp_Out_ref:'압축기 출구 엔탈피 [kJ/kg]',
