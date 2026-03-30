@@ -1194,7 +1194,7 @@ return(<div>
 
   {cases.length>0&&<>
   {/* 서브탭 */}
-  <div style={{display:'flex',gap:3,marginBottom:10,background:'var(--bg3)',padding:3,borderRadius:'var(--r)'}}>{[['chart','개별선도'],['psych','습공기 선도'],['ph','P-h 선도']].map(([k,lb])=>
+  <div style={{display:'flex',gap:3,marginBottom:10,background:'var(--bg3)',padding:3,borderRadius:'var(--r)'}}>{[['chart','개별선도'],['psych','습공기 선도'],['ph','P-h 선도'],['perf','성능 비교']].map(([k,lb])=>
     <button key={k} className={`tb ${sub===k?'on':''}`} onClick={()=>setSub(k)} style={sub!==k?{border:'1px solid var(--bd2)',background:'var(--bg)'}:{}}>{lb}</button>)}</div>
 
   {/* 공통 컨트롤 — 케이스 */}
@@ -1273,6 +1273,7 @@ return(<div>
   {sub==='chart'&&<VwChart cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} xGap={xGap} yGap={yGap}/>}
   {sub==='psych'&&<VwPsych cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/>}
   {sub==='ph'&&<VwPh cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} cfg={cfg}/>}
+  {sub==='perf'&&<VwPerf cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW}/>}
   </ErrorBound>
   </>}
 </div>)}
@@ -1776,6 +1777,188 @@ function VwPh({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,cfg}){
       </div>)}
       </div>
     </div>}
+  </div>)
+}
+
+// ═══ 성능 비교 차트 ═══
+const PERF_PRESETS=[
+  {key:'Time_min',label:'운전시간 [min]',agg:'last'},
+  {key:'Water_calc_kg',label:'총 응축수 [kg]',agg:'last'},
+  {key:'Water_calc_kg_corrected',label:'총 응축수 (IMC보정) [kg]',agg:'last'},
+  {key:'RMC_calc',label:'잔여수분율 [%]',agg:'last'},
+  {key:'E_WD',label:'총 소비전력량 [Wh]',agg:'last'},
+  {key:'E_Comp',label:'압축기 전력량 [Wh]',agg:'last'},
+  {key:'E_Fan',label:'팬 전력량 [Wh]',agg:'last'},
+  {key:'Po_WD',label:'평균 소비전력 [W]',agg:'mean'},
+  {key:'Po_Comp',label:'평균 압축기 전력 [W]',agg:'mean'},
+  {key:'Po_Fan',label:'평균 팬 전력 [W]',agg:'mean'},
+  {key:'COP_heating',label:'평균 난방 COP [-]',agg:'mean'},
+  {key:'COP_cooling',label:'평균 냉방 COP [-]',agg:'mean'},
+  {key:'COP_heating_corrected',label:'평균 난방 COP (IMC) [-]',agg:'mean'},
+  {key:'SMER',label:'평균 SMER [kg/kWh]',agg:'mean'},
+  {key:'SMER_corrected',label:'평균 SMER (IMC) [kg/kWh]',agg:'mean'},
+  {key:'Flow_ref_kgH',label:'평균 냉매유량 [kg/h]',agg:'mean'},
+  {key:'Qrefr_Eva',label:'평균 증발기 열량 [W]',agg:'mean'},
+  {key:'Qrefr_Cond',label:'평균 응축기 열량 [W]',agg:'mean'},
+  {key:'T_Comp_Out',label:'평균 토출온도 [°C]',agg:'mean'},
+  {key:'P_Comp_Out',label:'평균 토출압력 [barg]',agg:'mean'},
+];
+
+function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
+  const VW_COLORS=['#2563eb','#dc2626','#16a34a','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16'];
+  const ref=useRef();
+  // 변수 설정: [{key, axis:'y1'|'y2', type:'bar'|'line', agg:'last'|'mean'|'max'|'min'}]
+  const[vars,setVars]=useState([
+    {key:'E_WD',axis:'y1',type:'bar',agg:'last'},
+    {key:'E_Comp',axis:'y1',type:'bar',agg:'last'},
+    {key:'E_Fan',axis:'y1',type:'bar',agg:'last'},
+    {key:'COP_heating',axis:'y2',type:'line',agg:'mean'},
+  ]);
+  const[grouped,setGrouped]=useState(true);
+  const[y1Label,setY1Label]=useState('');
+  const[y2Label,setY2Label]=useState('');
+
+  // 사용 가능한 변수 (cases 데이터에 있는 것만)
+  const availKeys=useMemo(()=>{
+    const s=new Set();
+    cases.forEach(c=>{if(c?.data)Object.keys(c.data).forEach(k=>s.add(k))});
+    return[...s].sort();
+  },[cases]);
+
+  // 프리셋에서 라벨 찾기
+  const getLabel=k=>{const p=PERF_PRESETS.find(x=>x.key===k);return p?p.label:k};
+
+  // 요약값 추출
+  const getSummary=(caseData,key,agg)=>{
+    const arr=caseData?.[key];
+    if(!arr?.length)return null;
+    const valid=arr.filter(v=>v!=null&&!isNaN(v));
+    if(!valid.length)return null;
+    if(agg==='last')return valid[valid.length-1];
+    if(agg==='mean')return valid.reduce((a,b)=>a+b,0)/valid.length;
+    if(agg==='max')return Math.max(...valid);
+    if(agg==='min')return Math.min(...valid);
+    return valid[valid.length-1];
+  };
+
+  // 변수 추가
+  const addVar=()=>{
+    const unused=availKeys.filter(k=>!vars.some(v=>v.key===k)&&!/^Time/i.test(k));
+    if(!unused.length){alert('추가할 변수 없음');return}
+    setVars(p=>[...p,{key:unused[0],axis:'y1',type:'bar',agg:'last'}]);
+  };
+  const removeVar=i=>setVars(p=>p.filter((_,j)=>j!==i));
+  const updateVar=(i,field,val)=>setVars(p=>p.map((v,j)=>j===i?{...v,[field]:val}:v));
+  const moveVar=(i,to)=>{if(to<0||to>=vars.length)return;setVars(p=>{const a=[...p];[a[i],a[to]]=[a[to],a[i]];return a})};
+
+  // 차트 렌더링
+  useEffect(()=>{
+    if(!ref.current||!cases.length||!vars.length)return;
+    const visCases=cases.filter(c=>caseVis[c.name]);
+    if(!visCases.length)return;
+    const caseNames=visCases.map(c=>c.label||c.name);
+    const traces=[];
+    const BAR_COLORS=['#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6'];
+    const barVars=vars.filter(v=>v.type==='bar');
+    const lineVars=vars.filter(v=>v.type==='line');
+
+    if(grouped){
+      // ── 그룹화: X=케이스, 변수별로 다른 색상 바 ──
+      barVars.forEach((v,vi)=>{
+        const vals=visCases.map(c=>getSummary(c.data,v.key,v.agg));
+        traces.push({
+          x:caseNames,y:vals,name:getLabel(v.key),type:'bar',
+          yaxis:v.axis==='y2'?'y2':'y',
+          marker:{color:BAR_COLORS[vi%BAR_COLORS.length],line:{width:1,color:'rgba(0,0,0,.15)'}},
+          text:vals.map(x=>x!=null?x.toFixed(2):''),textposition:'outside',textfont:{size:9},
+        });
+      });
+    }else{
+      // ── 비그룹화: X=변수, 케이스별로 다른 색상 바 ──
+      const barLabels=barVars.map(v=>getLabel(v.key));
+      visCases.forEach((c,ci)=>{
+        const col=caseColors[c.name]||VW_COLORS[ci%VW_COLORS.length];
+        const vals=barVars.map(v=>getSummary(c.data,v.key,v.agg));
+        traces.push({
+          x:barLabels,y:vals,name:c.label||c.name,type:'bar',
+          marker:{color:col,line:{width:1,color:'rgba(0,0,0,.15)'}},
+          text:vals.map(x=>x!=null?x.toFixed(2):''),textposition:'outside',textfont:{size:9},
+          legendgroup:c.name,
+        });
+      });
+    }
+
+    // ── 라인 차트 (항상 X=케이스) ──
+    lineVars.forEach((v,vi)=>{
+      const vals=visCases.map(c=>getSummary(c.data,v.key,v.agg));
+      traces.push({
+        x:caseNames,y:vals,name:getLabel(v.key),type:'scatter',mode:'lines+markers+text',
+        yaxis:v.axis==='y2'?'y2':'y',
+        line:{width:2.5,shape:'spline',color:BAR_COLORS[(barVars.length+vi)%BAR_COLORS.length]},
+        marker:{size:10,line:{width:2,color:'#fff'}},
+        text:vals.map(x=>x!=null?x.toFixed(2):''),textposition:'top center',textfont:{size:9},
+      });
+    });
+
+    const fW=chartW>0?chartW:undefined;
+    const layout={
+      width:fW,height:chartH||500,
+      margin:{l:70,r:70,t:40,b:80},
+      barmode:'group',
+      paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
+      font:{family:'var(--sans)'},
+      xaxis:{tickfont:{size:11},linecolor:'rgba(0,0,0,0.2)',linewidth:1},
+      yaxis:{title:{text:y1Label||'좌측 Y축',font:{size:12}},tickfont:{size:11},gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false},
+      legend:{orientation:'h',y:-.2,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,.8)'},
+    };
+    if(vars.some(v=>v.axis==='y2')){
+      layout.yaxis2={title:{text:y2Label||'우측 Y축',font:{size:12}},tickfont:{size:11},overlaying:'y',side:'right',gridcolor:'rgba(0,0,0,0.04)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false};
+    }
+    try{Plotly.react(ref.current,traces,layout,{responsive:!fW,displaylogo:false})}catch(e){console.error('VwPerf:',e)}
+  },[cases,caseVis,caseColors,vars,grouped,chartH,chartW,y1Label,y2Label]);
+
+  return(<div>
+    {/* 변수 설정 */}
+    <div style={{padding:'8px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:8}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>변수 설정</span>
+        <button className="bt bs" onClick={addVar} style={{fontSize:9,padding:'2px 8px'}}>+ 추가</button>
+        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+        <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,cursor:'pointer'}}>
+          <input type="checkbox" checked={grouped} onChange={e=>setGrouped(e.target.checked)} style={{accentColor:'var(--teal)'}}/>
+          그룹화 막대
+        </label>
+        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+        <span style={{fontSize:10,color:'var(--tx3)'}}>좌측 Y축:</span>
+        <input value={y1Label} onChange={e=>setY1Label(e.target.value)} placeholder="자동" style={{width:100,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+        <span style={{fontSize:10,color:'var(--tx3)'}}>우측 Y축:</span>
+        <input value={y2Label} onChange={e=>setY2Label(e.target.value)} placeholder="자동" style={{width:100,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+      </div>
+      <div style={{maxHeight:200,overflowY:'auto'}}>
+        {vars.map((v,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:4,padding:'3px 4px',borderBottom:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',flexDirection:'column',gap:0}}>
+            <button onClick={()=>moveVar(i,i-1)} disabled={i===0} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i===0?'var(--bd2)':'var(--tx3)',cursor:i===0?'default':'pointer'}}>▲</button>
+            <button onClick={()=>moveVar(i,i+1)} disabled={i>=vars.length-1} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i>=vars.length-1?'var(--bd2)':'var(--tx3)',cursor:i>=vars.length-1?'default':'pointer'}}>▼</button>
+          </div>
+          <span style={{fontSize:9,color:'var(--tx3)',minWidth:14,textAlign:'center'}}>{i+1}</span>
+          <select value={v.key} onChange={e=>updateVar(i,'key',e.target.value)} style={{flex:1,fontSize:10,padding:'2px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
+            {availKeys.map(k=><option key={k} value={k}>{getLabel(k)}</option>)}
+          </select>
+          <select value={v.type} onChange={e=>updateVar(i,'type',e.target.value)} style={{fontSize:10,padding:'2px 3px',width:55,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
+            <option value="bar">막대</option><option value="line">선</option>
+          </select>
+          <select value={v.axis} onChange={e=>updateVar(i,'axis',e.target.value)} style={{fontSize:10,padding:'2px 3px',width:55,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
+            <option value="y1">좌측</option><option value="y2">우측</option>
+          </select>
+          <select value={v.agg} onChange={e=>updateVar(i,'agg',e.target.value)} style={{fontSize:10,padding:'2px 3px',width:55,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
+            <option value="last">최종</option><option value="mean">평균</option><option value="max">최대</option><option value="min">최소</option>
+          </select>
+          <button onClick={()=>removeVar(i)} style={{fontSize:9,border:0,background:0,color:'var(--red)',cursor:'pointer',padding:'0 2px'}}>×</button>
+        </div>))}
+      </div>
+    </div>
+    {/* 차트 */}
+    <div className="cd" style={{padding:4}}><div ref={ref}/></div>
   </div>)
 }
 
