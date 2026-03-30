@@ -1014,21 +1014,21 @@ const[loadMsg,setLoadMsg]=useState('');
 const[dbg,setDbg]=useState('');
 const loadData=async()=>{if(!selFiles.size)return;setLoading(true);setLoadMsg('');setDbg('');
   const logs=[];const errs=[];
+  // 파일 목록 순서 유지 (Set → 정렬된 배열)
+  const orderedSel=files.filter(f=>selFiles.has(f.name)).map(f=>f.name);
 
   // ── 그룹핑 ──
   const groups=new Map(); // groupName → [fn, fn, ...]
   if(mergeMode==='all'){
-    // 전부 한 케이스
-    groups.set('All_merged',[...selFiles]);
+    groups.set('All_merged',[...orderedSel]);
   }else if(mergeMode==='each'){
-    // 파일별 개별
-    for(const fn of selFiles)groups.set(fn.replace(/\.csv$/,''),[fn]);
+    for(const fn of orderedSel)groups.set(fn.replace(/\.csv$/,''),[fn]);
   }else{
     // auto: 1차 source_dir, 2차 base명으로 그룹핑
     const fileInfo=new Map();files.forEach(f=>fileInfo.set(f.name,f));
     const getBase=fn=>fn.replace(/_calc_formula\.csv$/,'').replace(/_formula\.csv$/,'').replace(/_calc\.csv$/,'').replace(/_merged\.csv$/,'').replace(/\.csv$/,'');
     const baseMap=new Map(); // groupKey → [fn]
-    for(const fn of selFiles){
+    for(const fn of orderedSel){
       const f=fileInfo.get(fn);
       let key;
       if(f?.source_dir){
@@ -1164,7 +1164,11 @@ return(<div>
     </div>
     <div className="it" style={{marginBottom:6}}>💡 "자동" 모드: 같은 base명의 merged+calc+formula를 자동으로 하나의 케이스로 병합합니다.</div>
     {files.length>0?<div className="file-sel" style={{maxHeight:200}}>
-      {files.map(f=><div key={f.name} className="file-sel-item" style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px',borderBottom:'1px solid var(--bd)'}}>
+      {files.map((f,fi)=><div key={f.name} className="file-sel-item" style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px',borderBottom:'1px solid var(--bd)'}}>
+        <div style={{display:'flex',flexDirection:'column',gap:0}}>
+          <button onClick={()=>{if(fi===0)return;setFiles(prev=>{const a=[...prev];[a[fi],a[fi-1]]=[a[fi-1],a[fi]];return a})}} disabled={fi===0} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:fi===0?'var(--bd2)':'var(--tx3)',cursor:fi===0?'default':'pointer'}}>▲</button>
+          <button onClick={()=>{if(fi===files.length-1)return;setFiles(prev=>{const a=[...prev];[a[fi],a[fi+1]]=[a[fi+1],a[fi]];return a})}} disabled={fi===files.length-1} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:fi===files.length-1?'var(--bd2)':'var(--tx3)',cursor:fi===files.length-1?'default':'pointer'}}>▼</button>
+        </div>
         <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>{setSelFiles(p=>{const s=new Set(p);s.has(f.name)?s.delete(f.name):s.add(f.name);return s});setFilterMode('')}} style={{accentColor:'var(--teal)'}}/>
         <span style={{flex:1,fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
         {f.name.includes('_formula')&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:4,background:'rgba(168,85,247,.1)',color:'#a855f7'}}>formula</span>}
@@ -1196,8 +1200,14 @@ return(<div>
   {/* 공통 컨트롤 — 케이스 */}
   <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:6,padding:'8px 12px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:8}}>
     <span style={{fontSize:11,fontWeight:500,color:'var(--tx2)'}}>케이스:</span>
-    {cases.map((c,i)=>{const col=caseColors[c.name]||VW_COLORS[i%VW_COLORS.length];return(<div key={c.name} style={{display:'flex',alignItems:'center',gap:0}}>
-      <input type="color" value={col} onChange={e=>setCaseColors(p=>({...p,[c.name]:e.target.value}))} title="색상 변경" style={{width:20,height:22,padding:0,border:'1px solid var(--bd2)',borderRight:0,borderRadius:'5px 0 0 5px',cursor:'pointer',background:'var(--bg3)'}}/>
+    {cases.map((c,i)=>{const col=caseColors[c.name]||VW_COLORS[i%VW_COLORS.length];
+      const moveCase=(from,to)=>{if(to<0||to>=cases.length)return;setCases(prev=>{const a=[...prev];[a[from],a[to]]=[a[to],a[from]];return a})};
+      return(<div key={c.name} style={{display:'flex',alignItems:'center',gap:0}}>
+      <div style={{display:'flex',flexDirection:'column',marginRight:-1}}>
+        <button onClick={()=>moveCase(i,i-1)} disabled={i===0} title="위로" style={{padding:'0 3px',border:'1px solid var(--bd2)',borderBottom:0,borderRadius:'5px 0 0 0',background:'var(--bg3)',color:i===0?'var(--bd2)':'var(--tx3)',cursor:i===0?'default':'pointer',fontSize:7,lineHeight:'10px'}}>▲</button>
+        <button onClick={()=>moveCase(i,i+1)} disabled={i===cases.length-1} title="아래로" style={{padding:'0 3px',border:'1px solid var(--bd2)',borderRadius:'0 0 0 5px',background:'var(--bg3)',color:i===cases.length-1?'var(--bd2)':'var(--tx3)',cursor:i===cases.length-1?'default':'pointer',fontSize:7,lineHeight:'10px'}}>▼</button>
+      </div>
+      <input type="color" value={col} onChange={e=>setCaseColors(p=>({...p,[c.name]:e.target.value}))} title="색상 변경" style={{width:20,height:22,padding:0,border:'1px solid var(--bd2)',borderRight:0,borderRadius:'0',cursor:'pointer',background:'var(--bg3)'}}/>
       <button style={{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',border:'1px solid var(--bd2)',borderRight:0,borderLeft:0,background:caseVis[c.name]?'var(--bg3)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}>
         <span style={{width:10,height:10,borderRadius:'50%',background:col}}/>{c.label||c.name}
       </button>
