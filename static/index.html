@@ -1198,22 +1198,24 @@ return(<div>
     <button key={k} className={`tb ${sub===k?'on':''}`} onClick={()=>setSub(k)} style={sub!==k?{border:'1px solid var(--bd2)',background:'var(--bg)'}:{}}>{lb}</button>)}</div>
 
   {/* 공통 컨트롤 — 케이스 */}
-  <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:6,padding:'8px 12px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:8}}>
-    <span style={{fontSize:11,fontWeight:500,color:'var(--tx2)'}}>케이스:</span>
+  <div style={{marginBottom:6,padding:'8px 12px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:8}}>
+    <div style={{fontSize:11,fontWeight:500,color:'var(--tx2)',marginBottom:6}}>케이스 ({cases.length}개)</div>
+    <div style={{maxHeight:160,overflowY:'auto'}}>
     {cases.map((c,i)=>{const col=caseColors[c.name]||VW_COLORS[i%VW_COLORS.length];
       const moveCase=(from,to)=>{if(to<0||to>=cases.length)return;setCases(prev=>{const a=[...prev];[a[from],a[to]]=[a[to],a[from]];return a})};
-      return(<div key={c.name} style={{display:'flex',alignItems:'center',gap:0}}>
-      <div style={{display:'flex',flexDirection:'column',marginRight:-1}}>
-        <button onClick={()=>moveCase(i,i-1)} disabled={i===0} title="위로" style={{padding:'0 3px',border:'1px solid var(--bd2)',borderBottom:0,borderRadius:'5px 0 0 0',background:'var(--bg3)',color:i===0?'var(--bd2)':'var(--tx3)',cursor:i===0?'default':'pointer',fontSize:7,lineHeight:'10px'}}>▲</button>
-        <button onClick={()=>moveCase(i,i+1)} disabled={i===cases.length-1} title="아래로" style={{padding:'0 3px',border:'1px solid var(--bd2)',borderRadius:'0 0 0 5px',background:'var(--bg3)',color:i===cases.length-1?'var(--bd2)':'var(--tx3)',cursor:i===cases.length-1?'default':'pointer',fontSize:7,lineHeight:'10px'}}>▼</button>
-      </div>
-      <input type="color" value={col} onChange={e=>setCaseColors(p=>({...p,[c.name]:e.target.value}))} title="색상 변경" style={{width:20,height:22,padding:0,border:'1px solid var(--bd2)',borderRight:0,borderRadius:'0',cursor:'pointer',background:'var(--bg3)'}}/>
-      <button style={{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',border:'1px solid var(--bd2)',borderRight:0,borderLeft:0,background:caseVis[c.name]?'var(--bg3)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}>
-        <span style={{width:10,height:10,borderRadius:'50%',background:col}}/>{c.label||c.name}
-      </button>
-      <button onClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n)setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}} title="이름 변경" style={{padding:'4px 5px',border:'1px solid var(--bd2)',borderRight:0,background:'var(--bg3)',color:'var(--tx3)',cursor:'pointer',fontSize:9}}>✏️</button>
-      <button onClick={()=>{if(cases.length<=1){alert('최소 1개 케이스 필요');return}if(!confirm(`"${c.label||c.name}" 케이스를 삭제하시겠습니까?`))return;setCases(prev=>prev.filter(cc=>cc.name!==c.name));setCaseVis(p=>{const n={...p};delete n[c.name];return n})}} title="케이스 삭제" style={{padding:'4px 5px',borderRadius:'0 5px 5px 0',border:'1px solid var(--bd2)',background:'var(--bg3)',color:'var(--red)',cursor:'pointer',fontSize:9}}>×</button>
-    </div>)})}
+      return(<div key={c.name} style={{display:'flex',alignItems:'center',gap:4,padding:'3px 6px',borderBottom:'1px solid var(--bd)'}}>
+        <div style={{display:'flex',flexDirection:'column',gap:0}}>
+          <button onClick={()=>moveCase(i,i-1)} disabled={i===0} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i===0?'var(--bd2)':'var(--tx3)',cursor:i===0?'default':'pointer'}}>▲</button>
+          <button onClick={()=>moveCase(i,i+1)} disabled={i===cases.length-1} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i===cases.length-1?'var(--bd2)':'var(--tx3)',cursor:i===cases.length-1?'default':'pointer'}}>▼</button>
+        </div>
+        <input type="color" value={col} onChange={e=>setCaseColors(p=>({...p,[c.name]:e.target.value}))} title="색상 변경" style={{width:18,height:18,padding:0,border:'1px solid var(--bd2)',borderRadius:3,cursor:'pointer'}}/>
+        <button style={{flex:1,display:'flex',alignItems:'center',gap:5,padding:'2px 8px',border:'1px solid var(--bd2)',borderRadius:4,background:caseVis[c.name]?'var(--bg3)':'transparent',opacity:caseVis[c.name]?1:.3,cursor:'pointer',fontFamily:'var(--mono)',fontSize:11,color:'var(--tx)',textAlign:'left'}} onClick={()=>setCaseVis(p=>({...p,[c.name]:!p[c.name]}))}>
+          <span style={{width:8,height:8,borderRadius:'50%',background:col,flexShrink:0}}/><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.label||c.name}</span>
+        </button>
+        <button onClick={()=>{const n=prompt('케이스 이름:',c.label||c.name);if(n)setCases(prev=>prev.map(cc=>cc.name===c.name?{...cc,label:n}:cc))}} title="이름 변경" style={{padding:'2px 4px',border:'1px solid var(--bd2)',borderRadius:3,background:'var(--bg3)',color:'var(--tx3)',cursor:'pointer',fontSize:9}}>✏️</button>
+        <button onClick={()=>{if(cases.length<=1){alert('최소 1개 케이스 필요');return}if(!confirm(`"${c.label||c.name}" 삭제?`))return;setCases(prev=>prev.filter(cc=>cc.name!==c.name));setCaseVis(p=>{const n={...p};delete n[c.name];return n})}} title="삭제" style={{padding:'2px 4px',border:'1px solid var(--bd2)',borderRadius:3,background:'var(--bg3)',color:'var(--red)',cursor:'pointer',fontSize:9}}>×</button>
+      </div>)})}
+    </div>
   </div>
   <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>
 
@@ -1496,18 +1498,22 @@ function VwChart({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,xGap,yGap})
         <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>변수/Y축</span>
         <span style={{width:1,height:14,background:'var(--bd2)'}}/>
         <button className="bt bs" onClick={addPlot} style={{fontSize:9,padding:'2px 8px'}}>+ 변수 추가</button>
+        <span style={{fontSize:9,color:'var(--tx3)'}}>{tab.plots.slice(0,tab.rows*tab.cols).length}개</span>
       </div>
-      <div style={{display:'flex',gap:4,flexWrap:'wrap',alignItems:'center'}}>
+      <div style={{maxHeight:200,overflowY:'auto'}}>
       {tab.plots.slice(0,tab.rows*tab.cols).map((k,i)=>{const yr=tab.yranges?.[k];const hasR=yr&&(yr[0]!=null||yr[1]!=null);
-        return(<div key={i} style={{display:'flex',alignItems:'center',gap:2,padding:'2px 4px',background:'var(--bg2)',border:'1px solid var(--bd)',borderRadius:5}}>
-        {i>0&&<button onClick={()=>movePlot(i,i-1)} style={{fontSize:9,border:0,background:0,color:'var(--tx3)',cursor:'pointer',padding:0}}>◀</button>}
-        <select value={k} onChange={e=>setPlotVar(i,e.target.value)} style={{fontSize:10,padding:'2px 3px',width:180,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
+        return(<div key={i} style={{display:'flex',alignItems:'center',gap:4,padding:'3px 4px',borderBottom:'1px solid var(--bd)'}}>
+        <div style={{display:'flex',flexDirection:'column',gap:0}}>
+          <button onClick={()=>movePlot(i,i-1)} disabled={i===0} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i===0?'var(--bd2)':'var(--tx3)',cursor:i===0?'default':'pointer'}}>▲</button>
+          <button onClick={()=>movePlot(i,i+1)} disabled={i>=tab.plots.slice(0,tab.rows*tab.cols).length-1} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i>=tab.plots.slice(0,tab.rows*tab.cols).length-1?'var(--bd2)':'var(--tx3)',cursor:i>=tab.plots.slice(0,tab.rows*tab.cols).length-1?'default':'pointer'}}>▼</button>
+        </div>
+        <span style={{fontSize:9,color:'var(--tx3)',minWidth:16,textAlign:'center'}}>{i+1}</span>
+        <select value={k} onChange={e=>setPlotVar(i,e.target.value)} style={{flex:1,fontSize:10,padding:'2px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
           {allVars.map(v=><option key={v} value={v}>{VL[v]||v}</option>)}
         </select>
         <input value={yr?.[0]??''} onChange={e=>setYRange(k,0,e.target.value)} placeholder="min" title="Y축 최소" style={{width:40,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
         <input value={yr?.[1]??''} onChange={e=>setYRange(k,1,e.target.value)} placeholder="max" title="Y축 최대" style={{width:40,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
         {hasR&&<button onClick={()=>clearYRange(k)} title="Y축 자동" style={{fontSize:8,border:0,background:0,color:'var(--blue)',cursor:'pointer',padding:0}}>↺</button>}
-        {i<tab.plots.length-1&&<button onClick={()=>movePlot(i,i+1)} style={{fontSize:9,border:0,background:0,color:'var(--tx3)',cursor:'pointer',padding:0}}>▶</button>}
         <button onClick={()=>removePlot(i)} style={{fontSize:9,border:0,background:0,color:'var(--red)',cursor:'pointer',padding:'0 2px'}}>×</button>
       </div>)})}
     </div>
