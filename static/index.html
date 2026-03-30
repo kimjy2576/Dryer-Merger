@@ -1816,6 +1816,7 @@ function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
   const[grouped,setGrouped]=useState(true);
   const[y1Label,setY1Label]=useState('');
   const[y2Label,setY2Label]=useState('');
+  const[xLabel,setXLabel]=useState('');
   // 차트 설정
   const[y1Range,setY1Range]=useState(['','']);
   const[y2Range,setY2Range]=useState(['','']);
@@ -1916,15 +1917,14 @@ function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
     const g2=y2Grid?'rgba(0,0,0,0.08)':'rgba(0,0,0,0)';
     const y1R=y1Range[0]!==''&&y1Range[1]!==''?[+y1Range[0],+y1Range[1]]:undefined;
     const y2R=y2Range[0]!==''&&y2Range[1]!==''?[+y2Range[0],+y2Range[1]]:undefined;
-    // 바 폭 적용
-    traces.forEach(t=>{if(t.type==='bar')t.width=barWidth});
+    // trace.width 설정하면 barmode:'group' 자동 배치가 무시돼서 겹침 → bargap만 사용
     const layout={
       width:fW,height:chartH||500,
       margin:{l:70,r:70,t:40,b:80},
-      barmode:'group',bargap:1-barWidth,
+      barmode:'group',bargap:1-barWidth,bargroupgap:0.1,
       paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
       font:{family:'var(--sans)'},
-      xaxis:{tickfont:{size:axisFontSize},linecolor:'rgba(0,0,0,0.2)',linewidth:1},
+      xaxis:{title:xLabel?axTitle(xLabel):undefined,tickfont:{size:axisFontSize},linecolor:'rgba(0,0,0,0.2)',linewidth:1},
       yaxis:{title:axTitle(y1Label||'좌측 Y축'),tickfont:{size:axisFontSize},range:y1R,gridcolor:g1,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false},
       legend:{orientation:'h',y:-.2,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,.8)'},
     };
@@ -1932,7 +1932,7 @@ function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
       layout.yaxis2={title:axTitle(y2Label||'우측 Y축'),tickfont:{size:axisFontSize},range:y2R,overlaying:'y',side:'right',gridcolor:g2,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false};
     }
     try{Plotly.react(ref.current,traces,layout,{responsive:!fW,displaylogo:false})}catch(e){console.error('VwPerf:',e)}
-  },[cases,caseVis,caseColors,vars,grouped,chartH,chartW,y1Label,y2Label,y1Range,y2Range,axisFontSize,axisBold,showDataLabels,dataLabelSize,dataLabelBold,y1Grid,y2Grid,barWidth]);
+  },[cases,caseVis,caseColors,vars,grouped,chartH,chartW,xLabel,y1Label,y2Label,y1Range,y2Range,axisFontSize,axisBold,showDataLabels,dataLabelSize,dataLabelBold,y1Grid,y2Grid,barWidth]);
 
   return(<div>
     {/* 변수 설정 */}
@@ -1946,10 +1946,12 @@ function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
           그룹화 막대
         </label>
         <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+        <span style={{fontSize:10,color:'var(--tx3)'}}>X축:</span>
+        <input value={xLabel} onChange={e=>setXLabel(e.target.value)} placeholder="자동" style={{width:80,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
         <span style={{fontSize:10,color:'var(--tx3)'}}>좌측 Y축:</span>
-        <input value={y1Label} onChange={e=>setY1Label(e.target.value)} placeholder="자동" style={{width:100,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+        <input value={y1Label} onChange={e=>setY1Label(e.target.value)} placeholder="자동" style={{width:80,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
         <span style={{fontSize:10,color:'var(--tx3)'}}>우측 Y축:</span>
-        <input value={y2Label} onChange={e=>setY2Label(e.target.value)} placeholder="자동" style={{width:100,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+        <input value={y2Label} onChange={e=>setY2Label(e.target.value)} placeholder="자동" style={{width:80,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
       </div>
       <div style={{maxHeight:200,overflowY:'auto'}}>
         {vars.map((v,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:4,padding:'3px 4px',borderBottom:'1px solid var(--bd)'}}>
