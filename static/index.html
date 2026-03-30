@@ -1989,12 +1989,12 @@ function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
       <input value={y2Range[1]} onChange={e=>setY2Range(p=>[p[0],e.target.value])} placeholder="max" style={{width:45,fontSize:10,padding:'2px 4px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
       <span style={{width:1,height:14,background:'var(--bd2)'}}/>
       <span style={{fontWeight:600,color:'var(--tx2)'}}>축 글꼴</span>
-      <input type="number" value={axisFontSize} onChange={e=>setAxisFontSize(+e.target.value)} min={8} max={20} style={{width:35,fontSize:10,padding:'2px 3px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+      <input type="number" value={axisFontSize} onChange={e=>setAxisFontSize(+e.target.value)} min={1} style={{width:35,fontSize:10,padding:'2px 3px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
       <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={axisBold} onChange={e=>setAxisBold(e.target.checked)} style={{accentColor:'var(--teal)'}}/>Bold</label>
       <span style={{width:1,height:14,background:'var(--bd2)'}}/>
       <span style={{fontWeight:600,color:'var(--tx2)'}}>수치 레이블</span>
       <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={showDataLabels} onChange={e=>setShowDataLabels(e.target.checked)} style={{accentColor:'var(--teal)'}}/>표시</label>
-      <input type="number" value={dataLabelSize} onChange={e=>setDataLabelSize(+e.target.value)} min={6} max={16} style={{width:35,fontSize:10,padding:'2px 3px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+      <input type="number" value={dataLabelSize} onChange={e=>setDataLabelSize(+e.target.value)} min={1} style={{width:35,fontSize:10,padding:'2px 3px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
       <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={dataLabelBold} onChange={e=>setDataLabelBold(e.target.checked)} style={{accentColor:'var(--teal)'}}/>Bold</label>
       <span style={{width:1,height:14,background:'var(--bd2)'}}/>
       <span style={{fontWeight:600,color:'var(--tx2)'}}>Grid</span>
