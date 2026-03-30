@@ -334,29 +334,29 @@ def scan_columns(req: BrowseRequest):
         cf = _classify_files(case_dir, fr, active)
 
         def _scan_csv(src_key, label, skip=1):
-            if not cf.get(src_key): return
-            fp = case_dir / cf[src_key][0]
-            rule = fr.get(src_key, {})
-            skip_r = rule.get("skip_rows", skip)
-            sep = '\t' if fp.suffix.lower() == '.tsv' else ','
-            for enc in ["utf-8", "cp949", "euc-kr", "latin1"]:
-                try:
-                    skiparg = list(range(skip_r)) if skip_r > 0 else None
-                    df = pd.read_csv(fp, encoding=enc, sep=sep, skiprows=skiparg, nrows=5)
-                    df.columns = [c.strip() for c in df.columns]
-                    for c in df.columns:
-                        if c not in all_columns:
-                            all_columns[c] = {"source": label, "dtype": str(df[c].dtype)}
-                    break
-                except: continue
+            for fp_name in cf.get(src_key, []):
+                fp = case_dir / fp_name
+                rule = fr.get(src_key, {})
+                skip_r = rule.get("skip_rows", skip)
+                sep = '\t' if fp.suffix.lower() == '.tsv' else ','
+                for enc in ["utf-8", "cp949", "euc-kr", "latin1"]:
+                    try:
+                        skiparg = list(range(skip_r)) if skip_r > 0 else None
+                        df = pd.read_csv(fp, encoding=enc, sep=sep, skiprows=skiparg, nrows=5)
+                        df.columns = [c.strip() for c in df.columns]
+                        for c in df.columns:
+                            if c not in all_columns:
+                                all_columns[c] = {"source": label, "dtype": str(df[c].dtype)}
+                        break
+                    except: continue
 
         _scan_csv("br", "BR", skip=1)
         _scan_csv("ams", "AMS", skip=1)
         _scan_csv("nidaq", "NIDAQ", skip=0)
-        # MX100 (Excel)
-        if cf.get("mx100"):
+        # MX100 (Excel) — 모든 파일
+        for mx_name in cf.get("mx100", []):
             try:
-                fp = case_dir / cf["mx100"][0]
+                fp = case_dir / mx_name
                 skip_r = fr.get("mx100", {}).get("skip_rows", 24)
                 df = pd.read_excel(fp, skiprows=skip_r, header=0, nrows=5)
                 df.columns = [c.strip() for c in df.columns]
@@ -437,15 +437,15 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                 t0 = time.perf_counter()
                 _log(sid, f"[{case_name}] {i+1}/{n} 병합 중...")
 
-                # 선택된 소스만 읽기
+                # 선택된 소스만 읽기 (MX100/NIDAQ는 전체 파일 리스트)
                 bp = str(case_dir / cf["br"][i]) if use_br and cf.get("br") and i < len(cf["br"]) else None
                 ap = str(case_dir / cf["ams"][i]) if use_ams and cf.get("ams") and i < len(cf["ams"]) else None
-                mp = str(case_dir / cf["mx100"][i]) if use_mx and cf.get("mx100") and i < len(cf["mx100"]) else None
-                np_ = str(case_dir / cf["nidaq"][i]) if use_ni and cf.get("nidaq") and i < len(cf["nidaq"]) else None
+                mp_list = [str(case_dir / f) for f in cf.get("mx100",[])] if use_mx and cf.get("mx100") else None
+                np_list = [str(case_dir / f) for f in cf.get("nidaq",[])] if use_ni and cf.get("nidaq") else None
 
                 t1 = time.perf_counter()
-                df_ams, df_br, df_mx, df_ni = _read(ap, bp, mp, dt, np_=np_, file_rules=cfg.get("file_rules"))
-                _log(sid, f"  📖 읽기: {time.perf_counter()-t1:.1f}s (BR={len(df_br)}행 MX100={len(df_mx)}행 NIDAQ={len(df_ni)}행)")
+                df_ams, df_br, df_mx, df_ni = _read(ap, bp, mp_list, dt, np_list=np_list, file_rules=cfg.get("file_rules"))
+                _log(sid, f"  📖 읽기: {time.perf_counter()-t1:.1f}s (BR={len(df_br)}행 MX100={len(df_mx)}행/{len(cf.get('mx100',[]))}파일 NIDAQ={len(df_ni)}행/{len(cf.get('nidaq',[]))}파일)")
 
                 t1 = time.perf_counter()
                 # 선택된 소스만 전처리
@@ -953,7 +953,11 @@ def auto_map(req: BrowseRequest):
 # ══════════════════════════════════════════════
 #  공통 유틸
 # ══════════════════════════════════════════════
-def _read(ap, bp, mp, dt, np_=None, file_rules=None):
+def _read(ap, bp, mp_list, dt, np_list=None, file_rules=None):
+    """
+    소스별 파일 읽기. mp_list/np_list는 리스트(여러 파일 → 컬럼 병합).
+    ap, bp는 단일 경로(문자열 또는 None).
+    """
     df_a, df_b, df_m, df_n = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     fr = file_rules or {}
     def _read_csv(path, src_key, default_skip=1):
@@ -968,27 +972,72 @@ def _read(ap, bp, mp, dt, np_=None, file_rules=None):
                 return df
             except: continue
         return pd.DataFrame()
+
+    def _read_excel(path):
+        skip = fr.get("mx100",{}).get("skip_rows",24)
+        try:
+            df = pd.read_excel(path, skiprows=skip, header=0)
+            df.columns = [c.strip() for c in df.columns]
+            return df
+        except Exception as e1:
+            try:
+                df = pd.read_excel(path, skiprows=skip, header=[0,1])
+                cols = [c[1] if "Unnamed" in str(c[0]) else c[0] for c in df.columns]
+                df.columns = [c.strip() for c in cols]
+                if "Date" in df.columns and "Time" in df.columns:
+                    df["Time"] = df["Date"].astype(str)+" "+df["Time"].astype(str)
+                    df.drop(columns=["Date"], inplace=True, errors="ignore")
+                return df
+            except Exception as e2:
+                print(f"[MX100] 읽기 실패: {e1} / {e2}")
+                return pd.DataFrame()
+
+    def _merge_multi(dfs):
+        """여러 df를 Time 기준 병합 (중복 컬럼은 첫 번째 우선)"""
+        if not dfs: return pd.DataFrame()
+        if len(dfs) == 1: return dfs[0]
+        merged = dfs[0]
+        for df in dfs[1:]:
+            if df.empty: continue
+            new_cols = [c for c in df.columns if c not in merged.columns or c == "Time"]
+            if len(new_cols) <= 1: continue  # Time만 있으면 스킵
+            if "Time" in merged.columns and "Time" in df.columns:
+                merged = pd.merge(merged, df[new_cols], on="Time", how="outer", suffixes=('','_dup'))
+                merged = merged.loc[:, ~merged.columns.str.endswith('_dup')]
+            else:
+                # Time 없으면 단순 concat
+                for c in new_cols:
+                    if c != "Time" and c not in merged.columns:
+                        merged[c] = df[c].values[:len(merged)] if len(df) >= len(merged) else np.nan
+        return merged
+
     if bp and os.path.exists(bp):
         df_b = _read_csv(bp, "br", 1)
     if ap and os.path.exists(ap):
         df_a = _read_csv(ap, "ams", 1)
-    if mp and os.path.exists(mp):
-        skip = fr.get("mx100",{}).get("skip_rows",24)
-        try:
-            df_m = pd.read_excel(mp, skiprows=skip, header=0)
-            df_m.columns = [c.strip() for c in df_m.columns]
-        except Exception as e1:
-            try:
-                df_m = pd.read_excel(mp, skiprows=skip, header=[0,1])
-                cols = [c[1] if "Unnamed" in str(c[0]) else c[0] for c in df_m.columns]
-                df_m.columns = [c.strip() for c in cols]
-                if "Date" in df_m.columns and "Time" in df_m.columns:
-                    df_m["Time"] = df_m["Date"].astype(str)+" "+df_m["Time"].astype(str)
-                    df_m.drop(columns=["Date"], inplace=True, errors="ignore")
-            except Exception as e2:
-                print(f"[MX100] 읽기 실패: {e1} / {e2}")
-    if np_ and os.path.exists(np_):
-        df_n = _read_csv(np_, "nidaq", 0)
+
+    # MX100: 여러 파일 → 컬럼 병합
+    if mp_list:
+        mx_dfs = []
+        for mp in (mp_list if isinstance(mp_list, list) else [mp_list]):
+            if mp and os.path.exists(mp):
+                df = _read_excel(mp)
+                if not df.empty:
+                    mx_dfs.append(df)
+                    print(f"  [MX100] {os.path.basename(mp)}: {len(df)}행 × {len(df.columns)}열")
+        df_m = _merge_multi(mx_dfs)
+
+    # NIDAQ: 여러 파일 → 컬럼 병합
+    if np_list:
+        ni_dfs = []
+        for np_ in (np_list if isinstance(np_list, list) else [np_list]):
+            if np_ and os.path.exists(np_):
+                df = _read_csv(np_, "nidaq", 0)
+                if not df.empty:
+                    ni_dfs.append(df)
+                    print(f"  [NIDAQ] {os.path.basename(np_)}: {len(df)}행 × {len(df.columns)}열")
+        df_n = _merge_multi(ni_dfs)
+
     return df_a, df_b, df_m, df_n
 
 def _log(sid, msg):
