@@ -1368,8 +1368,7 @@ function VwChart({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,xGap,yGap})
   const removeTab=(i)=>{if(tabs.length<=1)return;setTabs(ts=>ts.filter((_,j)=>j!==i));setTabIdx(ti=>Math.min(ti,tabs.length-2))};
   const addCustomTab=()=>{
     const name=prompt('새 탭 이름:','커스텀');if(!name)return;
-    // 현재 탭의 변수/행열을 복제
-    setTabs(ts=>[...ts,{id:Date.now(),name,rows:tab.rows,cols:tab.cols,plots:[...tab.plots],yranges:{...(tab.yranges||{})}}]);
+    setTabs(ts=>[...ts,{id:Date.now(),name,rows:3,cols:3,plots:[],yranges:{}}]);
     setTabIdx(tabs.length);
   };
 
