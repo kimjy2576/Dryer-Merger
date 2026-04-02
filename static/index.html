@@ -960,7 +960,7 @@ const VW_CATS=[
   {name:'압축기 상태량',rows:3,cols:2,vars:['P_Comp_In','P_Comp_Out','T_Comp_In','T_Comp_Body','T_Superheating','T_SH_CompOut']},
   {name:'증발기 상태량',rows:3,cols:3,vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_In','T_Eva_Out','T_Boiling_ref','T_Superheating','RH_Eva_In','AH_Eva_In','AH_Eva_In_corrected']},
   {name:'응축기 상태량',rows:3,cols:3,vars:['T_Air_Eva_Out','T_Air_Cond_Out','T_Cond_In','T_Cond_Out','T_Cond_M1','T_subcooling','RH_Cond_Out','AH_Cond_Out']},
-  {name:'유량',rows:3,cols:3,vars:['Flow_air_Cond_CMM','Flow_Mair_Cond_kgH','Flow_ref_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH_corrected','Water_calc_gM','Water_calc_gM_corrected','Water_calc_kg','Water_calc_kg_corrected']},
+  {name:'유량',rows:3,cols:3,vars:['Flow_air_Cond_CMM','Flow_air_Eva_CMM','Flow_ref_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH_corrected','Water_calc_gM','Water_calc_gM_corrected','Water_calc_kg','Water_calc_kg_corrected']},
   {name:'성능지표',rows:3,cols:3,vars:['COP_heating','COP_heating_corrected','COP_cooling','COP_cooling_corrected','COP_sys_heating','COP_sys_cooling','SMER','SMER_corrected','Ratio_Compression']},
   {name:'소비전력',rows:2,cols:3,vars:['E_WD','E_Comp','E_Fan','Po_WD','Po_Comp','Po_Fan']},
   {name:'열전달',rows:3,cols:3,vars:['Qrefr_Eva','Qrefr_Eva_corrected','Qrefr_Cond','Qrefr_Cond_corrected','Q_sen_eva','Q_sen_eva_corrected','Q_lat_eva','Q_lat_eva_corrected','Q_Drum_Total']},
@@ -1270,10 +1270,10 @@ return(<div>
   </div>
 
   <ErrorBound>
-  {sub==='chart'&&<VwChart cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} xGap={xGap} yGap={yGap}/>}
-  {sub==='psych'&&<VwPsych cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/>}
-  {sub==='ph'&&<VwPh cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} cfg={cfg}/>}
-  {sub==='perf'&&<VwPerf cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW}/>}
+  <div style={{display:sub==='chart'?'block':'none'}}><VwChart cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} xGap={xGap} yGap={yGap}/></div>
+  <div style={{display:sub==='psych'?'block':'none'}}><VwPsych cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/></div>
+  <div style={{display:sub==='ph'?'block':'none'}}><VwPh cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} cfg={cfg}/></div>
+  <div style={{display:sub==='perf'?'block':'none'}}><VwPerf cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW}/></div>
   </ErrorBound>
   </>}
 </div>)}
@@ -1804,20 +1804,15 @@ const PERF_PRESETS=[
   {key:'P_Comp_Out',label:'평균 토출압력 [barg]',agg:'mean'},
 ];
 
-function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
+function PerfChart({cases,caseVis,caseColors,chartH,chartW,defaultVars,defaultY1,id}){
   const VW_COLORS=['#2563eb','#dc2626','#16a34a','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16'];
+  const BAR_COLORS=['#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6'];
   const ref=useRef();
-  // 변수 설정: [{key, axis:'y1'|'y2', type:'bar'|'line', agg:'last'|'mean'|'max'|'min'}]
-  const[vars,setVars]=useState([
-    {key:'E_WD',axis:'y1',type:'bar',agg:'last'},
-    {key:'RMC_calc',axis:'y2',type:'bar',agg:'last'},
-    {key:'Time_min',axis:'y2',type:'bar',agg:'last'},
-  ]);
+  const[vars,setVars]=useState(defaultVars);
   const[grouped,setGrouped]=useState(true);
-  const[y1Label,setY1Label]=useState('');
+  const[xLabel,setXLabel]=useState('Case');
+  const[y1Label,setY1Label]=useState(defaultY1);
   const[y2Label,setY2Label]=useState('');
-  const[xLabel,setXLabel]=useState('');
-  // 차트 설정
   const[y1Range,setY1Range]=useState(['','']);
   const[y2Range,setY2Range]=useState(['','']);
   const[axisFontSize,setAxisFontSize]=useState(12);
@@ -1828,185 +1823,87 @@ function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
   const[y1Grid,setY1Grid]=useState(true);
   const[y2Grid,setY2Grid]=useState(false);
   const[barWidth,setBarWidth]=useState(0.8);
+  const[open,setOpen]=useState(false);
 
-  // 사용 가능한 변수 (cases 데이터에 있는 것만)
-  const availKeys=useMemo(()=>{
-    const s=new Set();
-    cases.forEach(c=>{if(c?.data)Object.keys(c.data).forEach(k=>s.add(k))});
-    return[...s].sort();
-  },[cases]);
-
-  // 프리셋에서 라벨 찾기
+  const availKeys=useMemo(()=>{const s=new Set();cases.forEach(c=>{if(c?.data)Object.keys(c.data).forEach(k=>s.add(k))});return[...s].sort()},[cases]);
   const getLabel=k=>{const p=PERF_PRESETS.find(x=>x.key===k);return p?p.label:k};
-
-  // 요약값 추출
-  const getSummary=(caseData,key,agg)=>{
-    const arr=caseData?.[key];
-    if(!arr?.length)return null;
-    const valid=arr.filter(v=>v!=null&&!isNaN(v));
-    if(!valid.length)return null;
-    if(agg==='last')return valid[valid.length-1];
-    if(agg==='mean')return valid.reduce((a,b)=>a+b,0)/valid.length;
-    if(agg==='max')return Math.max(...valid);
-    if(agg==='min')return Math.min(...valid);
-    return valid[valid.length-1];
-  };
-
-  // 변수 추가
-  const addVar=()=>{
-    const unused=availKeys.filter(k=>!vars.some(v=>v.key===k)&&!/^Time/i.test(k));
-    if(!unused.length){alert('추가할 변수 없음');return}
-    setVars(p=>[...p,{key:unused[0],axis:'y1',type:'bar',agg:'last'}]);
-  };
+  const getSummary=(d,key,agg)=>{const a=d?.[key];if(!a?.length)return null;const v=a.filter(x=>x!=null&&!isNaN(x));if(!v.length)return null;if(agg==='last')return v[v.length-1];if(agg==='mean')return v.reduce((a,b)=>a+b,0)/v.length;if(agg==='max')return Math.max(...v);if(agg==='min')return Math.min(...v);return v[v.length-1]};
+  const addVar=()=>{const u=availKeys.filter(k=>!vars.some(v=>v.key===k)&&!/^Time_sec/i.test(k));if(!u.length)return;setVars(p=>[...p,{key:u[0],axis:'y1',type:'bar',agg:'last'}])};
   const removeVar=i=>setVars(p=>p.filter((_,j)=>j!==i));
-  const updateVar=(i,field,val)=>setVars(p=>p.map((v,j)=>j===i?{...v,[field]:val}:v));
+  const updateVar=(i,f,v)=>setVars(p=>p.map((x,j)=>j===i?{...x,[f]:v}:x));
   const moveVar=(i,to)=>{if(to<0||to>=vars.length)return;setVars(p=>{const a=[...p];[a[i],a[to]]=[a[to],a[i]];return a})};
 
-  // 차트 렌더링
   useEffect(()=>{
     if(!ref.current||!cases.length||!vars.length)return;
-    const visCases=cases.filter(c=>caseVis[c.name]);
-    if(!visCases.length)return;
-    const caseNames=visCases.map(c=>c.label||c.name);
-    const traces=[];
-    const BAR_COLORS=['#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6'];
-    const barVars=vars.filter(v=>v.type==='bar');
-    const lineVars=vars.filter(v=>v.type==='line');
-    const dlFont={size:dataLabelSize,weight:dataLabelBold?'bold':'normal'};
-    const mkText=vals=>showDataLabels?vals.map(x=>x!=null?x.toFixed(2):''):[];
-
-    if(grouped){
-      barVars.forEach((v,vi)=>{
-        const vals=visCases.map(c=>getSummary(c.data,v.key,v.agg));
-        traces.push({
-          x:caseNames,y:vals,name:getLabel(v.key),type:'bar',
-          yaxis:v.axis==='y2'?'y2':'y',
-          marker:{color:BAR_COLORS[vi%BAR_COLORS.length],line:{width:1,color:'rgba(0,0,0,.15)'}},
-          text:mkText(vals),textposition:'outside',textfont:dlFont,
-        });
-      });
-    }else{
-      const barLabels=barVars.map(v=>getLabel(v.key));
-      visCases.forEach((c,ci)=>{
-        const col=caseColors[c.name]||VW_COLORS[ci%VW_COLORS.length];
-        const vals=barVars.map(v=>getSummary(c.data,v.key,v.agg));
-        traces.push({
-          x:barLabels,y:vals,name:c.label||c.name,type:'bar',
-          marker:{color:col,line:{width:1,color:'rgba(0,0,0,.15)'}},
-          text:mkText(vals),textposition:'outside',textfont:dlFont,legendgroup:c.name,
-        });
-      });
-    }
-
-    lineVars.forEach((v,vi)=>{
-      const vals=visCases.map(c=>getSummary(c.data,v.key,v.agg));
-      traces.push({
-        x:caseNames,y:vals,name:getLabel(v.key),type:'scatter',
-        mode:showDataLabels?'lines+markers+text':'lines+markers',
-        yaxis:v.axis==='y2'?'y2':'y',
-        line:{width:2.5,shape:'spline',color:BAR_COLORS[(barVars.length+vi)%BAR_COLORS.length]},
-        marker:{size:10,line:{width:2,color:'#fff'}},
-        text:mkText(vals),textposition:'top center',textfont:dlFont,
-      });
-    });
-
-    const fW=chartW>0?chartW:undefined;
-    const axFont={size:axisFontSize};
-    const axTitle=txt=>({text:axisBold?'<b>'+txt+'</b>':txt,font:axFont});
-    const g1=y1Grid?'rgba(0,0,0,0.08)':'rgba(0,0,0,0)';
-    const g2=y2Grid?'rgba(0,0,0,0.08)':'rgba(0,0,0,0)';
-    const y1R=y1Range[0]!==''&&y1Range[1]!==''?[+y1Range[0],+y1Range[1]]:undefined;
-    const y2R=y2Range[0]!==''&&y2Range[1]!==''?[+y2Range[0],+y2Range[1]]:undefined;
-    // trace.width 설정하면 barmode:'group' 자동 배치가 무시돼서 겹침 → bargap만 사용
-    const layout={
-      width:fW,height:chartH||500,
-      margin:{l:70,r:70,t:40,b:80},
-      barmode:'group',bargap:1-barWidth,bargroupgap:0.1,
-      paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
-      font:{family:'var(--sans)'},
-      xaxis:{title:xLabel?axTitle(xLabel):undefined,tickfont:{size:axisFontSize},linecolor:'rgba(0,0,0,0.2)',linewidth:1},
-      yaxis:{title:axTitle(y1Label||'좌측 Y축'),tickfont:{size:axisFontSize},range:y1R,gridcolor:g1,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false},
-      legend:{orientation:'h',y:-.2,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,.8)'},
-    };
-    if(vars.some(v=>v.axis==='y2')){
-      layout.yaxis2={title:axTitle(y2Label||'우측 Y축'),tickfont:{size:axisFontSize},range:y2R,overlaying:'y',side:'right',gridcolor:g2,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false};
-    }
-    try{Plotly.react(ref.current,traces,layout,{responsive:!fW,displaylogo:false})}catch(e){console.error('VwPerf:',e)}
+    const vc=cases.filter(c=>caseVis[c.name]);if(!vc.length)return;
+    const cn=vc.map(c=>c.label||c.name);const traces=[];
+    const bv=vars.filter(v=>v.type==='bar'),lv=vars.filter(v=>v.type==='line');
+    const dl={size:dataLabelSize,weight:dataLabelBold?'bold':'normal'};
+    const mt=vals=>showDataLabels?vals.map(x=>x!=null?x.toFixed(2):''):[];
+    if(grouped){bv.forEach((v,vi)=>{const vals=vc.map(c=>getSummary(c.data,v.key,v.agg));traces.push({x:cn,y:vals,name:getLabel(v.key),type:'bar',yaxis:v.axis==='y2'?'y2':'y',marker:{color:BAR_COLORS[vi%BAR_COLORS.length],line:{width:1,color:'rgba(0,0,0,.15)'}},text:mt(vals),textposition:'outside',textfont:dl})})}
+    else{const bl=bv.map(v=>getLabel(v.key));vc.forEach((c,ci)=>{const col=caseColors[c.name]||VW_COLORS[ci%VW_COLORS.length];const vals=bv.map(v=>getSummary(c.data,v.key,v.agg));traces.push({x:bl,y:vals,name:c.label||c.name,type:'bar',marker:{color:col,line:{width:1,color:'rgba(0,0,0,.15)'}},text:mt(vals),textposition:'outside',textfont:dl,legendgroup:c.name})})}
+    lv.forEach((v,vi)=>{const vals=vc.map(c=>getSummary(c.data,v.key,v.agg));traces.push({x:cn,y:vals,name:getLabel(v.key),type:'scatter',mode:showDataLabels?'lines+markers+text':'lines+markers',yaxis:v.axis==='y2'?'y2':'y',line:{width:2.5,shape:'spline',color:BAR_COLORS[(bv.length+vi)%BAR_COLORS.length]},marker:{size:10,line:{width:2,color:'#fff'}},text:mt(vals),textposition:'top center',textfont:dl})});
+    const fW=chartW>0?chartW:undefined;const af={size:axisFontSize};
+    const at=t=>({text:axisBold?'<b>'+t+'</b>':t,font:af});
+    const g1=y1Grid?'rgba(0,0,0,0.08)':'rgba(0,0,0,0)';const g2=y2Grid?'rgba(0,0,0,0.08)':'rgba(0,0,0,0)';
+    const r1=y1Range[0]!==''&&y1Range[1]!==''?[+y1Range[0],+y1Range[1]]:undefined;
+    const r2=y2Range[0]!==''&&y2Range[1]!==''?[+y2Range[0],+y2Range[1]]:undefined;
+    const lo={width:fW,height:chartH||400,margin:{l:70,r:70,t:30,b:60},barmode:'group',bargap:1-barWidth,bargroupgap:0.1,paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:'var(--sans)'},xaxis:{title:xLabel?at(xLabel):undefined,tickfont:{size:axisFontSize},linecolor:'rgba(0,0,0,0.2)',linewidth:1},yaxis:{title:at(y1Label||'Y축'),tickfont:{size:axisFontSize},range:r1,gridcolor:g1,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false},legend:{orientation:'h',y:-.22,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,.8)'}};
+    if(vars.some(v=>v.axis==='y2'))lo.yaxis2={title:at(y2Label||'우측 Y축'),tickfont:{size:axisFontSize},range:r2,overlaying:'y',side:'right',gridcolor:g2,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false};
+    try{Plotly.react(ref.current,traces,lo,{responsive:!fW,displaylogo:false})}catch(e){console.error('PerfChart:',e)}
   },[cases,caseVis,caseColors,vars,grouped,chartH,chartW,xLabel,y1Label,y2Label,y1Range,y2Range,axisFontSize,axisBold,showDataLabels,dataLabelSize,dataLabelBold,y1Grid,y2Grid,barWidth]);
 
-  return(<div>
-    {/* 변수 설정 */}
-    <div style={{padding:'8px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:8}}>
-      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
-        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>변수 설정</span>
-        <button className="bt bs" onClick={addVar} style={{fontSize:9,padding:'2px 8px'}}>+ 추가</button>
-        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-        <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,cursor:'pointer'}}>
-          <input type="checkbox" checked={grouped} onChange={e=>setGrouped(e.target.checked)} style={{accentColor:'var(--teal)'}}/>
-          그룹화 막대
-        </label>
-        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-        <span style={{fontSize:10,color:'var(--tx3)'}}>X축:</span>
-        <input value={xLabel} onChange={e=>setXLabel(e.target.value)} placeholder="자동" style={{width:80,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
-        <span style={{fontSize:10,color:'var(--tx3)'}}>좌측 Y축:</span>
-        <input value={y1Label} onChange={e=>setY1Label(e.target.value)} placeholder="자동" style={{width:80,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
-        <span style={{fontSize:10,color:'var(--tx3)'}}>우측 Y축:</span>
-        <input value={y2Label} onChange={e=>setY2Label(e.target.value)} placeholder="자동" style={{width:80,fontSize:10,padding:'2px 4px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+  return(<div style={{marginBottom:12}}>
+    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+      <span style={{fontWeight:600,fontSize:11,color:'var(--tx)'}}>{y1Label||defaultY1}</span>
+      <button className="bt bs" onClick={()=>setOpen(p=>!p)} style={{fontSize:9,padding:'2px 8px'}}>{open?'설정 접기':'설정 펼치기'}</button>
+    </div>
+    {open&&<div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:6}}>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',fontSize:10,marginBottom:4}}>
+        <button className="bt bs" onClick={addVar} style={{fontSize:9,padding:'2px 6px'}}>+ 추가</button>
+        <label style={{display:'flex',alignItems:'center',gap:3,cursor:'pointer'}}><input type="checkbox" checked={grouped} onChange={e=>setGrouped(e.target.checked)} style={{accentColor:'var(--teal)'}}/>그룹화</label>
+        <span style={{width:1,height:12,background:'var(--bd2)'}}/>
+        <span style={{color:'var(--tx3)'}}>X:</span><input value={xLabel} onChange={e=>setXLabel(e.target.value)} style={{width:60,fontSize:10,padding:'1px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+        <span style={{color:'var(--tx3)'}}>좌Y:</span><input value={y1Label} onChange={e=>setY1Label(e.target.value)} style={{width:80,fontSize:10,padding:'1px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+        <span style={{color:'var(--tx3)'}}>우Y:</span><input value={y2Label} onChange={e=>setY2Label(e.target.value)} placeholder="자동" style={{width:60,fontSize:10,padding:'1px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+        <span style={{width:1,height:12,background:'var(--bd2)'}}/>
+        <span style={{color:'var(--tx3)'}}>좌범위:</span><input value={y1Range[0]} onChange={e=>setY1Range(p=>[e.target.value,p[1]])} placeholder="min" style={{width:35,fontSize:10,padding:'1px 3px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>~<input value={y1Range[1]} onChange={e=>setY1Range(p=>[p[0],e.target.value])} placeholder="max" style={{width:35,fontSize:10,padding:'1px 3px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+        <span style={{width:1,height:12,background:'var(--bd2)'}}/>
+        <span style={{color:'var(--tx3)'}}>글꼴:</span><input type="number" value={axisFontSize} onChange={e=>setAxisFontSize(+e.target.value)} min={1} style={{width:30,fontSize:10,padding:'1px 2px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+        <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={axisBold} onChange={e=>setAxisBold(e.target.checked)} style={{accentColor:'var(--teal)'}}/>B</label>
+        <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={showDataLabels} onChange={e=>setShowDataLabels(e.target.checked)} style={{accentColor:'var(--teal)'}}/>수치</label>
+        <input type="number" value={dataLabelSize} onChange={e=>setDataLabelSize(+e.target.value)} min={1} style={{width:30,fontSize:10,padding:'1px 2px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
+        <span style={{width:1,height:12,background:'var(--bd2)'}}/>
+        <span style={{color:'var(--tx3)'}}>Grid</span><label style={{display:'flex',alignItems:'center',gap:1,cursor:'pointer'}}><input type="checkbox" checked={y1Grid} onChange={e=>setY1Grid(e.target.checked)} style={{accentColor:'var(--teal)'}}/>좌</label><label style={{display:'flex',alignItems:'center',gap:1,cursor:'pointer'}}><input type="checkbox" checked={y2Grid} onChange={e=>setY2Grid(e.target.checked)} style={{accentColor:'var(--teal)'}}/>우</label>
+        <span style={{width:1,height:12,background:'var(--bd2)'}}/>
+        <span style={{color:'var(--tx3)'}}>바폭</span><input type="range" min="0.2" max="1" step="0.05" value={barWidth} onChange={e=>setBarWidth(+e.target.value)} style={{width:50}}/><span style={{fontFamily:'var(--mono)',color:'var(--tx3)'}}>{barWidth}</span>
       </div>
-      <div style={{maxHeight:200,overflowY:'auto'}}>
-        {vars.map((v,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:4,padding:'3px 4px',borderBottom:'1px solid var(--bd)'}}>
-          <div style={{display:'flex',flexDirection:'column',gap:0}}>
-            <button onClick={()=>moveVar(i,i-1)} disabled={i===0} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i===0?'var(--bd2)':'var(--tx3)',cursor:i===0?'default':'pointer'}}>▲</button>
-            <button onClick={()=>moveVar(i,i+1)} disabled={i>=vars.length-1} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i>=vars.length-1?'var(--bd2)':'var(--tx3)',cursor:i>=vars.length-1?'default':'pointer'}}>▼</button>
-          </div>
-          <span style={{fontSize:9,color:'var(--tx3)',minWidth:14,textAlign:'center'}}>{i+1}</span>
-          <select value={v.key} onChange={e=>updateVar(i,'key',e.target.value)} style={{flex:1,fontSize:10,padding:'2px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
-            {availKeys.map(k=><option key={k} value={k}>{getLabel(k)}</option>)}
-          </select>
-          <select value={v.type} onChange={e=>updateVar(i,'type',e.target.value)} style={{fontSize:10,padding:'2px 3px',width:55,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
-            <option value="bar">막대</option><option value="line">선</option>
-          </select>
-          <select value={v.axis} onChange={e=>updateVar(i,'axis',e.target.value)} style={{fontSize:10,padding:'2px 3px',width:55,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
-            <option value="y1">좌측</option><option value="y2">우측</option>
-          </select>
-          <select value={v.agg} onChange={e=>updateVar(i,'agg',e.target.value)} style={{fontSize:10,padding:'2px 3px',width:55,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
-            <option value="last">최종</option><option value="mean">평균</option><option value="max">최대</option><option value="min">최소</option>
-          </select>
-          <button onClick={()=>removeVar(i)} style={{fontSize:9,border:0,background:0,color:'var(--red)',cursor:'pointer',padding:'0 2px'}}>×</button>
+      <div style={{maxHeight:120,overflowY:'auto'}}>
+        {vars.map((v,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:3,padding:'2px 3px',borderBottom:'1px solid var(--bd)',fontSize:10}}>
+          <div style={{display:'flex',flexDirection:'column'}}><button onClick={()=>moveVar(i,i-1)} disabled={i===0} style={{fontSize:6,lineHeight:'7px',padding:0,border:0,background:0,color:i===0?'var(--bd2)':'var(--tx3)',cursor:i===0?'default':'pointer'}}>▲</button><button onClick={()=>moveVar(i,i+1)} disabled={i>=vars.length-1} style={{fontSize:6,lineHeight:'7px',padding:0,border:0,background:0,color:i>=vars.length-1?'var(--bd2)':'var(--tx3)',cursor:i>=vars.length-1?'default':'pointer'}}>▼</button></div>
+          <select value={v.key} onChange={e=>updateVar(i,'key',e.target.value)} style={{flex:1,fontSize:10,padding:'1px 2px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3,color:'var(--tx)'}}>{availKeys.map(k=><option key={k} value={k}>{getLabel(k)}</option>)}</select>
+          <select value={v.type} onChange={e=>updateVar(i,'type',e.target.value)} style={{fontSize:10,padding:'1px 2px',width:45,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}><option value="bar">막대</option><option value="line">선</option></select>
+          <select value={v.axis} onChange={e=>updateVar(i,'axis',e.target.value)} style={{fontSize:10,padding:'1px 2px',width:40,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}><option value="y1">좌</option><option value="y2">우</option></select>
+          <select value={v.agg} onChange={e=>updateVar(i,'agg',e.target.value)} style={{fontSize:10,padding:'1px 2px',width:45,background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}><option value="last">최종</option><option value="mean">평균</option><option value="max">최대</option><option value="min">최소</option></select>
+          <button onClick={()=>removeVar(i)} style={{fontSize:9,border:0,background:0,color:'var(--red)',cursor:'pointer',padding:0}}>×</button>
         </div>))}
       </div>
-    </div>
-    {/* 차트 설정 */}
-    <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',padding:'6px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:8,fontSize:10}}>
-      <span style={{fontWeight:600,color:'var(--tx2)'}}>Y축 범위</span>
-      <span style={{color:'var(--tx3)'}}>좌:</span>
-      <input value={y1Range[0]} onChange={e=>setY1Range(p=>[e.target.value,p[1]])} placeholder="min" style={{width:45,fontSize:10,padding:'2px 4px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
-      <span style={{color:'var(--tx3)'}}>~</span>
-      <input value={y1Range[1]} onChange={e=>setY1Range(p=>[p[0],e.target.value])} placeholder="max" style={{width:45,fontSize:10,padding:'2px 4px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
-      <span style={{color:'var(--tx3)',marginLeft:4}}>우:</span>
-      <input value={y2Range[0]} onChange={e=>setY2Range(p=>[e.target.value,p[1]])} placeholder="min" style={{width:45,fontSize:10,padding:'2px 4px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
-      <span style={{color:'var(--tx3)'}}>~</span>
-      <input value={y2Range[1]} onChange={e=>setY2Range(p=>[p[0],e.target.value])} placeholder="max" style={{width:45,fontSize:10,padding:'2px 4px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{fontWeight:600,color:'var(--tx2)'}}>축 글꼴</span>
-      <input type="number" value={axisFontSize} onChange={e=>setAxisFontSize(+e.target.value)} min={1} style={{width:35,fontSize:10,padding:'2px 3px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
-      <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={axisBold} onChange={e=>setAxisBold(e.target.checked)} style={{accentColor:'var(--teal)'}}/>Bold</label>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{fontWeight:600,color:'var(--tx2)'}}>수치 레이블</span>
-      <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={showDataLabels} onChange={e=>setShowDataLabels(e.target.checked)} style={{accentColor:'var(--teal)'}}/>표시</label>
-      <input type="number" value={dataLabelSize} onChange={e=>setDataLabelSize(+e.target.value)} min={1} style={{width:35,fontSize:10,padding:'2px 3px',textAlign:'center',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3}}/>
-      <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={dataLabelBold} onChange={e=>setDataLabelBold(e.target.checked)} style={{accentColor:'var(--teal)'}}/>Bold</label>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{fontWeight:600,color:'var(--tx2)'}}>Grid</span>
-      <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={y1Grid} onChange={e=>setY1Grid(e.target.checked)} style={{accentColor:'var(--teal)'}}/>좌</label>
-      <label style={{display:'flex',alignItems:'center',gap:2,cursor:'pointer'}}><input type="checkbox" checked={y2Grid} onChange={e=>setY2Grid(e.target.checked)} style={{accentColor:'var(--teal)'}}/>우</label>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{fontWeight:600,color:'var(--tx2)'}}>바 폭</span>
-      <input type="range" min="0.2" max="1.0" step="0.05" value={barWidth} onChange={e=>setBarWidth(+e.target.value)} style={{width:70}}/>
-      <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',minWidth:24}}>{barWidth}</span>
-    </div>
-    {/* 차트 */}
+    </div>}
     <div className="cd" style={{padding:4}}><div ref={ref}/></div>
+  </div>)
+}
+
+function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
+  return(<div>
+    <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="ewd"
+      defaultVars={[{key:'E_WD',axis:'y1',type:'bar',agg:'last'}]}
+      defaultY1="총 소비전력량 [Wh]"/>
+    <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="rmc"
+      defaultVars={[{key:'RMC_calc',axis:'y1',type:'bar',agg:'last'}]}
+      defaultY1="잔여수분율 [%]"/>
+    <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="time"
+      defaultVars={[{key:'Time_min',axis:'y1',type:'bar',agg:'last'}]}
+      defaultY1="운전시간 [min]"/>
   </div>)
 }
 
