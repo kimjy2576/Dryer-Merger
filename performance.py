@@ -183,21 +183,23 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
     # ── 7. 에너지 적산 ──
     df = _calc_energy_integration(df, calc_cfg, time_interval)
 
-    # ── 7.5. IMC/FMC 기반 유량 보정 ──
-    imc_corr, imc_info = None, None
+    # ── 7.5. IMC/FMC 기반 유량 보정 → 전체 재계산 ──
+    imc_flow, imc_perf, imc_info = None, None, None
     use_imc = calc_cfg.get("use_imc_correction", True)
     if (use_imc and exp and exp.get("imc_kg")
-            and computed.get("perf") and computed["perf"].get("water_kg") is not None
+            and computed.get("flow") and computed.get("perf")
+            and computed["perf"].get("water_kg") is not None
             and len(computed["perf"]["water_kg"]) > 0):
-        imc_corr, imc_info = _apply_imc_correction(
-            computed["flow"], computed["perf"],
-            computed["ref_eva"], computed["ref_cond"],
-            computed["air_cond"], exp)
+        imc_flow, imc_perf, imc_info = _apply_imc_full(
+            df, cfg, props, patm, rh_eva_out,
+            computed["air_cond"], computed["ref_cond"], computed["ref_eva"],
+            computed["flow"], computed["perf"], time_interval, exp)
 
     # ── 8. 결과 조립 ──
     df_calc = _assemble_output(df, computed["air_cond"], computed["ref_cond"],
                                 computed["ref_eva"], computed["ref_comp"],
-                                computed["flow"], computed["perf"], imc_corr)
+                                computed["flow"], computed["perf"],
+                                imc_flow, imc_perf)
 
     # ── 9. 후처리 LPF ──
     lpf_cols = calc_cfg.get("calc_lpf_columns", [])
@@ -219,10 +221,7 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
     if imc_info:
         df_calc.attrs["imc_correction"] = imc_info
 
-    return df_calc
-
-
-# ════════════════════════════════════════════════
+    return df_calc# ════════════════════════════════════════════════
 #  빈 결과 생성기 (스킵된 블록 대체)
 # ════════════════════════════════════════════════
 def _empty_air_cond(n):
@@ -522,93 +521,68 @@ def _filter_mass_flow(raw, time_min, dh_cond):
     return flow
 
 
-def _apply_imc_correction(flow, perf, ref_eva, ref_cond, air_cond, exp):
+def _apply_imc_full(df, cfg, props, patm, rh_eva_out,
+                    air_cond, ref_cond, ref_eva,
+                    flow_raw, perf_raw, time_interval, exp):
     """
-    IMC/FMC 기반 냉매 유량 보정.
-
-    흐름:
-    1. 비보정 응축수량(water_kg) 총량 vs 실제(IMC-FMC)
-    2. scale = (IMC - FMC) / water_kg_total
-    3. 응축수량 비례보정 → AH_eva_in 역산 → Q_lat 역산
-    4. Q_eva_corrected = Q_sen + Q_lat_corrected
-    5. ṁ_ref_corrected = Q_eva_corrected / Δh_ref_eva
-    6. Q_cond_corrected → CMM_corrected (풍량 역산)
-    7. 보정된 유량으로 COP 등 재계산
+    IMC/FMC 기반 전체 재계산.
+    
+    1. scale = (IMC-FMC) / water_kg_total
+    2. ṁ_ref × scale → 보정 유량
+    3. 보정 유량으로 flow 전체 재계산 (Q, CMM, mdot_air 등)
+    4. 보정 flow로 perf 전체 재계산 (AH, COP, SMER, water, RMC, drum 등)
+    → 모든 파생 변수가 일관되게 보정됨
     """
     total_real = exp["imc_kg"] - (exp.get("fmc_kg") or 0)
-    total_calc = perf["water_kg"][-1] if len(perf["water_kg"]) > 0 else 0
+    total_calc = perf_raw["water_kg"][-1] if len(perf_raw["water_kg"]) > 0 else 0
 
     if total_real <= 0 or total_calc <= 0:
-        return None, {"converged": False, "reason": "IMC-FMC 또는 계산 응축수 <= 0"}
+        return None, None, {"converged": False, "reason": "IMC-FMC 또는 계산 응축수 <= 0"}
 
     scale = total_real / total_calc
     info = {"scale_factor": float(scale),
             "total_real_kg": float(total_real),
             "total_calc_kg": float(total_calc)}
 
-    # ── 1. 응축수량 비례보정 ──
-    water_gs_corr = perf["water_gs"] * scale
-    water_gm_corr = water_gs_corr * 60
-    water_kg_corr = perf["water_kg"] * scale
-
-    # ── 2. AH_eva_in 역산 ──
-    AH_cond_in = perf.get("_AH_cond_in", np.zeros_like(perf["AH_eva_in"]))
-    AH_eva_in_corr = AH_cond_in + (perf["AH_eva_in"] - AH_cond_in) * scale
-
-    # ── 3. Q_lat 역산 (잠열 = 제습량 × hfg) ──
-    Q_sen = perf["Q_sen"]
-    Q_lat_corr = perf["Q_lat"] * scale
-
-    # ── 4. Q_eva 보정 ──
-    Q_eva_corr = Q_sen + Q_lat_corr
-
-    # ── 5. 냉매 유량 역산 ──
-    safe_dh = np.where(ref_eva["dh"] == 0, 1e-6, ref_eva["dh"])
-    mdot_ref_corr = Q_eva_corr / (safe_dh * 1000) * 3600
+    # ── 보정 유량 ──
+    mdot_ref_corr = flow_raw["mdot_ref"] * scale
     mdot_ref_corr = np.maximum(mdot_ref_corr, 0)
 
-    # ── 6. 응축기 열량 + 풍량 역산 ──
+    # ── flow 전체 재계산 ──
+    Q_eva_corr = mdot_ref_corr / 3600 * ref_eva["dh"] * 1000
     Q_cond_corr = mdot_ref_corr / 3600 * ref_cond["dh"] * 1000
-    # CMM = Q_cond * v_out * 3600 / (60 * Δh_air * 1000)
+
+    # CMM 역산: Q_cond = CMM × (60 × Δh_air × 1000) / (v_out × 3600)
     dh_air = air_cond["h_out"] - air_cond["h_in"]
     safe_dh_air = np.where(np.abs(dh_air) < 1e-9, 1e-6, dh_air)
     v_out = air_cond["v_out"]
+    AH_out = air_cond["AH_out"]
     cmm_corr = Q_cond_corr * v_out * 3600 / (60 * safe_dh_air * 1000)
     cmm_corr = np.maximum(cmm_corr, 0)
 
-    # ── 7. COP/SMER 재계산 ──
-    Po_comp = perf["_Po_comp"]
-    Po_wd = perf["_Po_wd"]
-    COP_cool_corr = np.where(Po_comp != 0, Q_eva_corr / Po_comp, 0)
-    COP_heat_corr = np.where(Po_comp != 0, Q_cond_corr / Po_comp, 0)
-    COP_sys_cool_corr = np.where(Po_wd != 0, Q_eva_corr / Po_wd, 0)
-    COP_sys_heat_corr = np.where(Po_wd != 0, Q_cond_corr / Po_wd, 0)
-    SMER_corr = np.where(Po_wd > 0, water_gs_corr * 3.6 / Po_wd, 0)
+    # 공기 유량 재계산
+    v_da = v_out / (1 + AH_out)
+    mdot_mair_corr = cmm_corr * 60 / np.where(v_da == 0, 1e-6, v_da)
+    mdot_dair_corr = mdot_mair_corr / (1 + AH_out)
 
-    # ── 8. 현잠열비 ──
-    safe_Q = np.where(Q_eva_corr == 0, 1e-6, Q_eva_corr)
-    SFH_corr = Q_sen / safe_Q
-    LFH_corr = Q_lat_corr / safe_Q
-
-    # ── 9. RMC 보정 ──
-    rmc_corr = np.zeros_like(water_kg_corr)
-    if exp.get("load_kg"):
-        rmc_corr = _calc_rmc(water_kg_corr, exp["imc_kg"], exp.get("fmc_kg"), exp["load_kg"])
-
-    result = {
-        "mdot_ref": mdot_ref_corr,
+    flow_corr = {
         "cmm_cond": cmm_corr,
-        "Q_eva": Q_eva_corr, "Q_cond": Q_cond_corr,
-        "Q_sen": Q_sen, "Q_lat": Q_lat_corr,
-        "COP_cool": COP_cool_corr, "COP_heat": COP_heat_corr,
-        "COP_sys_cool": COP_sys_cool_corr, "COP_sys_heat": COP_sys_heat_corr,
-        "SMER": SMER_corr,
-        "AH_eva_in": AH_eva_in_corr,
-        "water_gs": water_gs_corr, "water_gm": water_gm_corr,
-        "water_kg": water_kg_corr, "rmc": rmc_corr,
-        "SFH": SFH_corr, "LFH": LFH_corr,
+        "mdot_mair": mdot_mair_corr,
+        "mdot_dair": mdot_dair_corr,
+        "mdot_ref": mdot_ref_corr,
+        "mdot_ref_filtered": mdot_ref_corr,
+        "Q_cond": Q_cond_corr,
+        "Q_cond_filtered": Q_cond_corr,
+        "Q_eva": Q_eva_corr,
+        "Q_eva_filtered": Q_eva_corr,
     }
-    return result, info
+
+    # ── perf 전체 재계산 ──
+    perf_corr = _calc_evaporator_air_and_performance(
+        df, props, patm, rh_eva_out, air_cond,
+        flow_corr, time_interval, exp)
+
+    return flow_corr, perf_corr, info
 
 
 # ════════════════════════════════════════════════
@@ -785,11 +759,21 @@ def _calc_energy_integration(df, calc_cfg, dt):
 # ════════════════════════════════════════════════
 #  8. 출력 DataFrame 조립
 # ════════════════════════════════════════════════
-def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf, imc_corr=None):
-    """모든 계산 결과를 단일 DataFrame으로 조립."""
+def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf,
+                     imc_flow=None, imc_perf=None):
+    """
+    모든 계산 결과를 단일 DataFrame으로 조립.
+    IMC 보정 시: 기본 변수명 = 보정값, _raw 접미사 = 비보정 원본
+    IMC 비활성: 기본 변수명 = 비보정값, _raw 없음
+    """
     out = df.copy()
+    has_imc = imc_flow is not None and imc_perf is not None
 
-    # 응축기 공기
+    # 사용할 flow/perf (IMC 있으면 보정값이 기본)
+    f = imc_flow if has_imc else flow
+    p = imc_perf if has_imc else perf
+
+    # 응축기 공기 (IMC 무관 — 온도/RH 기반)
     out["AH_Cond_In"] = air_cond["AH_in"]
     out["AH_Cond_Out"] = air_cond["AH_out"]
     out["RH_Cond_In"] = air_cond["RH_in"]
@@ -797,7 +781,7 @@ def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf, imc_
     out["h_Cond_In_MAir"] = air_cond["h_in"]
     out["h_Cond_Out_MAir"] = air_cond["h_out"]
 
-    # 응축기 냉매
+    # 응축기 냉매 (IMC 무관 — P, T 기반)
     out["h_Cond_In_ref"] = ref_cond["h_in"]
     out["h_Cond_Out_ref"] = ref_cond["h_out"]
     out["s_Cond_In_ref"] = ref_cond["s_in"]
@@ -807,7 +791,7 @@ def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf, imc_
     out["T_Dew_ref"] = ref_cond["T_dew"]
     out["T_subcooling"] = ref_cond["T_subcool"]
 
-    # 증발기 냉매
+    # 증발기 냉매 (IMC 무관)
     out["h_Eva_In_ref"] = ref_eva["h_in"]
     out["h_Eva_Out_ref"] = ref_eva["h_out"]
     out["s_Eva_In_ref"] = ref_eva["s_in"]
@@ -818,7 +802,7 @@ def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf, imc_
     out["T_Superheating"] = ref_eva["T_superheat"]
     out["Quality_x"] = ref_eva["quality"]
 
-    # 압축기 냉매
+    # 압축기 냉매 (IMC 무관)
     out["h_Comp_In_ref"] = ref_comp["h_in"]
     out["h_Comp_Out_ref"] = ref_comp["h_out"]
     out["s_Comp_In_ref"] = ref_comp["s_in"]
@@ -827,66 +811,73 @@ def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf, imc_
     out["v_Comp_Out_ref"] = ref_comp["v_out"]
     out["Ratio_Compression"] = ref_comp["pr"]
 
-    # 유량
-    out["Flow_air_Cond_CMM"] = flow["cmm_cond"]
-    out["Flow_Mair_Cond_kgH"] = flow["mdot_mair"]
-    out["Flow_Dair_kgH"] = flow["mdot_dair"]
-    out["Flow_ref_kgH"] = flow["mdot_ref"]
-    out["Flow_ref_kgH_recalc"] = flow["mdot_ref_filtered"]
+    # ── 유량 (기본 = 보정 또는 원본) ──
+    out["Flow_air_Cond_CMM"] = f["cmm_cond"]
+    out["Flow_Mair_Cond_kgH"] = f["mdot_mair"]
+    out["Flow_Dair_kgH"] = f["mdot_dair"]
+    out["Flow_ref_kgH"] = f["mdot_ref"]
+    out["Flow_ref_kgH_recalc"] = f["mdot_ref_filtered"]
 
-    # 열전달량
-    out["Qrefr_Cond_recalc"] = flow["Q_cond_filtered"]
-    out["Qrefr_Eva_recalc"] = flow["Q_eva_filtered"]
-    out["Qrefr_Cond"] = flow["Q_cond"]
-    out["Qrefr_Eva"] = flow["Q_eva"]
-    out["Q_sen_eva"] = perf["Q_sen"]
-    out["Q_lat_eva"] = perf["Q_lat"]
+    # ── 열전달량 ──
+    out["Qrefr_Cond_recalc"] = f["Q_cond_filtered"]
+    out["Qrefr_Eva_recalc"] = f["Q_eva_filtered"]
+    out["Qrefr_Cond"] = f["Q_cond"]
+    out["Qrefr_Eva"] = f["Q_eva"]
+    out["Q_sen_eva"] = p["Q_sen"]
+    out["Q_lat_eva"] = p["Q_lat"]
 
-    # 드럼 열전달
-    out["Q_Drum_Sen"] = perf["Q_drum_sen"]
-    out["Q_Drum_Lat"] = perf["Q_drum_lat"]
-    out["Q_Drum_Total"] = perf["Q_drum_total"]
+    # ── 드럼 열전달 ──
+    out["Q_Drum_Sen"] = p["Q_drum_sen"]
+    out["Q_Drum_Lat"] = p["Q_drum_lat"]
+    out["Q_Drum_Total"] = p["Q_drum_total"]
 
-    # 성능
-    out["Factor_SFH"] = perf["SFH"]
-    out["Factor_LFH"] = perf["LFH"]
-    out["Drum_SFH"] = perf["Drum_SFH"]
-    out["Drum_LFH"] = perf["Drum_LFH"]
-    out["COP_cooling"] = perf["COP_cool"]
-    out["COP_heating"] = perf["COP_heat"]
-    out["COP_sys_cooling"] = perf["COP_sys_cool"]
-    out["COP_sys_heating"] = perf["COP_sys_heat"]
-    out["SMER"] = perf["SMER"]
+    # ── 성능 ──
+    out["Factor_SFH"] = p["SFH"]
+    out["Factor_LFH"] = p["LFH"]
+    out["Drum_SFH"] = p["Drum_SFH"]
+    out["Drum_LFH"] = p["Drum_LFH"]
+    out["COP_cooling"] = p["COP_cool"]
+    out["COP_heating"] = p["COP_heat"]
+    out["COP_sys_cooling"] = p["COP_sys_cool"]
+    out["COP_sys_heating"] = p["COP_sys_heat"]
+    out["SMER"] = p["SMER"]
 
-    # 습도
-    out["AH_Eva_In"] = perf["AH_eva_in"]
-    out["RH_Eva_In"] = perf["RH_eva_in"]
-    out["h_Eva_In_MAir"] = perf["h_eva_in_air"]
-    out["Flow_air_Eva_CMM"] = perf["cmm_eva"]
+    # ── 습도 ──
+    out["AH_Eva_In"] = p["AH_eva_in"]
+    out["RH_Eva_In"] = p["RH_eva_in"]
+    out["h_Eva_In_MAir"] = p["h_eva_in_air"]
+    out["Flow_air_Eva_CMM"] = p["cmm_eva"]
 
-    # 수분
-    out["Water_calc_gM"] = perf["water_gm"]
-    out["Water_calc_kg"] = perf["water_kg"]
-    out["RMC_calc"] = perf["rmc"]
+    # ── 수분 ──
+    out["Water_calc_gM"] = p["water_gm"]
+    out["Water_calc_kg"] = p["water_kg"]
+    out["RMC_calc"] = p["rmc"]
 
-    # ── IMC 보정 결과 (_corrected 접미사) ──
-    if imc_corr:
-        out["Flow_ref_kgH_corrected"] = imc_corr["mdot_ref"]
-        out["Flow_air_Cond_CMM_corrected"] = imc_corr["cmm_cond"]
-        out["Qrefr_Eva_corrected"] = imc_corr["Q_eva"]
-        out["Qrefr_Cond_corrected"] = imc_corr["Q_cond"]
-        out["Q_sen_eva_corrected"] = imc_corr["Q_sen"]
-        out["Q_lat_eva_corrected"] = imc_corr["Q_lat"]
-        out["COP_cooling_corrected"] = imc_corr["COP_cool"]
-        out["COP_heating_corrected"] = imc_corr["COP_heat"]
-        out["COP_sys_cooling_corrected"] = imc_corr["COP_sys_cool"]
-        out["COP_sys_heating_corrected"] = imc_corr["COP_sys_heat"]
-        out["SMER_corrected"] = imc_corr["SMER"]
-        out["AH_Eva_In_corrected"] = imc_corr["AH_eva_in"]
-        out["Water_calc_gM_corrected"] = imc_corr["water_gm"]
-        out["Water_calc_kg_corrected"] = imc_corr["water_kg"]
-        out["RMC_calc_corrected"] = imc_corr["rmc"]
-        out["Factor_SFH_corrected"] = imc_corr["SFH"]
-        out["Factor_LFH_corrected"] = imc_corr["LFH"]
+    # ── IMC 보정 시: 원본을 _raw로 저장 ──
+    if has_imc:
+        out["Flow_air_Cond_CMM_raw"] = flow["cmm_cond"]
+        out["Flow_Mair_Cond_kgH_raw"] = flow["mdot_mair"]
+        out["Flow_Dair_kgH_raw"] = flow["mdot_dair"]
+        out["Flow_ref_kgH_raw"] = flow["mdot_ref"]
+        out["Qrefr_Cond_raw"] = flow["Q_cond"]
+        out["Qrefr_Eva_raw"] = flow["Q_eva"]
+        out["Q_sen_eva_raw"] = perf["Q_sen"]
+        out["Q_lat_eva_raw"] = perf["Q_lat"]
+        out["Q_Drum_Sen_raw"] = perf["Q_drum_sen"]
+        out["Q_Drum_Lat_raw"] = perf["Q_drum_lat"]
+        out["Q_Drum_Total_raw"] = perf["Q_drum_total"]
+        out["Factor_SFH_raw"] = perf["SFH"]
+        out["Factor_LFH_raw"] = perf["LFH"]
+        out["COP_cooling_raw"] = perf["COP_cool"]
+        out["COP_heating_raw"] = perf["COP_heat"]
+        out["COP_sys_cooling_raw"] = perf["COP_sys_cool"]
+        out["COP_sys_heating_raw"] = perf["COP_sys_heat"]
+        out["SMER_raw"] = perf["SMER"]
+        out["AH_Eva_In_raw"] = perf["AH_eva_in"]
+        out["RH_Eva_In_raw"] = perf["RH_eva_in"]
+        out["Flow_air_Eva_CMM_raw"] = perf["cmm_eva"]
+        out["Water_calc_gM_raw"] = perf["water_gm"]
+        out["Water_calc_kg_raw"] = perf["water_kg"]
+        out["RMC_calc_raw"] = perf["rmc"]
 
     return out
