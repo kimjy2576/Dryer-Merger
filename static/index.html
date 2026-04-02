@@ -960,7 +960,7 @@ const VW_CATS=[
   {name:'압축기 상태량',rows:3,cols:2,vars:['P_Comp_In','P_Comp_Out','T_Comp_In','T_Comp_Body','T_Superheating','T_SH_CompOut']},
   {name:'증발기 상태량',rows:3,cols:3,vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_In','T_Eva_Out','T_Boiling_ref','T_Superheating','RH_Eva_In','AH_Eva_In','AH_Eva_In_corrected']},
   {name:'응축기 상태량',rows:3,cols:3,vars:['T_Air_Eva_Out','T_Air_Cond_Out','T_Cond_In','T_Cond_Out','T_Cond_M1','T_subcooling','RH_Cond_Out','AH_Cond_Out']},
-  {name:'유량',rows:3,cols:3,vars:['Flow_air_Cond_CMM','Flow_air_Eva_CMM','Flow_ref_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH_corrected','Water_calc_gM','Water_calc_gM_corrected','Water_calc_kg','Water_calc_kg_corrected']},
+  {name:'유량',rows:3,cols:3,vars:['Flow_air_Cond_CMM','Flow_air_Cond_CMM_corrected','Flow_air_Eva_CMM','Flow_ref_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH_corrected','Water_calc_gM','Water_calc_kg','Water_calc_kg_corrected']},
   {name:'성능지표',rows:3,cols:3,vars:['COP_heating','COP_heating_corrected','COP_cooling','COP_cooling_corrected','COP_sys_heating','COP_sys_cooling','SMER','SMER_corrected','Ratio_Compression']},
   {name:'소비전력',rows:2,cols:3,vars:['E_WD','E_Comp','E_Fan','Po_WD','Po_Comp','Po_Fan']},
   {name:'열전달',rows:3,cols:3,vars:['Qrefr_Eva','Qrefr_Eva_corrected','Qrefr_Cond','Qrefr_Cond_corrected','Q_sen_eva','Q_sen_eva_corrected','Q_lat_eva','Q_lat_eva_corrected','Q_Drum_Total']},
@@ -1295,7 +1295,7 @@ const VL={
   RH_Eva_In:'증발기 입구 상대습도 [-]',RH_Cond_Out:'응축기 출구 상대습도 [-]',RH_Cond_In:'응축기 입구 상대습도 [-]',
   AH_Eva_In:'증발기 입구 절대습도 [kg/kg]',AH_Eva_In_corrected:'증발기 입구 절대습도 (IMC보정) [kg/kg]',AH_Cond_In:'응축기 입구 절대습도 [kg/kg]',AH_Cond_Out:'응축기 출구 절대습도 [kg/kg]',
   // 유량
-  Flow_air_Cond_CMM:'응축기 풍량 [CMM]',Flow_air_Eva_CMM:'증발기 풍량 [CMM]',
+  Flow_air_Cond_CMM:'응축기 풍량 [CMM]',Flow_air_Cond_CMM_corrected:'응축기 풍량 (IMC보정) [CMM]',Flow_air_Eva_CMM:'증발기 풍량 [CMM]',
   Flow_Mair_Cond_kgH:'습공기 질량유량 [kg/h]',Flow_Dair_kgH:'건조공기 질량유량 [kg/h]',
   Flow_ref_kgH:'냉매 유량 [kg/h]',Flow_ref_kgH_recalc:'냉매 유량 (필터) [kg/h]',Flow_ref_kgH_corrected:'냉매 유량 (IMC보정) [kg/h]',
   // 수분
