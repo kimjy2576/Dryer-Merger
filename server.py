@@ -397,7 +397,7 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
         _log(sid, "═══ Merge 시작 ═══")
         from preprocessor import (
             preprocess_blackrose, preprocess_ams, preprocess_mx100,
-            sync_and_merge, add_time_columns,
+            sync_and_merge, add_time_columns, _fuzzy_col_match,
         )
         from calculator import run_stage1
         from postprocessor import run_postprocessing
@@ -451,8 +451,7 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                 # 선택된 소스만 전처리
                 if use_br and not df_br.empty:
                     df_br_main, df_br_add = preprocess_blackrose(
-                        df_br, get_selected_columns(cfg, "br"), get_column_mapping(cfg, "blackrose"),
-                        cfg.get("filtering", {}).get("start_trim"))
+                        df_br, get_selected_columns(cfg, "br"), get_column_mapping(cfg, "blackrose"))
                 else:
                     df_br_main, df_br_add = pd.DataFrame(), pd.DataFrame()
 
@@ -506,6 +505,30 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
 
                 t1 = time.perf_counter()
                 merged = add_time_columns(merged)
+
+                # ── 시작 트림 (merge 후 적용 — 모든 소스에 일관 적용) ──
+                st_cfg = cfg.get("filtering", {}).get("start_trim", {})
+                if st_cfg.get("enabled"):
+                    st_col = st_cfg.get("column", "HP_CompTargetHz")
+                    st_val = st_cfg.get("min_value", 10)
+                    # 퍼지 매칭
+                    st_matched = _fuzzy_col_match(merged.columns, [st_col])
+                    st_actual = st_matched[0] if st_matched else None
+                    if st_actual:
+                        st_numeric = pd.to_numeric(merged[st_actual], errors="coerce")
+                        st_mask = st_numeric >= st_val
+                        if st_mask.any():
+                            st_first = st_mask.idxmax()
+                            before_len = len(merged)
+                            merged = merged.loc[st_first:].reset_index(drop=True)
+                            _log(sid, f"  ✂️ 시작 트림: {st_actual} >= {st_val} → {before_len-len(merged)}행 제거, {len(merged)}행 남음")
+                            # Time_min/Time_sec 재계산 (0부터 시작)
+                            merged = add_time_columns(merged)
+                        else:
+                            _log(sid, f"  ✂️ 시작 트림: {st_actual} >= {st_val} 없음 → 트림 안 함")
+                    else:
+                        _log(sid, f"  ✂️ 시작 트림: 컬럼 '{st_col}' 없음 → 트림 안 함")
+
                 merged = run_stage1(merged, cfg)
                 if 'P_Comp_Out' in merged.columns:
                     v = merged['P_Comp_Out'].dropna()
