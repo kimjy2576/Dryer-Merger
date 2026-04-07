@@ -91,6 +91,7 @@ def preprocess_blackrose(
     df_raw: pd.DataFrame,
     selected_columns: list,
     column_mapping: dict,
+    start_trim: dict = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     BlackRose 데이터 전처리.
@@ -121,11 +122,33 @@ def preprocess_blackrose(
     time_str = df[time_col].astype(str)
     df["Time"] = time_str.str.split(" ").str[1].str.split(".").str[0]
 
-    # 필터링: 컬럼 없으면 전체 데이터 사용
-    if "SW_ProtectionCount" in df.columns:
-        df_main = df[df["SW_ProtectionCount"] > 0].copy()
-    else:
+    # ── 시작 트림 ──
+    if start_trim and start_trim.get("enabled"):
+        col = start_trim.get("column", "HP_CompTargetHz")
+        min_val = start_trim.get("min_value", 10)
+        # 퍼지 매칭
+        matched = _fuzzy_col_match(df.columns, [col])
+        actual_col = matched[0] if matched else None
+        if actual_col:
+            numeric = pd.to_numeric(df[actual_col], errors="coerce")
+            idx = numeric >= min_val
+            if idx.any():
+                first_idx = idx.idxmax()
+                df = df.loc[first_idx:].copy()
+                print(f"  [start_trim] {actual_col} >= {min_val} → {first_idx}행부터 ({len(df)}행)")
+            else:
+                print(f"  [start_trim] {actual_col} >= {min_val} 없음 → 트림 안 함")
+        else:
+            print(f"  [start_trim] 컬럼 '{col}' 없음 → 트림 안 함")
+        # start_trim 사용 시 SW_ProtectionCount 필터 스킵
         df_main = df.copy()
+    else:
+        # 기존 방식: SW_ProtectionCount > 0
+        if "SW_ProtectionCount" in df.columns:
+            df_main = df[df["SW_ProtectionCount"] > 0].copy()
+        else:
+            df_main = df.copy()
+
     if "MainProcess" in df.columns:
         df_sub = df[df["MainProcess"] == 10].copy()
     else:

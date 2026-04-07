@@ -60,6 +60,13 @@ filtering:
   min_hz: 10
   last_min: 2
 
+  # 시작 트림: 특정 변수가 기준값 이상인 첫 시점부터 데이터 사용
+  # enabled=false → 기존 방식 (SW_ProtectionCount > 0)
+  start_trim:
+    enabled: false
+    column: "HP_CompTargetHz"
+    min_value: 10
+
 spike_removal:
   target_columns: ["Po_WD", "Po_Comp", "Po_Fan"]
   window: 3

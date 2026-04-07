@@ -451,7 +451,8 @@ def _run_merge(sid: str, cfg: dict, var_settings: dict | None = None):
                 # 선택된 소스만 전처리
                 if use_br and not df_br.empty:
                     df_br_main, df_br_add = preprocess_blackrose(
-                        df_br, get_selected_columns(cfg, "br"), get_column_mapping(cfg, "blackrose"))
+                        df_br, get_selected_columns(cfg, "br"), get_column_mapping(cfg, "blackrose"),
+                        cfg.get("filtering", {}).get("start_trim"))
                 else:
                     df_br_main, df_br_add = pd.DataFrame(), pd.DataFrame()
 
