@@ -1845,14 +1845,14 @@ function PerfChart({cases,caseVis,caseColors,chartH,chartW,defaultVars,defaultY1
     if(grouped){bv.forEach((v,vi)=>{const vals=vc.map(c=>getSummary(c.data,v.key,v.agg));traces.push({x:cn,y:vals,name:getLabel(v.key),type:'bar',yaxis:v.axis==='y2'?'y2':'y',marker:{color:BAR_COLORS[vi%BAR_COLORS.length],line:{width:1,color:'rgba(0,0,0,.15)'}},text:mt(vals),textposition:'outside',textfont:dl})})}
     else{const bl=bv.map(v=>getLabel(v.key));vc.forEach((c,ci)=>{const col=caseColors[c.name]||VW_COLORS[ci%VW_COLORS.length];const vals=bv.map(v=>getSummary(c.data,v.key,v.agg));traces.push({x:bl,y:vals,name:c.label||c.name,type:'bar',marker:{color:col,line:{width:1,color:'rgba(0,0,0,.15)'}},text:mt(vals),textposition:'outside',textfont:dl,legendgroup:c.name})})}
     lv.forEach((v,vi)=>{const vals=vc.map(c=>getSummary(c.data,v.key,v.agg));traces.push({x:cn,y:vals,name:getLabel(v.key),type:'scatter',mode:showDataLabels?'lines+markers+text':'lines+markers',yaxis:v.axis==='y2'?'y2':'y',line:{width:2.5,shape:'spline',color:BAR_COLORS[(bv.length+vi)%BAR_COLORS.length]},marker:{size:10,line:{width:2,color:'#fff'}},text:mt(vals),textposition:'top center',textfont:dl})});
-    const af={size:axisFontSize};
+    const fW=chartW>0?chartW:undefined;const af={size:axisFontSize};
     const at=t=>({text:axisBold?'<b>'+t+'</b>':t,font:af});
     const g1=y1Grid?'rgba(0,0,0,0.08)':'rgba(0,0,0,0)';const g2=y2Grid?'rgba(0,0,0,0.08)':'rgba(0,0,0,0)';
     const r1=y1Range[0]!==''&&y1Range[1]!==''?[+y1Range[0],+y1Range[1]]:undefined;
     const r2=y2Range[0]!==''&&y2Range[1]!==''?[+y2Range[0],+y2Range[1]]:undefined;
-    const lo={width:undefined,height:chartH||500,margin:{l:70,r:70,t:30,b:80},barmode:'group',bargap:1-barWidth,bargroupgap:0.1,paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:'var(--sans)'},xaxis:{title:xLabel?at(xLabel):undefined,tickfont:{size:axisFontSize},linecolor:'rgba(0,0,0,0.2)',linewidth:1},yaxis:{title:at(y1Label||'Y축'),tickfont:{size:axisFontSize},range:r1,gridcolor:g1,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false},legend:{orientation:'h',y:-.15,x:.5,xanchor:'center',font:{size:12},bgcolor:'rgba(255,255,255,.8)'},autosize:true};
+    const lo={width:fW,height:chartH||400,margin:{l:70,r:70,t:30,b:60},barmode:'group',bargap:1-barWidth,bargroupgap:0.1,paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:'var(--sans)'},xaxis:{title:xLabel?at(xLabel):undefined,tickfont:{size:axisFontSize},linecolor:'rgba(0,0,0,0.2)',linewidth:1},yaxis:{title:at(y1Label||'Y축'),tickfont:{size:axisFontSize},range:r1,gridcolor:g1,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false},legend:{orientation:'h',y:-.22,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,.8)'}};
     if(vars.some(v=>v.axis==='y2'))lo.yaxis2={title:at(y2Label||'우측 Y축'),tickfont:{size:axisFontSize},range:r2,overlaying:'y',side:'right',gridcolor:g2,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false};
-    try{Plotly.react(ref.current,traces,lo,{responsive:true,displaylogo:false})}catch(e){console.error('PerfChart:',e)}
+    try{Plotly.react(ref.current,traces,lo,{responsive:!fW,displaylogo:false})}catch(e){console.error('PerfChart:',e)}
   },[cases,caseVis,caseColors,vars,grouped,chartH,chartW,xLabel,y1Label,y2Label,y1Range,y2Range,axisFontSize,axisBold,showDataLabels,dataLabelSize,dataLabelBold,y1Grid,y2Grid,barWidth]);
 
   return(<div style={{marginBottom:12}}>
@@ -1891,7 +1891,7 @@ function PerfChart({cases,caseVis,caseColors,chartH,chartW,defaultVars,defaultY1
         </div>))}
       </div>
     </div>}
-    <div className="cd" style={{padding:4,width:'100%'}}><div ref={ref} style={{width:'100%'}}/></div>
+    <div className="cd" style={{padding:4}}><div ref={ref}/></div>
   </div>)
 }
 
