@@ -280,7 +280,9 @@ return(<>
   </div>)}
   <div style={{fontSize:11,color:'var(--tx3)',marginTop:4}}>스킵된 블록의 출력값은 0으로 채워집니다. 변수 매핑을 확인하세요.</div>
 </div>}
-{results.length>0&&<div style={{marginTop:14}}><div className="ct">결과 파일 ({results.length}개)</div>{results.map(f=><div key={f} className="rr"><div style={{display:'flex',alignItems:'center',gap:8}}><span className="rn">{f}</span><span className={`rt ${f.includes('_merged')?'rt-m':'rt-c'}`}>{f.includes('_merged')?'merged':'calc'}</span></div><div style={{display:'flex',gap:6}}>{onPreview&&<button className="bt bs" onClick={()=>onPreview(f)}>미리보기</button>}<a href={`${API}/api/results/${f}`} download className="bt bs bp" style={{textDecoration:'none'}}>다운로드</a></div></div>)}</div>}
+{results.length>0&&<div style={{marginTop:14}}><div className="ct">결과 파일 ({results.length}개)</div>
+<div style={{fontSize:10,color:'var(--tx3)',marginBottom:6}}>💾 원본 데이터 폴더 + results 폴더에 자동 저장됨</div>
+{results.map(f=><div key={f} className="rr"><div style={{display:'flex',alignItems:'center',gap:8}}><span className="rn">{f}</span><span className={`rt ${f.includes('_merged')?'rt-m':'rt-c'}`}>{f.includes('_merged')?'merged':'calc'}</span></div><div style={{display:'flex',gap:6}}>{onPreview&&<button className="bt bs" onClick={()=>onPreview(f)}>미리보기</button>}<span style={{fontSize:10,color:'var(--green)'}}>✅ 저장됨</span></div></div>)}</div>}
 {st.error&&<div style={{marginTop:12,padding:12,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,fontSize:12,color:'var(--red)'}}>{st.error}</div>}
 </>)}
 
