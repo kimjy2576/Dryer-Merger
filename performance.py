@@ -493,13 +493,17 @@ def _calc_mass_flow(df, cfg, air_cond, ref_cond, ref_eva, ref_comp, dt):
     # ── 냉매 유량 계산 방법 결정 ──
     V_cc = calc_cfg.get("compressor_volume_cc", 0)
     C_v = calc_cfg.get("clearance_volume_ratio", 0.03)
-    has_hz = "HP_CompCurrentHz" in df.columns
-    use_volumetric = V_cc > 0 and has_hz and ref_comp.get("rho_in") is not None
+    # HP_CompCurrentHz → Ctrl_Comp_Hz로 리네임될 수 있음
+    hz_col = None
+    for c in ["Ctrl_Comp_Hz", "HP_CompCurrentHz"]:
+        if c in df.columns:
+            hz_col = c; break
+    use_volumetric = V_cc > 0 and hz_col is not None and ref_comp.get("rho_in") is not None
 
     if use_volumetric:
         # ── 체적효율 기반 ──
         V_m3 = V_cc / 1e6  # cc → m³
-        N_hz = df["HP_CompCurrentHz"].values.astype(float)  # Hz = rev/s
+        N_hz = df[hz_col].values.astype(float)  # Hz = rev/s
         rho_suc = ref_comp["rho_in"]   # kg/m³
         pr_abs = ref_comp["pr_abs"]    # 절대압 기준 압축비
         kappa = ref_comp["kappa"]      # 비열비
