@@ -959,7 +959,7 @@ const PSYCH_BG=(()=>{const out=[];
 })();
 
 const VW_CATS=[
-  {name:'압축기 상태량',rows:3,cols:2,vars:['P_Comp_In','P_Comp_Out','T_Comp_In','T_Comp_Body','T_Superheating','T_SH_CompOut']},
+  {name:'압축기 상태량',rows:3,cols:3,vars:['P_Comp_In','P_Comp_Out','T_Comp_In','T_Comp_Body','T_Superheating','T_SH_CompOut','Ratio_Compression','Eta_vol','HP_CompCurrentHz']},
   {name:'증발기 상태량',rows:3,cols:3,vars:['T_Air_Eva_In','T_Air_Eva_Out','T_Eva_In','T_Eva_Out','T_Boiling_ref','T_Superheating','RH_Eva_In','AH_Eva_In','AH_Eva_In_raw']},
   {name:'응축기 상태량',rows:3,cols:3,vars:['T_Air_Eva_Out','T_Air_Cond_Out','T_Cond_In','T_Cond_Out','T_Cond_M1','T_subcooling','RH_Cond_Out','AH_Cond_Out']},
   {name:'유량',rows:3,cols:3,vars:['Flow_air_Cond_CMM','Flow_air_Cond_CMM_raw','Flow_air_Eva_CMM','Flow_ref_kgH','Flow_ref_kgH_recalc','Flow_ref_kgH_raw','Water_calc_gM','Water_calc_kg','Water_calc_kg_raw']},
@@ -1299,7 +1299,7 @@ const VL={
   // 유량
   Flow_air_Cond_CMM:'응축기 풍량 [CMM]',Flow_air_Cond_CMM_raw:'응축기 풍량 (비보정) [CMM]',Flow_air_Eva_CMM:'증발기 풍량 [CMM]',
   Flow_Mair_Cond_kgH:'습공기 질량유량 [kg/h]',Flow_Dair_kgH:'건조공기 질량유량 [kg/h]',
-  Flow_ref_kgH:'냉매 유량 [kg/h]',Flow_ref_kgH_recalc:'냉매 유량 (필터) [kg/h]',Flow_ref_kgH_raw:'냉매 유량 (비보정) [kg/h]',
+  Flow_ref_kgH:'냉매 유량 [kg/h]',Flow_ref_kgH_recalc:'냉매 유량 (필터) [kg/h]',Flow_ref_kgH_raw:'냉매 유량 (비보정) [kg/h]',Eta_vol:'체적효율 [-]',
   // 수분
   Water_calc_gM:'응축수량 [g/min]',Water_calc_kg:'누적 응축수 [kg]',RMC_calc:'잔여수분율 [%]',
   Water_calc_gM_raw:'응축수량 (비보정) [g/min]',Water_calc_kg_raw:'누적 응축수 (비보정) [kg]',RMC_calc_raw:'잔여수분율 (비보정) [%]',

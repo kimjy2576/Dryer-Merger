@@ -248,7 +248,8 @@ def _empty_flow(n):
     z = np.zeros(n)
     return {"cmm_cond": z, "mdot_mair": z, "mdot_dair": z,
             "mdot_ref": z, "mdot_ref_filtered": z,
-            "Q_cond": z, "Q_eva": z, "Q_eva_filtered": z}
+            "Q_cond": z, "Q_cond_filtered": z,
+            "Q_eva": z, "Q_eva_filtered": z, "eta_vol": z}
 
 def _empty_perf(n):
     z = np.zeros(n)
@@ -446,13 +447,24 @@ def _calc_compressor_ref(df, props):
     v_out = props.v_tp_superheat(T_out, P_out)
     rho_in = props.rho_tp(T_in, P_in)
 
+    # 비열비 κ = Cp/Cv (흡입 조건)
+    cp_in = props.cp_tp(T_in, P_in)
+    cv_in = props.cv_tp(T_in, P_in)
+    kappa = np.where(cv_in > 0, cp_in / cv_in, 1.2)
+
     dh = h_out - h_in
     pr = np.where(P_in > 0, P_out / P_in, 1)
+
+    # 절대압 기준 압축비 (체적효율 계산용)
+    patm_bar = props.patm / 100  # kPa → bar (≈1.01325)
+    P_in_abs = P_in + patm_bar
+    P_out_abs = P_out + patm_bar
+    pr_abs = np.where(P_in_abs > 0, P_out_abs / P_in_abs, 1)
 
     return {
         "h_in": h_in, "h_out": h_out, "s_in": s_in, "s_out": s_out,
         "v_in": v_in, "v_out": v_out, "rho_in": rho_in,
-        "dh": dh, "pr": pr,
+        "dh": dh, "pr": pr, "pr_abs": pr_abs, "kappa": kappa,
     }
 
 
@@ -460,29 +472,71 @@ def _calc_compressor_ref(df, props):
 #  5. 질량유량 & 열전달량
 # ════════════════════════════════════════════════
 def _calc_mass_flow(df, cfg, air_cond, ref_cond, ref_eva, ref_comp, dt):
+    """
+    냉매 질량유량 계산.
+    
+    체적효율 기반 (기본):
+      ṁ_ref = V_comp × N × η_vol × ρ_suc × 3600
+      η_vol = 1 - C_v × (PR^(1/κ) - 1)
+    
+    팬 전력 기반 (폴백):
+      CMM = Po_Fan / coeff_a × coeff_b → Q_cond → ṁ_ref
+    """
     calc_cfg = cfg["calculation"]
     af = calc_cfg.get("airflow_estimation", {})
 
     dh_air = air_cond["h_out"] - air_cond["h_in"]
-    safe_dh = np.where(np.abs(dh_air) < 1e-9, 1e-6, dh_air)
+    safe_dh_air = np.where(np.abs(dh_air) < 1e-9, 1e-6, dh_air)
     v_out = air_cond["v_out"]
     AH_out = air_cond["AH_out"]
 
-    # 풍량 결정
-    if af.get("method") == "fan_power" and "Po_Fan" in df.columns:
-        cmm = df["Po_Fan"].values.astype(float) / af["coeff_a"] * af["coeff_b"]
+    # ── 냉매 유량 계산 방법 결정 ──
+    V_cc = calc_cfg.get("compressor_volume_cc", 0)
+    C_v = calc_cfg.get("clearance_volume_ratio", 0.03)
+    has_hz = "HP_CompCurrentHz" in df.columns
+    use_volumetric = V_cc > 0 and has_hz and ref_comp.get("rho_in") is not None
+
+    if use_volumetric:
+        # ── 체적효율 기반 ──
+        V_m3 = V_cc / 1e6  # cc → m³
+        N_hz = df["HP_CompCurrentHz"].values.astype(float)  # Hz = rev/s
+        rho_suc = ref_comp["rho_in"]   # kg/m³
+        pr_abs = ref_comp["pr_abs"]    # 절대압 기준 압축비
+        kappa = ref_comp["kappa"]      # 비열비
+
+        # η_vol = 1 - C_v × (PR^(1/κ) - 1)
+        safe_kappa = np.where(kappa <= 0, 1.2, kappa)
+        eta_vol = 1 - C_v * (np.power(np.maximum(pr_abs, 1), 1/safe_kappa) - 1)
+        eta_vol = np.clip(eta_vol, 0.0, 1.0)
+
+        # ṁ_ref [kg/h] = V [m³] × N [rev/s] × η_vol × ρ [kg/m³] × 3600
+        mdot_ref = V_m3 * N_hz * eta_vol * rho_suc * 3600
+        mdot_ref = np.maximum(mdot_ref, 0)
+
+        # 열량 계산
+        Q_cond = mdot_ref / 3600 * ref_cond["dh"] * 1000
+        Q_eva = mdot_ref / 3600 * ref_eva["dh"] * 1000
+
+        # 풍량 역산: Q_cond = CMM × (60 × Δh_air × 1000) / (v_out × 3600)
+        cmm = Q_cond * v_out * 3600 / (60 * safe_dh_air * 1000)
+        cmm = np.maximum(cmm, 0)
+
+        print(f"  [mass_flow] 체적효율 기반: V={V_cc}cc, C_v={C_v}, "
+              f"η_vol={np.nanmean(eta_vol):.3f}, ṁ_ref={np.nanmean(mdot_ref):.2f} kg/h")
     else:
-        cmm = np.full(len(df), 1.0)
+        # ── 팬 전력 기반 (폴백) ──
+        if af.get("method") == "fan_power" and "Po_Fan" in df.columns:
+            cmm = df["Po_Fan"].values.astype(float) / af["coeff_a"] * af["coeff_b"]
+        else:
+            cmm = np.full(len(df), 1.0)
 
-    # 열전달량 (공기 기준)
-    Q_cond = cmm * (60 * safe_dh * 1000) / (v_out * 3600)
+        Q_cond = cmm * (60 * safe_dh_air * 1000) / (v_out * 3600)
+        safe_dh_ref = np.where(ref_cond["dh"] == 0, 1e-6, ref_cond["dh"])
+        mdot_ref = Q_cond / (safe_dh_ref * 1000) * 3600
+        Q_eva = mdot_ref / 3600 * ref_eva["dh"] * 1000
 
-    # 냉매 유량 역산
-    safe_dh_ref = np.where(ref_cond["dh"] == 0, 1e-6, ref_cond["dh"])
-    mdot_ref = Q_cond / (safe_dh_ref * 1000) * 3600
-
-    # 증발기 열량
-    Q_eva = mdot_ref * ref_eva["dh"] * 1000 / 3600
+        eta_vol = np.zeros(len(df))
+        print(f"  [mass_flow] 팬 전력 기반 (폴백): coeff_a={af.get('coeff_a')}, coeff_b={af.get('coeff_b')}")
 
     # 건공기 / 습공기 유량
     v_da = v_out / (1 + AH_out)
@@ -499,6 +553,7 @@ def _calc_mass_flow(df, cfg, air_cond, ref_cond, ref_eva, ref_comp, dt):
         "mdot_ref": mdot_ref, "mdot_ref_filtered": mdot_filtered,
         "Q_cond": Q_cond, "Q_cond_filtered": Q_cond_filtered,
         "Q_eva": Q_eva, "Q_eva_filtered": Q_eva_filtered,
+        "eta_vol": eta_vol,
     }
 
 
@@ -575,6 +630,7 @@ def _apply_imc_full(df, cfg, props, patm, rh_eva_out,
         "Q_cond_filtered": Q_cond_corr,
         "Q_eva": Q_eva_corr,
         "Q_eva_filtered": Q_eva_corr,
+        "eta_vol": flow_raw.get("eta_vol", np.zeros(len(df))),
     }
 
     # ── perf 전체 재계산 ──
@@ -817,6 +873,7 @@ def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf,
     out["Flow_Dair_kgH"] = f["mdot_dair"]
     out["Flow_ref_kgH"] = f["mdot_ref"]
     out["Flow_ref_kgH_recalc"] = f["mdot_ref_filtered"]
+    out["Eta_vol"] = f.get("eta_vol", np.zeros(len(df)))
 
     # ── 열전달량 ──
     out["Qrefr_Cond_recalc"] = f["Q_cond_filtered"]
