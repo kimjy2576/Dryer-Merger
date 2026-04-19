@@ -477,7 +477,8 @@ function CalcTab({cfg,sid,setSid,st,setSt,setTab,setViewerAutoLoad,calcAutoFiles
 const[poll,setPoll]=useState(false);const pr=useRef();
 const[results,setResults]=useState([]);
 const[selFiles,setSelFiles]=useState(new Set());
-const[expMap,setExpMap]=useState({}); // {filename: {load_kg, imc_kg, fmc_kg}}
+const[expMap,setExpMap]=useState({}); // {filename: {load_kg, imc_kg, fmc_kg, imc_pct, fmc_pct}}
+const[expUnit,setExpUnit]=useState('kg'); // 'kg' | '%'
 const[calcSid,setCalcSid]=useState(sid);
 // 변수 매핑
 const[calcVars,setCalcVars]=useState([]);     // 서버에서 받은 CALC_VARIABLES
@@ -571,7 +572,14 @@ const runCalc=async()=>{
     if(!confirm(msg))return;
   }
   const expData={};let hasExp=false;
-  [...selFiles].forEach(fn=>{const e=expMap[fn];if(e&&e.load_kg&&e.imc_kg&&e.fmc_kg){expData[fn]={load_kg:+e.load_kg,imc_kg:+e.imc_kg,fmc_kg:+e.fmc_kg};hasExp=true}});
+  [...selFiles].forEach(fn=>{const e=expMap[fn];if(!e||!e.load_kg)return;
+    const load=+e.load_kg;
+    if(expUnit==='%'){
+      if(e.imc_pct&&e.fmc_pct){
+        expData[fn]={load_kg:load,imc_kg:load*(1+(+e.imc_pct)/100),fmc_kg:load*(1+(+e.fmc_pct)/100)};hasExp=true}
+    }else{
+      if(e.imc_kg&&e.fmc_kg){expData[fn]={load_kg:load,imc_kg:+e.imc_kg,fmc_kg:+e.fmc_kg};hasExp=true}}
+  });
   const vm={};Object.entries(mapping).forEach(([k,v])=>{if(v&&v!==k)vm[k]=v});
   try{
     const r=await fetch(`${API}/api/calculate`,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -672,19 +680,37 @@ return(<div>
 
   {/* 실험 입력값 — 파일별 */}
   {selFiles.size>0&&<div className="cd">
-    <div className="ct">실험 입력값 (선택사항 — 파일별)</div>
-    <div style={{fontSize:10,color:'var(--tx3)',marginBottom:8}}>각 파일별 건조부하, 초기/최종 함수율 무게를 입력하세요. 비워두면 해당 계산을 생략합니다.</div>
-    <div style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden'}}>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 100px 100px 100px',gap:0,padding:'6px 10px',background:'var(--bg3)',fontSize:10,fontWeight:500,color:'var(--tx2)'}}>
-        <span>파일</span><span>건조부하 [kg]</span><span>초기 무게 [kg]</span><span>최종 무게 [kg]</span>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+      <div className="ct" style={{margin:0}}>실험 입력값 (선택사항 — 파일별)</div>
+      <div style={{display:'flex',gap:2,background:'var(--bg3)',borderRadius:6,padding:2}}>
+        <button onClick={()=>setExpUnit('kg')} style={{fontSize:10,padding:'2px 10px',borderRadius:4,border:'none',cursor:'pointer',fontWeight:500,background:expUnit==='kg'?'var(--teal)':'transparent',color:expUnit==='kg'?'#fff':'var(--tx3)'}}>kg</button>
+        <button onClick={()=>setExpUnit('%')} style={{fontSize:10,padding:'2px 10px',borderRadius:4,border:'none',cursor:'pointer',fontWeight:500,background:expUnit==='%'?'var(--teal)':'transparent',color:expUnit==='%'?'#fff':'var(--tx3)'}}>%</button>
       </div>
-      {[...selFiles].map(fn=>{const e=expMap[fn]||{load_kg:'',imc_kg:'',fmc_kg:''};
-        const setE=(k,v)=>setExpMap(p=>({...p,[fn]:{...(p[fn]||{load_kg:'',imc_kg:'',fmc_kg:''}),[k]:v}}));
-        return(<div key={fn} style={{display:'grid',gridTemplateColumns:'1fr 100px 100px 100px',gap:6,padding:'5px 10px',borderTop:'1px solid var(--bd)',alignItems:'center',fontSize:11}}>
+    </div>
+    <div style={{fontSize:10,color:'var(--tx3)',marginBottom:8}}>{expUnit==='%'?'건조부하 + IMC/FMC 함수율(%)을 입력하세요. → kg 자동 환산':'각 파일별 건조부하, 초기/최종 함수율 무게를 입력하세요.'} 비워두면 해당 계산을 생략합니다.</div>
+    <div style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden'}}>
+      <div style={{display:'grid',gridTemplateColumns:expUnit==='%'?'1fr 90px 90px 90px 1fr':'1fr 100px 100px 100px',gap:0,padding:'6px 10px',background:'var(--bg3)',fontSize:10,fontWeight:500,color:'var(--tx2)'}}>
+        <span>파일</span><span>건조부하 [kg]</span>
+        {expUnit==='%'?<><span>IMC [%]</span><span>FMC [%]</span><span style={{fontSize:9,color:'var(--tx3)'}}>환산값</span></>
+        :<><span>초기 무게 [kg]</span><span>최종 무게 [kg]</span></>}
+      </div>
+      {[...selFiles].map(fn=>{const e=expMap[fn]||{load_kg:'',imc_kg:'',fmc_kg:'',imc_pct:'',fmc_pct:''};
+        const setE=(k,v)=>setExpMap(p=>({...p,[fn]:{...(p[fn]||{load_kg:'',imc_kg:'',fmc_kg:'',imc_pct:'',fmc_pct:''}),[k]:v}}));
+        const load=+e.load_kg||0;
+        const imcKg=expUnit==='%'&&load&&e.imc_pct?(load*(1+(+e.imc_pct)/100)).toFixed(3):'';
+        const fmcKg=expUnit==='%'&&load&&e.fmc_pct?(load*(1+(+e.fmc_pct)/100)).toFixed(3):'';
+        const ist={fontSize:11,padding:'3px 6px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'};
+        return(<div key={fn} style={{display:'grid',gridTemplateColumns:expUnit==='%'?'1fr 90px 90px 90px 1fr':'1fr 100px 100px 100px',gap:6,padding:'5px 10px',borderTop:'1px solid var(--bd)',alignItems:'center',fontSize:11}}>
           <span style={{fontFamily:'var(--mono)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={fn}>{fn.replace('_merged.csv','')}</span>
-          <input value={e.load_kg} onChange={ev=>setE('load_kg',ev.target.value)} placeholder="3.0" style={{fontSize:11,padding:'3px 6px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
-          <input value={e.imc_kg} onChange={ev=>setE('imc_kg',ev.target.value)} placeholder="4.8" style={{fontSize:11,padding:'3px 6px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
-          <input value={e.fmc_kg} onChange={ev=>setE('fmc_kg',ev.target.value)} placeholder="3.15" style={{fontSize:11,padding:'3px 6px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}/>
+          <input value={e.load_kg} onChange={ev=>setE('load_kg',ev.target.value)} placeholder="3.0" style={ist}/>
+          {expUnit==='%'?<>
+            <input value={e.imc_pct} onChange={ev=>setE('imc_pct',ev.target.value)} placeholder="60" style={ist}/>
+            <input value={e.fmc_pct} onChange={ev=>setE('fmc_pct',ev.target.value)} placeholder="5" style={ist}/>
+            <span style={{fontSize:9,color:'var(--tx3)',fontFamily:'var(--mono)'}}>{imcKg&&fmcKg?`${imcKg} → ${fmcKg} kg`:''}</span>
+          </>:<>
+            <input value={e.imc_kg} onChange={ev=>setE('imc_kg',ev.target.value)} placeholder="4.8" style={ist}/>
+            <input value={e.fmc_kg} onChange={ev=>setE('fmc_kg',ev.target.value)} placeholder="3.15" style={ist}/>
+          </>}
         </div>)})}
     </div>
   </div>}
