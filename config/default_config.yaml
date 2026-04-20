@@ -93,7 +93,10 @@ mx100:
 calculation:
   enabled: true
   compressor_volume_cc: 7.5       # 압축기 행정체적 [cc]
-  clearance_volume_ratio: 0.03   # 클리어런스 체적비 [-] (dead volume ratio, 보통 0.02~0.05)
+  volumetric_efficiency:
+    method: "calculated"          # "calculated" (클리어런스 기반) | "fixed" (고정값)
+    clearance_volume_ratio: 0.03  # calculated 모드: C_v (dead volume ratio, 보통 0.02~0.05)
+    fixed_value: 0.85             # fixed 모드: 고정 체적효율 [-]
   rh_eva_out_assumed: 0.80        # 증발기 출구 예측 RH [-] (초기값)
   use_imc_correction: true       # IMC/FMC 기반 유량 보정 (true: IMC 입력 시 보정, false: 비보정만)
 

@@ -492,7 +492,10 @@ def _calc_mass_flow(df, cfg, air_cond, ref_cond, ref_eva, ref_comp, dt):
 
     # ── 냉매 유량 계산 방법 결정 ──
     V_cc = calc_cfg.get("compressor_volume_cc", 0)
-    C_v = calc_cfg.get("clearance_volume_ratio", 0.03)
+    vol_cfg = calc_cfg.get("volumetric_efficiency", {})
+    vol_method = vol_cfg.get("method", "calculated")
+    C_v = vol_cfg.get("clearance_volume_ratio", 0.03)
+    fixed_eta = vol_cfg.get("fixed_value", 0.85)
     # HP_CompCurrentHz → Ctrl_Comp_Hz로 리네임될 수 있음
     hz_col = None
     for c in ["Ctrl_Comp_Hz", "HP_CompCurrentHz"]:
@@ -508,10 +511,16 @@ def _calc_mass_flow(df, cfg, air_cond, ref_cond, ref_eva, ref_comp, dt):
         pr_abs = ref_comp["pr_abs"]    # 절대압 기준 압축비
         kappa = ref_comp["kappa"]      # 비열비
 
-        # η_vol = 1 - C_v × (PR^(1/κ) - 1)
-        safe_kappa = np.where(kappa <= 0, 1.2, kappa)
-        eta_vol = 1 - C_v * (np.power(np.maximum(pr_abs, 1), 1/safe_kappa) - 1)
-        eta_vol = np.clip(eta_vol, 0.0, 1.0)
+        if vol_method == "fixed":
+            # 고정 체적효율
+            eta_vol = np.full(len(df), fixed_eta)
+            print(f"  [mass_flow] 체적효율 고정: η_vol={fixed_eta}")
+        else:
+            # 클리어런스 기반: η_vol = 1 - C_v × (PR^(1/κ) - 1)
+            safe_kappa = np.where(kappa <= 0, 1.2, kappa)
+            eta_vol = 1 - C_v * (np.power(np.maximum(pr_abs, 1), 1/safe_kappa) - 1)
+            eta_vol = np.clip(eta_vol, 0.0, 1.0)
+            print(f"  [mass_flow] 체적효율 계산: C_v={C_v}, η_vol 평균={np.nanmean(eta_vol):.3f}")
 
         # ṁ_ref [kg/h] = V [m³] × N [rev/s] × η_vol × ρ [kg/m³] × 3600
         mdot_ref = V_m3 * N_hz * eta_vol * rho_suc * 3600
@@ -525,8 +534,7 @@ def _calc_mass_flow(df, cfg, air_cond, ref_cond, ref_eva, ref_comp, dt):
         cmm = Q_cond * v_out * 3600 / (60 * safe_dh_air * 1000)
         cmm = np.maximum(cmm, 0)
 
-        print(f"  [mass_flow] 체적효율 기반: V={V_cc}cc, C_v={C_v}, "
-              f"η_vol={np.nanmean(eta_vol):.3f}, ṁ_ref={np.nanmean(mdot_ref):.2f} kg/h")
+        print(f"  [mass_flow] V={V_cc}cc, ṁ_ref 평균={np.nanmean(mdot_ref):.2f} kg/h")
     else:
         # ── 팬 전력 기반 (폴백) ──
         if af.get("method") == "fan_power" and "Po_Fan" in df.columns:
