@@ -274,33 +274,29 @@ def _apply_sensor_offsets(df, offsets: dict):
 
 
 def _ensure_columns(df):
-    """레거시 컬럼명을 통일 명명 규칙으로 변환 + 누락 컬럼 대체."""
-    # ── 레거시 → 통일명 자동 변환 ──
+    """레거시 컬럼명 → 통일 명명 규칙 복사 (원본도 유지) + 누락 컬럼 대체."""
+    # ── 레거시 → 통일명 복사 (원본 이름 유지) ──
     rename_map = {
         "Heatpump_EvaOutTemp": "T_Eva_Out",
+        "Heatpump_EvaInTemp": "T_Eva_In",
         "Heatpump_DuctInTemp": "T_Air_Eva_In",
         "Heatpump_DuctOutTemp": "T_Air_Cond_Out",
         "Heatpump_CompTemp": "T_Comp_Body",
         "HP_CompCurrentHz": "Ctrl_Comp_Hz",
         "Heatpump_DryMotionInfo": "Ctrl_DryMotion",
         "T_Cond_M1": "T_Cond_Mid",
-        # 추가 호환
-        "Heatpump_EvaInTemp": "T_Eva_In",
-        "T_Air_Eva_In": "T_Air_Eva_In",  # 이미 통일명이면 그대로
     }
-    actual_renames = {}
+    # 복사: 통일명만 추가 (원본은 그대로 유지)
     for old, new in rename_map.items():
         if old in df.columns and new not in df.columns:
-            actual_renames[old] = new
-    if actual_renames:
-        df = df.rename(columns=actual_renames)
+            df[new] = df[old]
 
     # ── 폴백: 없는 컬럼은 대체 컬럼에서 복제 ──
     fallbacks = [
         ("T_Comp_In",      ["T_Eva_Out"]),
         ("T_Comp_Out",     ["T_Cond_In", "T_Comp_Body"]),
         ("T_Air_Eva_In",   ["T_Eva_In"]),
-        ("T_Air_Cond_Out", ["T_Air_Eva_In"]),  # 최후 fallback
+        ("T_Air_Cond_Out", ["T_Air_Eva_In"]),
     ]
     for tgt, srcs in fallbacks:
         if tgt not in df.columns:
@@ -319,6 +315,19 @@ def _ensure_columns(df):
         df["Ctrl_DryMotion"] = 0
     if "Ctrl_Comp_Hz" not in df.columns:
         df["Ctrl_Comp_Hz"] = 0
+
+    # ── 원본 이름 역복사 (통일명만 있는 경우 원본 이름도 생성) ──
+    reverse_map = {
+        "Heatpump_EvaOutTemp": "T_Eva_Out",
+        "Heatpump_EvaInTemp": "T_Eva_In",
+        "Heatpump_DuctInTemp": "T_Air_Eva_In",
+        "Heatpump_DuctOutTemp": "T_Air_Cond_Out",
+        "Heatpump_CompTemp": "T_Comp_Body",
+        "HP_CompCurrentHz": "Ctrl_Comp_Hz",
+    }
+    for orig, unified in reverse_map.items():
+        if orig not in df.columns and unified in df.columns:
+            df[orig] = df[unified]
 
     return df
 
