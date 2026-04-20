@@ -122,7 +122,7 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
             # 6. 성능지표 (에너지 밸런스로 AH_eva_in 역산)
             computed["perf"] = _calc_evaporator_air_and_performance(
                 df, props, patm, rh_eva_out, computed["air_cond"],
-                computed["flow"], time_interval, exp)
+                computed["flow"], time_interval, exp, cfg)
 
             # ── 수렴 체크: AH_eva_in에서 AH_eva_out 역산 ──
             AH_eva_in = computed["perf"]["AH_eva_in"]
@@ -162,7 +162,7 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
             computed["ref_eva"], computed["ref_comp"], time_interval)
         computed["perf"] = _calc_evaporator_air_and_performance(
             df, props, patm, rh_eva_out, computed["air_cond"],
-            computed["flow"], time_interval, exp)
+            computed["flow"], time_interval, exp, cfg)
 
     else:
         # ━━━ 필수 컬럼 부족: 스킵 ━━━
@@ -657,7 +657,7 @@ def _apply_imc_full(df, cfg, props, patm, rh_eva_out,
     # ── perf 전체 재계산 ──
     perf_corr = _calc_evaporator_air_and_performance(
         df, props, patm, rh_eva_out, air_cond,
-        flow_corr, time_interval, exp)
+        flow_corr, time_interval, exp, cfg)
 
     return flow_corr, perf_corr, info
 
@@ -665,7 +665,7 @@ def _apply_imc_full(df, cfg, props, patm, rh_eva_out,
 # ════════════════════════════════════════════════
 #  6. 증발기 공기측 + 성능지표
 # ════════════════════════════════════════════════
-def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, flow, dt, exp):
+def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, flow, dt, exp, cfg=None):
     T_eva_in = df["T_Air_Eva_In"].values.astype(float)
     T_eva_out = df["T_Air_Eva_Out"].values.astype(float) if "T_Air_Eva_Out" in df.columns \
         else df["T_Air_Eva_In"].values.astype(float) - 5
@@ -714,12 +714,30 @@ def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, 
     COP_sys_cool = np.where(Po_wd != 0, Q_eva / Po_wd, 0)
     COP_sys_heat = np.where(Po_wd != 0, flow["Q_cond"] / Po_wd, 0)
 
-    # 응축수량
-    cold_start = df.loc[df["Ctrl_DryMotion"] == 2, "Time_min"]
-    cold_t = cold_start.min() if not cold_start.empty else 99999
-    mask_cold = time_min >= cold_t
-    water_gs = np.where(mask_cold, 0,
-                        (AH_eva_in - AH_cond_in) * mdot_dair * 1000 / 3600)
+    # 응축수량 계산
+    # 원식: water_gs = (AH_eva_in - AH_cond_in) × mdot_dair × 1000 / 3600
+    raw_water_gs = (AH_eva_in - AH_cond_in) * mdot_dair * 1000 / 3600
+
+    # ── 초반 튐 방어 (3단계 필터) ──
+    ww = (cfg or {}).get("calculation", {}).get("water_warmup", {})
+    warmup_extra_min = float(ww.get("extra_min", 1.5))
+    max_gs = float(ww.get("max_gs", 3.0))
+
+    # 1. Warm-up 마스크: Ctrl_DryMotion >= 2 (히트펌프 건조 구간) 이후부터
+    if "Ctrl_DryMotion" in df.columns and (df["Ctrl_DryMotion"] >= 2).any():
+        hp_start = df.loc[df["Ctrl_DryMotion"] >= 2, "Time_min"].min()
+    else:
+        hp_start = 0
+    mask_warmup = time_min >= (hp_start + warmup_extra_min)
+
+    # 2. 음수 방어: 증발(AH 감소)은 물리적으로 없음
+    raw_water_gs = np.maximum(raw_water_gs, 0)
+
+    # 3. 물리적 상한 클리핑
+    raw_water_gs = np.minimum(raw_water_gs, max_gs)
+
+    # 최종 water_gs
+    water_gs = np.where(mask_warmup, raw_water_gs, 0)
     water_gm = water_gs * 60
     water_kg = np.cumsum(water_gm * (dt / 60) / 1000)
 

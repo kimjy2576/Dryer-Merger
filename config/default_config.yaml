@@ -100,6 +100,11 @@ calculation:
   rh_eva_out_assumed: 0.80        # 증발기 출구 예측 RH [-] (초기값)
   use_imc_correction: true       # IMC/FMC 기반 유량 보정 (true: IMC 입력 시 보정, false: 비보정만)
 
+  # 응축수 초반 튐 방어
+  water_warmup:
+    extra_min: 1.5          # Ctrl_DryMotion>=2 시점 + N분 이후부터 응축 계산
+    max_gs: 3.0             # 물리적 상한 [g/s] (정상 ~0.5-2 g/s)
+
   # RH 미측정 시 수렴 반복 설정
   rh_iteration:
     max_iter: 15                   # 최대 반복 횟수
