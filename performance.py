@@ -199,7 +199,7 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
     df_calc = _assemble_output(df, computed["air_cond"], computed["ref_cond"],
                                 computed["ref_eva"], computed["ref_comp"],
                                 computed["flow"], computed["perf"],
-                                imc_flow, imc_perf)
+                                imc_flow, imc_perf, cfg)
 
     # ── 9. 후처리 LPF ──
     lpf_cols = calc_cfg.get("calc_lpf_columns", [])
@@ -828,7 +828,7 @@ def _calc_energy_integration(df, calc_cfg, dt):
 #  8. 출력 DataFrame 조립
 # ════════════════════════════════════════════════
 def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf,
-                     imc_flow=None, imc_perf=None):
+                     imc_flow=None, imc_perf=None, cfg=None):
     """
     모든 계산 결과를 단일 DataFrame으로 조립.
     IMC 보정 시: 기본 변수명 = 보정값, _raw 접미사 = 비보정 원본
@@ -921,6 +921,95 @@ def _assemble_output(df, air_cond, ref_cond, ref_eva, ref_comp, flow, perf,
     out["Water_calc_gM"] = p["water_gm"]
     out["Water_calc_kg"] = p["water_kg"]
     out["RMC_calc"] = p["rmc"]
+
+    # ── 원본 프로그램 호환 변수 ──
+    # 온도 _ref 접미사 (플로팅 호환)
+    for col, alias in [("T_Comp_In","T_Comp_In_ref"),("T_Comp_Out","T_Comp_Out_ref"),
+                        ("T_Cond_In","T_Cond_In_ref"),("T_Cond_Out","T_Cond_Out_ref"),
+                        ("T_Eva_In","T_Eva_In_ref"),("T_Eva_Out","T_Eva_Out_ref")]:
+        if col in out.columns:
+            out[alias] = out[col]
+
+    # RH 실측값 (센서 데이터 있으면)
+    for rh_col in ["RH_Eva_In_measure","RH_Air_Eva_In"]:
+        if rh_col in out.columns: break
+    else:
+        if "RH_Eva_In" in out.columns:
+            out["RH_Eva_In_measure"] = out["RH_Eva_In"]  # fallback
+
+    # 등온 압축 유량: ṁ = V × N × ρ_suc × 3600 (η_vol=1)
+    if "Ctrl_Comp_Hz" in out.columns:
+        V_cc = 7.5  # config에서 가져올 수도 있지만 간단히
+        try: V_cc = cfg["calculation"].get("compressor_volume_cc", 7.5)
+        except: pass
+        V_m3 = V_cc / 1e6
+        N = out["Ctrl_Comp_Hz"].values.astype(float)
+        rho = ref_comp["rho_in"]
+        out["Flow_ref_kgH_isothermal"] = V_m3 * N * rho * 3600
+
+    # 재보정 응축수량 (별칭)
+    out["Water_calc_gM_recal"] = p["water_gm"]
+
+    # 건조 열량: Q_Dry = mdot_da × (h_eva_in - h_cond_out) / 3.6
+    mdot_da = f["mdot_dair"]
+    h_eva_in_air = p["AH_eva_in"]  # 실제로는 h_eva_in_air 필요
+    h_cond_out_air = air_cond["h_out"]
+    h_eva_in_air_val = p.get("h_eva_in_air", np.zeros(len(df)))
+    Q_dry = mdot_da * (h_eva_in_air_val - h_cond_out_air) / 3.6
+    out["Q_Dry"] = Q_dry
+
+    # 건조 COP
+    Po_comp = df["Po_Comp"].values.astype(float) if "Po_Comp" in df.columns else np.ones(len(df))
+    Po_wd = df["Po_WD"].values.astype(float) if "Po_WD" in df.columns else np.ones(len(df))
+    out["COP_Dry"] = np.where(Po_comp > 0, Q_dry / Po_comp, 0)
+    out["COP_sys_Dry"] = np.where(Po_wd > 0, Q_dry / Po_wd, 0)
+
+    # SMER 변형 (제습능력/전력)
+    water_gs = p.get("water_gs", np.zeros(len(df)))
+    out["P_Dehumidity_PoComp"] = np.where(Po_comp > 0, water_gs * 3.6 / Po_comp, 0)
+    out["P_Dehumidity_PoWD"] = np.where(Po_wd > 0, water_gs * 3.6 / Po_wd, 0)
+
+    # 압축기 효율: η_comp = (h_out_is - h_in) / (h_out - h_in)
+    h_in_c = ref_comp["h_in"]
+    h_out_c = ref_comp["h_out"]
+    dh_actual = h_out_c - h_in_c
+    # 등엔트로피 출구 엔탈피 근사: h_out_is ≈ h_in + v_in × (P_out - P_in) × 100
+    # 더 정확한 방법: s_in에서 P_out 조건으로 계산 (여기서는 근사)
+    v_in_c = ref_comp["v_in"]
+    P_in_barg = df["P_Comp_In"].values.astype(float) if "P_Comp_In" in df.columns else np.zeros(len(df))
+    P_out_barg = df["P_Comp_Out"].values.astype(float) if "P_Comp_Out" in df.columns else np.zeros(len(df))
+    dP_kPa = (P_out_barg - P_in_barg) * 100  # barg → kPa
+    dh_isentropic = v_in_c * dP_kPa  # 근사 [kJ/kg]
+    out["Eff_Comp"] = np.where(np.abs(dh_actual) > 0.1, dh_isentropic / dh_actual, 0)
+    out["Eff_Comp"] = np.clip(out["Eff_Comp"], 0, 1.5)
+
+    # 열교환기 유효도: ε = Q / Q_max
+    T_air_in_eva = df["T_Air_Eva_In"].values.astype(float) if "T_Air_Eva_In" in df.columns else np.zeros(len(df))
+    T_air_out_eva = df["T_Air_Eva_Out"].values.astype(float) if "T_Air_Eva_Out" in df.columns else np.zeros(len(df))
+    T_boil = ref_eva.get("T_boil", np.zeros(len(df)))
+    T_dew = ref_cond.get("T_dew", np.zeros(len(df)))
+    T_air_cond_out = df["T_Air_Cond_Out"].values.astype(float) if "T_Air_Cond_Out" in df.columns else np.zeros(len(df))
+    # 증발기: ε = (T_air_in - T_air_out) / (T_air_in - T_boil)
+    dT_max_eva = T_air_in_eva - T_boil
+    out["Eff_Evap"] = np.where(np.abs(dT_max_eva) > 0.1, (T_air_in_eva - T_air_out_eva) / dT_max_eva, 0)
+    out["Eff_Evap"] = np.clip(out["Eff_Evap"], 0, 1.5)
+    # 응축기: ε = (T_air_out - T_air_in) / (T_dew - T_air_in)
+    T_air_in_cond = T_air_out_eva  # 응축기 입구 = 증발기 출구
+    dT_max_cond = T_dew - T_air_in_cond
+    out["Eff_Cond"] = np.where(np.abs(dT_max_cond) > 0.1, (T_air_cond_out - T_air_in_cond) / dT_max_cond, 0)
+    out["Eff_Cond"] = np.clip(out["Eff_Cond"], 0, 1.5)
+
+    # 열손실
+    Q_cond_ref = f["Q_cond"]
+    Q_eva_ref = f["Q_eva"]
+    # Q_Comp_loss = Po_Comp - ṁ_ref × Δh_comp (= 압축기 방열)
+    mdot_ref_hs = f["mdot_ref"] / 3600  # kg/s
+    Q_comp_work = mdot_ref_hs * dh_actual * 1000  # W
+    out["Q_Comp_loss"] = Po_comp - Q_comp_work
+    # Q_HP_loss = (Q_cond + Po_Comp) - Q_eva - Po_Comp = Q_cond - Q_eva (시스템 열손실)
+    out["Q_HP_loss"] = Q_cond_ref + Po_comp - Q_eva_ref - Po_comp
+    # 간단히: Q_HP_loss = Q_cond - Q_eva - 배관 등 열손실
+    out["Q_HP_loss"] = Q_cond_ref - Q_eva_ref - Q_comp_work
 
     # ── IMC 보정 시: 원본을 _raw로 저장 ──
     if has_imc:
