@@ -307,10 +307,18 @@ def sync_and_merge(
 #  시간 열 부가 (Time_sec, Time_min)
 # ══════════════════════════════════════════════
 def add_time_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Time 열 기준으로 Time_sec, Time_min 열 추가."""
+    """Time 열 기준으로 Time_sec, Time_min 열 추가/재계산."""
     t0 = df["Time"].iloc[0]
     time_sec = (df["Time"] - t0).dt.total_seconds()
     time_sec = time_sec - time_sec.iloc[0]
-    df.insert(1, "Time_sec", time_sec)
-    df.insert(2, "Time_min", (time_sec / 60).round(2))
+    time_min = (time_sec / 60).round(2)
+    # 이미 있으면 재계산, 없으면 새로 삽입
+    if "Time_sec" in df.columns:
+        df["Time_sec"] = time_sec
+    else:
+        df.insert(1, "Time_sec", time_sec)
+    if "Time_min" in df.columns:
+        df["Time_min"] = time_min
+    else:
+        df.insert(2, "Time_min", time_min)
     return df
