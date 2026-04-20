@@ -1392,7 +1392,8 @@ function VwChart({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,xGap,yGap})
     if(!cases?.length)return[];
     const s=new Set();
     cases.forEach(c=>{if(c?.data)Object.keys(c.data).forEach(k=>{if(!/^Time/i.test(k))s.add(k)})});
-    return[...s].sort();
+    // 라벨(VL) 기준 가나다 정렬 — 한국어 라벨이 없으면 변수명으로 정렬
+    return[...s].sort((a,b)=>(VL[a]||a).localeCompare(VL[b]||b,'ko'));
   },[cases]);
 
   // 탭 = 카테고리 (생성/삭제 가능)
@@ -1870,7 +1871,7 @@ function PerfChart({cases,caseVis,caseColors,chartH,chartW,defaultVars,defaultY1
   const[barWidth,setBarWidth]=useState(0.8);
   const[open,setOpen]=useState(false);
 
-  const availKeys=useMemo(()=>{const s=new Set();cases.forEach(c=>{if(c?.data)Object.keys(c.data).forEach(k=>s.add(k))});return[...s].sort()},[cases]);
+  const availKeys=useMemo(()=>{const s=new Set();cases.forEach(c=>{if(c?.data)Object.keys(c.data).forEach(k=>s.add(k))});return[...s].sort((a,b)=>{const la=VL[a]||a,lb=VL[b]||b;return la.localeCompare(lb,'ko')})},[cases]);
   const getLabel=k=>{const p=PERF_PRESETS.find(x=>x.key===k);return p?p.label:k};
   const getSummary=(d,key,agg)=>{const a=d?.[key];if(!a?.length)return null;const v=a.filter(x=>x!=null&&!isNaN(x));if(!v.length)return null;if(agg==='last')return v[v.length-1];if(agg==='mean')return v.reduce((a,b)=>a+b,0)/v.length;if(agg==='max')return Math.max(...v);if(agg==='min')return Math.min(...v);return v[v.length-1]};
   const addVar=()=>{const u=availKeys.filter(k=>!vars.some(v=>v.key===k)&&!/^Time_sec/i.test(k));if(!u.length)return;setVars(p=>[...p,{key:u[0],axis:'y1',type:'bar',agg:'last'}])};
