@@ -1378,11 +1378,21 @@ def get_version():
 
 @app.post("/api/update")
 def self_update():
-    """GitHub에서 최신 코드 다운로드 + 서버 재시작."""
+    """GitHub에서 최신 코드 다운로드 + 서버 재시작. Setting 값은 유지됨."""
     import subprocess, zipfile, io, shutil
+    import yaml as _yaml
     repo_url = "https://github.com/kimjy2576/Dryer-Merger/archive/refs/heads/main.zip"
 
     try:
+        # 0. 현재 설정 백업 (머지용)
+        cfg_path = BASE_DIR / "config" / "default_config.yaml"
+        user_cfg = None
+        if cfg_path.exists():
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    user_cfg = _yaml.safe_load(f)
+            except: pass
+
         # 1. 다운로드
         import urllib.request
         resp = urllib.request.urlopen(repo_url, timeout=30)
@@ -1415,6 +1425,19 @@ def self_update():
                 shutil.copy2(str(item), str(dest))
                 updated.append(str(rel))
 
+        # 4.5. 설정 머지 (유저 값 우선, 새로 추가된 키만 default에서 가져옴)
+        if user_cfg and cfg_path.exists():
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    new_cfg = _yaml.safe_load(f)
+                merged_cfg = _deep_merge_config(new_cfg, user_cfg)
+                with open(cfg_path, "w", encoding="utf-8") as f:
+                    _yaml.safe_dump(merged_cfg, f, allow_unicode=True,
+                                    sort_keys=False, default_flow_style=False)
+                print(f"[update] Setting 값 유지 (유저 설정 머지 완료)")
+            except Exception as e:
+                print(f"[update] 설정 머지 실패: {e} (새 default 사용)")
+
         # 5. 임시 폴더 삭제
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1425,9 +1448,36 @@ def self_update():
             os._exit(0)  # uvicorn이 재시작
         threading.Thread(target=restart, daemon=True).start()
 
-        return {"status": "updated", "files": len(updated), "message": "서버 재시작 중... 3초 후 새로고침하세요."}
+        return {"status": "updated", "files": len(updated), "message": "서버 재시작 중... Setting 값 유지됨."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+def _deep_merge_config(new_cfg, user_cfg):
+    """
+    유저 설정을 새 default에 머지.
+    - 유저에게 있는 키는 유저 값 사용
+    - 유저에게 없는 새 키는 default 값 사용 (신기능 자동 반영)
+    - dict는 재귀 머지, list/scalar는 유저 값으로 교체
+    """
+    if not isinstance(new_cfg, dict) or not isinstance(user_cfg, dict):
+        return user_cfg if user_cfg is not None else new_cfg
+    result = {}
+    # 새 default의 모든 키를 순회 (순서 유지)
+    for key, new_val in new_cfg.items():
+        if key in user_cfg:
+            user_val = user_cfg[key]
+            if isinstance(new_val, dict) and isinstance(user_val, dict):
+                result[key] = _deep_merge_config(new_val, user_val)
+            else:
+                result[key] = user_val  # 유저 값 우선
+        else:
+            result[key] = new_val  # 새로 추가된 키는 default 사용
+    # 유저에게만 있는 키도 유지 (유저가 수동 추가한 경우)
+    for key, user_val in user_cfg.items():
+        if key not in result:
+            result[key] = user_val
+    return result
 
 
 @app.get("/")
