@@ -1978,39 +1978,41 @@ function CfgField({lb,p,t='text',o,u,st,cfg,onChange}){
 }
 
 function PcCorrectionTable({cfg,setCfg}){
-  // 행: [P1_w, P1_b, P2_w, P2_b, ...], 열: [WD, Comp, Fan]
+  // 행: Po_WD, Po_Comp, Po_Fan (3개)
+  // 열: PC × (weight, bias) — 예: P1_w, P1_b, P2_w, P2_b, ...
   const pcs=cfg?.calculation?.pc_corrections||{};
   const pcKeys=Object.keys(pcs);
-  const cols=['Po_WD','Po_Comp','Po_Fan'];
-  const colLabels={Po_WD:'WD',Po_Comp:'Comp',Po_Fan:'Fan'};
+  const rows=['Po_WD','Po_Comp','Po_Fan'];
+  const rowLabels={Po_WD:'WD',Po_Comp:'Comp',Po_Fan:'Fan'};
   
-  // 행 구조: [{pc, field}]  예: [{pc:'P1',field:'weight'},{pc:'P1',field:'bias'},...]
-  const rows=[];
-  pcKeys.forEach(pc=>{rows.push({pc,field:'weight'});rows.push({pc,field:'bias'})});
+  // 열 구조: [{pc, field}]
+  const colDefs=[];
+  pcKeys.forEach(pc=>{colDefs.push({pc,field:'weight'});colDefs.push({pc,field:'bias'})});
   
-  const nRows=rows.length, nCols=cols.length;
-  const [editing,setEditing]=React.useState(null); // {r,c} - 편집 중인 셀
-  const [editVal,setEditVal]=React.useState('');   // 편집 중인 raw 문자열
-  const [sel,setSel]=React.useState(null);         // {r1,c1,r2,c2} 선택 범위
-  const [drag,setDrag]=React.useState(null);       // 드래그 시작점
+  const nRows=rows.length, nCols=colDefs.length;
+  const [editing,setEditing]=React.useState(null);
+  const [editVal,setEditVal]=React.useState('');
+  const [sel,setSel]=React.useState(null);
+  const [drag,setDrag]=React.useState(null);
   const tableRef=React.useRef(null);
   
-  const getVal=(r,c)=>{const{pc,field}=rows[r];return pcs[pc]?.[cols[c]]?.[field]};
+  const getVal=(r,c)=>{const row=rows[r];const{pc,field}=colDefs[c];return pcs[pc]?.[row]?.[field]};
   const setVal=(r,c,v)=>{
     const np=JSON.parse(JSON.stringify(pcs));
-    const{pc,field}=rows[r];
-    if(!np[pc][cols[c]])np[pc][cols[c]]={weight:1,bias:0};
-    np[pc][cols[c]][field]=v;
+    const row=rows[r];
+    const{pc,field}=colDefs[c];
+    if(!np[pc][row])np[pc][row]={weight:1,bias:0};
+    np[pc][row][field]=v;
     setCfg('calculation.pc_corrections',np);
   };
   const setMultiVals=(updates)=>{
-    // updates: [{r,c,v}]
     const np=JSON.parse(JSON.stringify(pcs));
     updates.forEach(({r,c,v})=>{
       if(r>=nRows||c>=nCols||r<0||c<0)return;
-      const{pc,field}=rows[r];
-      if(!np[pc][cols[c]])np[pc][cols[c]]={weight:1,bias:0};
-      np[pc][cols[c]][field]=v;
+      const row=rows[r];
+      const{pc,field}=colDefs[c];
+      if(!np[pc][row])np[pc][row]={weight:1,bias:0};
+      np[pc][row][field]=v;
     });
     setCfg('calculation.pc_corrections',np);
   };
@@ -2020,7 +2022,6 @@ function PcCorrectionTable({cfg,setCfg}){
   
   const commitEdit=()=>{
     if(!editing)return;
-    // 빈 문자열이면 0 대신 그대로 0 처리 (또는 undefined 유지)
     const v=editVal===''?0:(isNaN(+editVal)?0:+editVal);
     setVal(editing.r,editing.c,v);
     setEditing(null);setEditVal('');
@@ -2030,7 +2031,7 @@ function PcCorrectionTable({cfg,setCfg}){
   const startEdit=(r,c,keepVal=false)=>{
     setEditing({r,c});
     const cur=getVal(r,c);
-    setEditVal(keepVal?String(cur??''):'');  // keepVal=false면 빈칸으로 시작 → 처음 입력이 덮어씀
+    setEditVal(keepVal?String(cur??''):'');
     setSel({r1:r,c1:c,r2:r,c2:c});
   };
   
@@ -2048,7 +2049,6 @@ function PcCorrectionTable({cfg,setCfg}){
     return()=>window.removeEventListener('mouseup',up);
   },[]);
   
-  // 키보드 핸들러 (테이블 포커스 시)
   const onKeyDown=(e)=>{
     if(editing){
       if(e.key==='Enter'){e.preventDefault();commitEdit()}
@@ -2058,7 +2058,6 @@ function PcCorrectionTable({cfg,setCfg}){
     if(!sel)return;
     const n=normRange(sel);
     
-    // 복사
     if((e.ctrlKey||e.metaKey)&&e.key==='c'){
       e.preventDefault();
       const lines=[];
@@ -2071,7 +2070,6 @@ function PcCorrectionTable({cfg,setCfg}){
       return;
     }
     
-    // 잘라내기
     if((e.ctrlKey||e.metaKey)&&e.key==='x'){
       e.preventDefault();
       const lines=[];const updates=[];
@@ -2085,7 +2083,6 @@ function PcCorrectionTable({cfg,setCfg}){
       return;
     }
     
-    // 붙여넣기
     if((e.ctrlKey||e.metaKey)&&e.key==='v'){
       e.preventDefault();
       navigator.clipboard.readText().then(txt=>{
@@ -2109,7 +2106,6 @@ function PcCorrectionTable({cfg,setCfg}){
       return;
     }
     
-    // 삭제 (Delete/Backspace)
     if(e.key==='Delete'||e.key==='Backspace'){
       e.preventDefault();
       const updates=[];
@@ -2118,7 +2114,6 @@ function PcCorrectionTable({cfg,setCfg}){
       return;
     }
     
-    // 방향키
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
       e.preventDefault();
       let{r1,c1}=sel;
@@ -2131,14 +2126,12 @@ function PcCorrectionTable({cfg,setCfg}){
       return;
     }
     
-    // 엔터 → 편집 시작
     if(e.key==='Enter'||e.key==='F2'){
       e.preventDefault();
       startEdit(n.r1,n.c1,true);
       return;
     }
     
-    // 숫자/기호 입력 → 편집 시작 (덮어쓰기)
     if(/^[0-9.\-]$/.test(e.key)){
       e.preventDefault();
       setEditing({r:n.r1,c:n.c1});
@@ -2157,61 +2150,65 @@ function PcCorrectionTable({cfg,setCfg}){
     return(<div style={{padding:12,fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>+ PC 추가 버튼을 눌러 시작하세요</div>);
   }
   
-  const gridTpl=`60px 60px repeat(${nCols}, minmax(70px, 1fr))`;
+  // 열 개수: 변수(60px) + PC 개수 × 2(weight, bias)
+  const gridTpl=`60px repeat(${nCols}, minmax(60px, 1fr))`;
   
   return(
     <div ref={tableRef} tabIndex={0} onKeyDown={onKeyDown}
-         style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden',margin:'8px 12px',outline:'none'}}>
-      {/* 헤더 */}
-      <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:0,padding:'5px 4px',background:'var(--bg3)',fontSize:10,fontWeight:600,color:'var(--tx2)',textAlign:'center'}}>
-        <span>PC</span><span>파라미터</span>
-        {cols.map(c=>(<span key={c}>{colLabels[c]}</span>))}
+         style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'auto',margin:'8px 12px',outline:'none'}}>
+      {/* 헤더 1행: PC 이름 (weight+bias 2열을 가로로 병합) */}
+      <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:0,padding:'4px 4px',background:'var(--bg3)',fontSize:10,fontWeight:600,color:'var(--tx2)',textAlign:'center',borderBottom:'1px solid var(--bd2)'}}>
+        <span></span>
+        {pcKeys.map(pc=>(<div key={pc} style={{gridColumn:'span 2',display:'flex',alignItems:'center',justifyContent:'center',gap:3,borderLeft:'1px solid var(--bd2)'}}>
+          <span>{pc}</span>
+          <button onClick={()=>delPc(pc)} style={{fontSize:9,padding:0,background:'transparent',border:'none',color:'var(--tx3)',cursor:'pointer'}} title="삭제">✕</button>
+        </div>))}
       </div>
-      {/* 데이터 행 */}
-      {rows.map((row,ri)=>{
-        const isFirstField=row.field==='weight';
-        return(<div key={ri} style={{display:'grid',gridTemplateColumns:gridTpl,gap:0,padding:'0 4px',borderTop:'1px solid var(--bd)',alignItems:'stretch',fontSize:11,background:isFirstField?'var(--bg2)':'var(--bg)'}}>
-          {isFirstField?<div style={{display:'flex',alignItems:'center',justifyContent:'center',gridRow:'span 2',borderRight:'1px solid var(--bd)',fontWeight:500,gap:3}}>
-            <span>{row.pc}</span>
-            <button onClick={()=>delPc(row.pc)} style={{fontSize:9,padding:0,background:'transparent',border:'none',color:'var(--tx3)',cursor:'pointer'}} title="삭제">✕</button>
-          </div>:null}
-          <span style={{fontSize:9,color:'var(--tx3)',textAlign:'center',padding:'3px 0',display:'flex',alignItems:'center',justifyContent:'center'}}>{row.field}</span>
-          {cols.map((col,ci)=>{
-            const inSel=isInSel(ri,ci);
-            const isEdit=editing?.r===ri&&editing?.c===ci;
-            const v=getVal(ri,ci);
-            const cellStyle={
-              padding:'3px',margin:0,
-              background:isEdit?'var(--bg)':(inSel?'rgba(20,184,166,.15)':'transparent'),
-              border:inSel?'2px solid var(--teal)':'1px solid var(--bd2)',
-              borderRadius:2,
-              fontSize:11,color:'var(--tx)',
-              textAlign:'right',cursor:'cell',
-              userSelect:'none',
-              boxSizing:'border-box',
-              width:'100%',height:'100%',
-            };
-            if(isEdit){
-              return(<input key={ci} autoFocus type="text" value={editVal}
-                onChange={e=>setEditVal(e.target.value)}
-                onBlur={commitEdit}
-                onKeyDown={e=>{
-                  e.stopPropagation();
-                  if(e.key==='Enter'){e.preventDefault();commitEdit()}
-                  else if(e.key==='Escape'){e.preventDefault();cancelEdit()}
-                }}
-                style={{...cellStyle,fontFamily:'var(--mono)'}}/>);
-            }
-            return(<div key={ci}
-              onMouseDown={e=>onCellMouseDown(e,ri,ci)}
-              onMouseEnter={()=>onCellMouseEnter(ri,ci)}
-              onDoubleClick={()=>onCellDoubleClick(ri,ci)}
-              style={{...cellStyle,fontFamily:'var(--mono)',display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:6}}>
-              {v??''}
-            </div>);
-          })}
-        </div>);
-      })}
+      {/* 헤더 2행: weight/bias */}
+      <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:0,padding:'3px 4px',background:'var(--bg3)',fontSize:9,fontWeight:500,color:'var(--tx3)',textAlign:'center'}}>
+        <span>변수</span>
+        {colDefs.map((cd,i)=>(<span key={i} style={{borderLeft:i%2===0?'1px solid var(--bd2)':'none'}}>{cd.field}</span>))}
+      </div>
+      {/* 데이터 행: WD / Comp / Fan */}
+      {rows.map((row,ri)=>(<div key={ri} style={{display:'grid',gridTemplateColumns:gridTpl,gap:0,padding:'0 4px',borderTop:'1px solid var(--bd)',alignItems:'stretch',fontSize:11,background:ri%2===0?'var(--bg2)':'var(--bg)'}}>
+        <span style={{fontWeight:500,textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center',borderRight:'1px solid var(--bd)',padding:'3px 0'}}>{rowLabels[row]}</span>
+        {colDefs.map((cd,ci)=>{
+          const inSel=isInSel(ri,ci);
+          const isEdit=editing?.r===ri&&editing?.c===ci;
+          const v=getVal(ri,ci);
+          const leftBorder=ci%2===0?'1px solid var(--bd2)':'1px solid var(--bd2)';
+          const cellStyle={
+            padding:'3px',margin:0,
+            background:isEdit?'var(--bg)':(inSel?'rgba(20,184,166,.15)':'transparent'),
+            border:inSel?'2px solid var(--teal)':'1px solid var(--bd2)',
+            borderLeft:inSel?'2px solid var(--teal)':leftBorder,
+            borderRadius:2,
+            fontSize:11,color:'var(--tx)',
+            textAlign:'right',cursor:'cell',
+            userSelect:'none',
+            boxSizing:'border-box',
+            width:'100%',height:'100%',
+          };
+          if(isEdit){
+            return(<input key={ci} autoFocus type="text" value={editVal}
+              onChange={e=>setEditVal(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={e=>{
+                e.stopPropagation();
+                if(e.key==='Enter'){e.preventDefault();commitEdit()}
+                else if(e.key==='Escape'){e.preventDefault();cancelEdit()}
+              }}
+              style={{...cellStyle,fontFamily:'var(--mono)'}}/>);
+          }
+          return(<div key={ci}
+            onMouseDown={e=>onCellMouseDown(e,ri,ci)}
+            onMouseEnter={()=>onCellMouseEnter(ri,ci)}
+            onDoubleClick={()=>onCellDoubleClick(ri,ci)}
+            style={{...cellStyle,fontFamily:'var(--mono)',display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:6}}>
+            {v??''}
+          </div>);
+        })}
+      </div>))}
     </div>
   );
 }
