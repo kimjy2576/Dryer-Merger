@@ -31,42 +31,7 @@ def open_browser():
     webbrowser.open(f"http://localhost:{PORT}")
 
 
-def check_and_install_deps():
-    """시작 시 주요 의존성 확인 및 자동 설치."""
-    if IS_FROZEN:
-        return  # EXE는 스킵
-    required = [
-        ("fastapi", "fastapi>=0.104"),
-        ("uvicorn", "uvicorn[standard]>=0.24"),
-        ("pandas", "pandas>=2.0"),
-        ("CoolProp", "CoolProp>=6.4"),
-        ("yaml", "PyYAML>=6.0"),
-        ("openpyxl", "openpyxl>=3.1"),
-        # 성능 개선용 (선택)
-        ("pyarrow", "pyarrow>=15.0"),
-        ("python_calamine", "python-calamine>=0.2"),
-    ]
-    missing = []
-    for mod, spec in required:
-        try:
-            __import__(mod)
-        except ImportError:
-            missing.append(spec)
-    if missing:
-        print(f"\n[의존성 설치] 누락된 패키지 {len(missing)}개 설치 중...")
-        print(f"   {', '.join(missing)}")
-        import subprocess
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
-            print("[의존성 설치] ✅ 완료\n")
-        except Exception as e:
-            print(f"[의존성 설치] ⚠️ 일부 실패: {e}")
-            print("수동 설치: pip install -r requirements.txt\n")
-
-
 if __name__ == "__main__":
-    check_and_install_deps()
-
     print(f"\n{'='*50}")
     print(f"  HPWD Data Manager — http://localhost:{PORT}")
     print(f"  {'[EXE]' if IS_FROZEN else '[Python]'}")
