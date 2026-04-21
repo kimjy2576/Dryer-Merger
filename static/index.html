@@ -2086,22 +2086,36 @@ return(<div><div className="fg"><div>
   {Object.keys(l?.calculation?.pc_corrections||{}).map(pc=><option key={pc} value={pc}>{pc}</option>)}
 </select></div></div>
 <div style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden',margin:'8px 12px'}}>
-  <div style={{display:'grid',gridTemplateColumns:'50px repeat(6, 1fr) 30px',gap:0,padding:'5px 6px',background:'var(--bg3)',fontSize:10,fontWeight:500,color:'var(--tx2)',textAlign:'center'}}>
-    <span>PC</span><span>WD w</span><span>WD b</span><span>Comp w</span><span>Comp b</span><span>Fan w</span><span>Fan b</span><span></span>
-  </div>
-  {Object.entries(l?.calculation?.pc_corrections||{}).map(([pc,vals])=>{
-    const setV=(col,field,v)=>{const pcs=JSON.parse(JSON.stringify(l.calculation.pc_corrections));if(!pcs[pc][col])pcs[pc][col]={weight:1,bias:0};pcs[pc][col][field]=+v||0;s('calculation.pc_corrections',pcs)};
-    const delPc=()=>{if(!confirm(`${pc} 삭제?`))return;const pcs={...l.calculation.pc_corrections};delete pcs[pc];s('calculation.pc_corrections',pcs)};
+  {(()=>{
+    const pcs=l?.calculation?.pc_corrections||{};
+    const pcKeys=Object.keys(pcs);
+    const cols=['Po_WD','Po_Comp','Po_Fan'];
+    const colLabels={Po_WD:'WD',Po_Comp:'Comp',Po_Fan:'Fan'};
+    const setV=(pc,col,field,v)=>{const np=JSON.parse(JSON.stringify(pcs));if(!np[pc][col])np[pc][col]={weight:1,bias:0};np[pc][col][field]=+v||0;s('calculation.pc_corrections',np)};
+    const delPc=(pc)=>{if(!confirm(`${pc} 삭제?`))return;const np={...pcs};delete np[pc];s('calculation.pc_corrections',np)};
     const ist={fontSize:10,padding:'2px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3,color:'var(--tx)',width:'100%',textAlign:'right'};
-    return(<div key={pc} style={{display:'grid',gridTemplateColumns:'50px repeat(6, 1fr) 30px',gap:3,padding:'3px 6px',borderTop:'1px solid var(--bd)',alignItems:'center',fontSize:11}}>
-      <span style={{fontWeight:500,textAlign:'center'}}>{pc}</span>
-      {['Po_WD','Po_Comp','Po_Fan'].map(col=>(<React.Fragment key={col}>
-        <input type="number" step="0.01" value={vals?.[col]?.weight??1} onChange={e=>setV(col,'weight',e.target.value)} style={ist}/>
-        <input type="number" step="0.1" value={vals?.[col]?.bias??0} onChange={e=>setV(col,'bias',e.target.value)} style={ist}/>
+    const gridTpl=`70px 60px repeat(${pcKeys.length}, minmax(55px, 1fr))`;
+    return(<>
+      {/* 헤더 행: PC 이름들 */}
+      <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:0,padding:'5px 6px',background:'var(--bg3)',fontSize:10,fontWeight:600,color:'var(--tx2)',textAlign:'center'}}>
+        <span>변수</span><span>파라미터</span>
+        {pcKeys.map(pc=>(<div key={pc} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3}}><span>{pc}</span><button onClick={()=>delPc(pc)} style={{fontSize:9,padding:0,background:'transparent',border:'none',color:'var(--tx3)',cursor:'pointer'}} title="삭제">✕</button></div>))}
+      </div>
+      {/* 데이터 행: 변수 × (w/b) */}
+      {cols.map(col=>(<React.Fragment key={col}>
+        <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:3,padding:'3px 6px',borderTop:'1px solid var(--bd)',alignItems:'center',fontSize:11,background:'var(--bg2)'}}>
+          <span style={{fontWeight:500,textAlign:'center',gridRow:'span 2'}}>{colLabels[col]}</span>
+          <span style={{fontSize:9,color:'var(--tx3)',textAlign:'center'}}>weight</span>
+          {pcKeys.map(pc=>(<input key={pc+col+'w'} type="number" step="0.01" value={pcs[pc]?.[col]?.weight??1} onChange={e=>setV(pc,col,'weight',e.target.value)} style={ist}/>))}
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:3,padding:'3px 6px',alignItems:'center',fontSize:11,background:'var(--bg2)'}}>
+          <span></span>
+          <span style={{fontSize:9,color:'var(--tx3)',textAlign:'center'}}>bias</span>
+          {pcKeys.map(pc=>(<input key={pc+col+'b'} type="number" step="0.1" value={pcs[pc]?.[col]?.bias??0} onChange={e=>setV(pc,col,'bias',e.target.value)} style={ist}/>))}
+        </div>
       </React.Fragment>))}
-      <button onClick={delPc} style={{fontSize:10,padding:0,background:'transparent',border:'none',color:'var(--tx3)',cursor:'pointer'}} title="삭제">✕</button>
-    </div>)
-  })}
+    </>)
+  })()}
 </div>
 <button onClick={()=>{const name=prompt('PC 이름 (예: P4)');if(!name)return;const pcs={...(l.calculation.pc_corrections||{})};if(pcs[name]){alert('이미 존재함');return}pcs[name]={Po_WD:{weight:1,bias:0},Po_Comp:{weight:1,bias:0},Po_Fan:{weight:1,bias:0}};s('calculation.pc_corrections',pcs)}} style={{fontSize:11,padding:'4px 10px',margin:'0 12px 8px',background:'var(--teal)',color:'#fff',border:'none',borderRadius:4,cursor:'pointer'}}>+ PC 추가</button>
 </div>
