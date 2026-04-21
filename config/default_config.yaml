@@ -104,6 +104,7 @@ calculation:
   water_warmup:
     extra_min: 1.5          # Ctrl_DryMotion>=2 시점 + N분 이후부터 응축 계산
     min_comp_hz: 1.0        # 압축기 ON 판정 Hz (이 값 이상이면 응축 계산)
+    max_gm: 0               # 응축수량 상한 [g/min] (0이면 무제한)
 
   # RH 미측정 시 수렴 반복 설정
   rh_iteration:
