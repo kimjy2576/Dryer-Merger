@@ -1977,6 +1977,245 @@ function CfgField({lb,p,t='text',o,u,st,cfg,onChange}){
   return(<div className="fr"><div className="fl">{lb}</div><div className="fi">{o?<select value={v||''} onChange={e=>onChange(p,e.target.value)}>{o.map(x=><option key={x}>{x}</option>)}</select>:<input type={t} value={v??''} step={st} onChange={e=>onChange(p,t==='number'?Number(e.target.value):e.target.value)}/>}</div>{u&&<span className="fu">{u}</span>}</div>)
 }
 
+function PcCorrectionTable({cfg,setCfg}){
+  // 행: [P1_w, P1_b, P2_w, P2_b, ...], 열: [WD, Comp, Fan]
+  const pcs=cfg?.calculation?.pc_corrections||{};
+  const pcKeys=Object.keys(pcs);
+  const cols=['Po_WD','Po_Comp','Po_Fan'];
+  const colLabels={Po_WD:'WD',Po_Comp:'Comp',Po_Fan:'Fan'};
+  
+  // 행 구조: [{pc, field}]  예: [{pc:'P1',field:'weight'},{pc:'P1',field:'bias'},...]
+  const rows=[];
+  pcKeys.forEach(pc=>{rows.push({pc,field:'weight'});rows.push({pc,field:'bias'})});
+  
+  const nRows=rows.length, nCols=cols.length;
+  const [editing,setEditing]=React.useState(null); // {r,c} - 편집 중인 셀
+  const [editVal,setEditVal]=React.useState('');   // 편집 중인 raw 문자열
+  const [sel,setSel]=React.useState(null);         // {r1,c1,r2,c2} 선택 범위
+  const [drag,setDrag]=React.useState(null);       // 드래그 시작점
+  const tableRef=React.useRef(null);
+  
+  const getVal=(r,c)=>{const{pc,field}=rows[r];return pcs[pc]?.[cols[c]]?.[field]};
+  const setVal=(r,c,v)=>{
+    const np=JSON.parse(JSON.stringify(pcs));
+    const{pc,field}=rows[r];
+    if(!np[pc][cols[c]])np[pc][cols[c]]={weight:1,bias:0};
+    np[pc][cols[c]][field]=v;
+    setCfg('calculation.pc_corrections',np);
+  };
+  const setMultiVals=(updates)=>{
+    // updates: [{r,c,v}]
+    const np=JSON.parse(JSON.stringify(pcs));
+    updates.forEach(({r,c,v})=>{
+      if(r>=nRows||c>=nCols||r<0||c<0)return;
+      const{pc,field}=rows[r];
+      if(!np[pc][cols[c]])np[pc][cols[c]]={weight:1,bias:0};
+      np[pc][cols[c]][field]=v;
+    });
+    setCfg('calculation.pc_corrections',np);
+  };
+  
+  const normRange=(s)=>s?{r1:Math.min(s.r1,s.r2),r2:Math.max(s.r1,s.r2),c1:Math.min(s.c1,s.c2),c2:Math.max(s.c1,s.c2)}:null;
+  const isInSel=(r,c)=>{const n=normRange(sel);if(!n)return false;return r>=n.r1&&r<=n.r2&&c>=n.c1&&c<=n.c2};
+  
+  const commitEdit=()=>{
+    if(!editing)return;
+    // 빈 문자열이면 0 대신 그대로 0 처리 (또는 undefined 유지)
+    const v=editVal===''?0:(isNaN(+editVal)?0:+editVal);
+    setVal(editing.r,editing.c,v);
+    setEditing(null);setEditVal('');
+  };
+  const cancelEdit=()=>{setEditing(null);setEditVal('')};
+  
+  const startEdit=(r,c,keepVal=false)=>{
+    setEditing({r,c});
+    const cur=getVal(r,c);
+    setEditVal(keepVal?String(cur??''):'');  // keepVal=false면 빈칸으로 시작 → 처음 입력이 덮어씀
+    setSel({r1:r,c1:c,r2:r,c2:c});
+  };
+  
+  const onCellMouseDown=(e,r,c)=>{
+    if(editing&&(editing.r!==r||editing.c!==c))commitEdit();
+    if(e.shiftKey&&sel){setSel({...sel,r2:r,c2:c})}
+    else{setSel({r1:r,c1:c,r2:r,c2:c});setDrag({r,c})}
+  };
+  const onCellMouseEnter=(r,c)=>{if(drag)setSel({r1:drag.r,c1:drag.c,r2:r,c2:c})};
+  const onCellDoubleClick=(r,c)=>startEdit(r,c,true);
+  
+  React.useEffect(()=>{
+    const up=()=>setDrag(null);
+    window.addEventListener('mouseup',up);
+    return()=>window.removeEventListener('mouseup',up);
+  },[]);
+  
+  // 키보드 핸들러 (테이블 포커스 시)
+  const onKeyDown=(e)=>{
+    if(editing){
+      if(e.key==='Enter'){e.preventDefault();commitEdit()}
+      else if(e.key==='Escape'){e.preventDefault();cancelEdit()}
+      return;
+    }
+    if(!sel)return;
+    const n=normRange(sel);
+    
+    // 복사
+    if((e.ctrlKey||e.metaKey)&&e.key==='c'){
+      e.preventDefault();
+      const lines=[];
+      for(let r=n.r1;r<=n.r2;r++){
+        const cells=[];
+        for(let c=n.c1;c<=n.c2;c++){cells.push(String(getVal(r,c)??''))}
+        lines.push(cells.join('\t'));
+      }
+      navigator.clipboard.writeText(lines.join('\n'));
+      return;
+    }
+    
+    // 잘라내기
+    if((e.ctrlKey||e.metaKey)&&e.key==='x'){
+      e.preventDefault();
+      const lines=[];const updates=[];
+      for(let r=n.r1;r<=n.r2;r++){
+        const cells=[];
+        for(let c=n.c1;c<=n.c2;c++){cells.push(String(getVal(r,c)??''));updates.push({r,c,v:0})}
+        lines.push(cells.join('\t'));
+      }
+      navigator.clipboard.writeText(lines.join('\n'));
+      setMultiVals(updates);
+      return;
+    }
+    
+    // 붙여넣기
+    if((e.ctrlKey||e.metaKey)&&e.key==='v'){
+      e.preventDefault();
+      navigator.clipboard.readText().then(txt=>{
+        const lines=txt.replace(/\r/g,'').split('\n').filter(l=>l.length>0);
+        const updates=[];
+        lines.forEach((line,ri)=>{
+          const cells=line.split('\t');
+          cells.forEach((cv,ci)=>{
+            const r=n.r1+ri, c=n.c1+ci;
+            if(r>=nRows||c>=nCols)return;
+            const v=cv.trim()===''?0:(isNaN(+cv)?0:+cv);
+            updates.push({r,c,v});
+          });
+        });
+        setMultiVals(updates);
+        if(lines.length>0){
+          const lastCells=lines[lines.length-1].split('\t');
+          setSel({r1:n.r1,c1:n.c1,r2:Math.min(n.r1+lines.length-1,nRows-1),c2:Math.min(n.c1+lastCells.length-1,nCols-1)});
+        }
+      });
+      return;
+    }
+    
+    // 삭제 (Delete/Backspace)
+    if(e.key==='Delete'||e.key==='Backspace'){
+      e.preventDefault();
+      const updates=[];
+      for(let r=n.r1;r<=n.r2;r++)for(let c=n.c1;c<=n.c2;c++)updates.push({r,c,v:0});
+      setMultiVals(updates);
+      return;
+    }
+    
+    // 방향키
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+      e.preventDefault();
+      let{r1,c1}=sel;
+      if(e.key==='ArrowUp')r1=Math.max(0,r1-1);
+      else if(e.key==='ArrowDown')r1=Math.min(nRows-1,r1+1);
+      else if(e.key==='ArrowLeft')c1=Math.max(0,c1-1);
+      else if(e.key==='ArrowRight')c1=Math.min(nCols-1,c1+1);
+      if(e.shiftKey){setSel({...sel,r2:r1,c2:c1})}
+      else{setSel({r1,c1,r2:r1,c2:c1})}
+      return;
+    }
+    
+    // 엔터 → 편집 시작
+    if(e.key==='Enter'||e.key==='F2'){
+      e.preventDefault();
+      startEdit(n.r1,n.c1,true);
+      return;
+    }
+    
+    // 숫자/기호 입력 → 편집 시작 (덮어쓰기)
+    if(/^[0-9.\-]$/.test(e.key)){
+      e.preventDefault();
+      setEditing({r:n.r1,c:n.c1});
+      setEditVal(e.key);
+      return;
+    }
+  };
+  
+  const delPc=(pc)=>{
+    if(!confirm(`${pc} 삭제?`))return;
+    const np={...pcs};delete np[pc];
+    setCfg('calculation.pc_corrections',np);
+  };
+  
+  if(pcKeys.length===0){
+    return(<div style={{padding:12,fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>+ PC 추가 버튼을 눌러 시작하세요</div>);
+  }
+  
+  const gridTpl=`60px 60px repeat(${nCols}, minmax(70px, 1fr))`;
+  
+  return(
+    <div ref={tableRef} tabIndex={0} onKeyDown={onKeyDown}
+         style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden',margin:'8px 12px',outline:'none'}}>
+      {/* 헤더 */}
+      <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:0,padding:'5px 4px',background:'var(--bg3)',fontSize:10,fontWeight:600,color:'var(--tx2)',textAlign:'center'}}>
+        <span>PC</span><span>파라미터</span>
+        {cols.map(c=>(<span key={c}>{colLabels[c]}</span>))}
+      </div>
+      {/* 데이터 행 */}
+      {rows.map((row,ri)=>{
+        const isFirstField=row.field==='weight';
+        return(<div key={ri} style={{display:'grid',gridTemplateColumns:gridTpl,gap:0,padding:'0 4px',borderTop:'1px solid var(--bd)',alignItems:'stretch',fontSize:11,background:isFirstField?'var(--bg2)':'var(--bg)'}}>
+          {isFirstField?<div style={{display:'flex',alignItems:'center',justifyContent:'center',gridRow:'span 2',borderRight:'1px solid var(--bd)',fontWeight:500,gap:3}}>
+            <span>{row.pc}</span>
+            <button onClick={()=>delPc(row.pc)} style={{fontSize:9,padding:0,background:'transparent',border:'none',color:'var(--tx3)',cursor:'pointer'}} title="삭제">✕</button>
+          </div>:null}
+          <span style={{fontSize:9,color:'var(--tx3)',textAlign:'center',padding:'3px 0',display:'flex',alignItems:'center',justifyContent:'center'}}>{row.field}</span>
+          {cols.map((col,ci)=>{
+            const inSel=isInSel(ri,ci);
+            const isEdit=editing?.r===ri&&editing?.c===ci;
+            const v=getVal(ri,ci);
+            const cellStyle={
+              padding:'3px',margin:0,
+              background:isEdit?'var(--bg)':(inSel?'rgba(20,184,166,.15)':'transparent'),
+              border:inSel?'2px solid var(--teal)':'1px solid var(--bd2)',
+              borderRadius:2,
+              fontSize:11,color:'var(--tx)',
+              textAlign:'right',cursor:'cell',
+              userSelect:'none',
+              boxSizing:'border-box',
+              width:'100%',height:'100%',
+            };
+            if(isEdit){
+              return(<input key={ci} autoFocus type="text" value={editVal}
+                onChange={e=>setEditVal(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={e=>{
+                  e.stopPropagation();
+                  if(e.key==='Enter'){e.preventDefault();commitEdit()}
+                  else if(e.key==='Escape'){e.preventDefault();cancelEdit()}
+                }}
+                style={{...cellStyle,fontFamily:'var(--mono)'}}/>);
+            }
+            return(<div key={ci}
+              onMouseDown={e=>onCellMouseDown(e,ri,ci)}
+              onMouseEnter={()=>onCellMouseEnter(ri,ci)}
+              onDoubleClick={()=>onCellDoubleClick(ri,ci)}
+              style={{...cellStyle,fontFamily:'var(--mono)',display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:6}}>
+              {v??''}
+            </div>);
+          })}
+        </div>);
+      })}
+    </div>
+  );
+}
+
 function RefrigerantField({cfg,onChange}){
   const cur=cfg?.environment?.refrigerant||'R290';
   const presets=['R290','R134a'];
@@ -2080,44 +2319,13 @@ return(<div><div className="fg"><div>
 <div style={{fontSize:9,color:'var(--tx3)',padding:'4px 12px'}}>계산: η_vol = 1 - C_v × (PR^(1/κ) - 1) | 고정: η_vol = 입력값 (전 구간 동일)</div>
 </div>
 <div className="cd"><div className="ct">PC별 전력 보정 (파일명 자동 감지)</div>
-<div style={{fontSize:10,color:'var(--tx3)',marginBottom:6}}>파일명에 _P1_, _P2_ 등이 있으면 해당 PC 설정 자동 적용. 보정식: <b>Po = Po × weight + bias</b></div>
+<div style={{fontSize:10,color:'var(--tx3)',marginBottom:6}}>파일명에 _P1_, _P2_ 등이 있으면 해당 PC 설정 자동 적용. 보정식: <b>Po = Po × weight + bias</b><br/>📋 <b>엑셀처럼 사용</b>: 드래그 선택 → Ctrl+C/V/X, Delete로 삭제. 엑셀에서 복사한 Tab 구분 값 붙여넣기 가능.</div>
 <div className="fr"><div className="fl">미감지 시 기본</div><div className="fi"><select value={l?.calculation?.selected_pc||'none'} onChange={e=>s('calculation.selected_pc',e.target.value)} style={{fontSize:12}}>
   <option value="none">보정 없음</option>
   {Object.keys(l?.calculation?.pc_corrections||{}).map(pc=><option key={pc} value={pc}>{pc}</option>)}
 </select></div></div>
-<div style={{border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden',margin:'8px 12px'}}>
-  {(()=>{
-    const pcs=l?.calculation?.pc_corrections||{};
-    const pcKeys=Object.keys(pcs);
-    const cols=['Po_WD','Po_Comp','Po_Fan'];
-    const colLabels={Po_WD:'WD',Po_Comp:'Comp',Po_Fan:'Fan'};
-    const setV=(pc,col,field,v)=>{const np=JSON.parse(JSON.stringify(pcs));if(!np[pc][col])np[pc][col]={weight:1,bias:0};np[pc][col][field]=+v||0;s('calculation.pc_corrections',np)};
-    const delPc=(pc)=>{if(!confirm(`${pc} 삭제?`))return;const np={...pcs};delete np[pc];s('calculation.pc_corrections',np)};
-    const ist={fontSize:10,padding:'2px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:3,color:'var(--tx)',width:'100%',textAlign:'right'};
-    const gridTpl=`70px 60px repeat(${pcKeys.length}, minmax(55px, 1fr))`;
-    return(<>
-      {/* 헤더 행: PC 이름들 */}
-      <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:0,padding:'5px 6px',background:'var(--bg3)',fontSize:10,fontWeight:600,color:'var(--tx2)',textAlign:'center'}}>
-        <span>변수</span><span>파라미터</span>
-        {pcKeys.map(pc=>(<div key={pc} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3}}><span>{pc}</span><button onClick={()=>delPc(pc)} style={{fontSize:9,padding:0,background:'transparent',border:'none',color:'var(--tx3)',cursor:'pointer'}} title="삭제">✕</button></div>))}
-      </div>
-      {/* 데이터 행: 변수 × (w/b) */}
-      {cols.map(col=>(<React.Fragment key={col}>
-        <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:3,padding:'3px 6px',borderTop:'1px solid var(--bd)',alignItems:'center',fontSize:11,background:'var(--bg2)'}}>
-          <span style={{fontWeight:500,textAlign:'center',gridRow:'span 2'}}>{colLabels[col]}</span>
-          <span style={{fontSize:9,color:'var(--tx3)',textAlign:'center'}}>weight</span>
-          {pcKeys.map(pc=>(<input key={pc+col+'w'} type="number" step="0.01" value={pcs[pc]?.[col]?.weight??1} onChange={e=>setV(pc,col,'weight',e.target.value)} style={ist}/>))}
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:gridTpl,gap:3,padding:'3px 6px',alignItems:'center',fontSize:11,background:'var(--bg2)'}}>
-          <span></span>
-          <span style={{fontSize:9,color:'var(--tx3)',textAlign:'center'}}>bias</span>
-          {pcKeys.map(pc=>(<input key={pc+col+'b'} type="number" step="0.1" value={pcs[pc]?.[col]?.bias??0} onChange={e=>setV(pc,col,'bias',e.target.value)} style={ist}/>))}
-        </div>
-      </React.Fragment>))}
-    </>)
-  })()}
-</div>
-<button onClick={()=>{const name=prompt('PC 이름 (예: P4)');if(!name)return;const pcs={...(l.calculation.pc_corrections||{})};if(pcs[name]){alert('이미 존재함');return}pcs[name]={Po_WD:{weight:1,bias:0},Po_Comp:{weight:1,bias:0},Po_Fan:{weight:1,bias:0}};s('calculation.pc_corrections',pcs)}} style={{fontSize:11,padding:'4px 10px',margin:'0 12px 8px',background:'var(--teal)',color:'#fff',border:'none',borderRadius:4,cursor:'pointer'}}>+ PC 추가</button>
+<PcCorrectionTable cfg={l} setCfg={s}/>
+<button onClick={()=>{const name=prompt('PC 이름 (예: P4)');if(!name)return;const pcs={...(l?.calculation?.pc_corrections||{})};if(pcs[name]){alert('이미 존재함');return}pcs[name]={Po_WD:{weight:1,bias:0},Po_Comp:{weight:1,bias:0},Po_Fan:{weight:1,bias:0}};s('calculation.pc_corrections',pcs)}} style={{fontSize:11,padding:'4px 10px',margin:'0 12px 8px',background:'var(--teal)',color:'#fff',border:'none',borderRadius:4,cursor:'pointer'}}>+ PC 추가</button>
 </div>
 <div className="cd"><div className="ct">응축수 초반 튐 방어</div>
 <div style={{fontSize:10,color:'var(--tx3)',marginBottom:6}}>워밍업 직후 응축량이 과대 계산되어 IMC 보정 시 전체 값이 0에 수렴하는 문제를 방지합니다.</div>
