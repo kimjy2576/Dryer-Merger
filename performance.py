@@ -13,7 +13,7 @@ from properties import (
 )
 
 
-def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataFrame:
+def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None, filename: str | None = None) -> pd.DataFrame:
     """
     Stage 2 성능 계산 메인 엔트리.
     각 계산 블록의 필수 컬럼을 사전 검증하여, 누락 시 해당 블록을 스킵한다.
@@ -30,7 +30,9 @@ def run_stage2(df: pd.DataFrame, cfg: dict, exp: dict | None = None) -> pd.DataF
     # ── 0. 전처리 ──
     df = _apply_sensor_offsets(df, calc_cfg.get("sensor_offsets", {}))
     df = _ensure_columns(df)
-    df = _apply_power_corrections(df, calc_cfg)
+    df, pc_info = _apply_power_corrections(df, calc_cfg, filename)
+    if pc_info:
+        print(f"  [power_corr] {pc_info['pc']} ({pc_info['source']}): {pc_info['applied']}")
 
     # ── 블록별 의존성 정의 ──
     BLOCKS = {
@@ -332,14 +334,43 @@ def _ensure_columns(df):
     return df
 
 
-def _apply_power_corrections(df, calc_cfg):
-    """DAQ PC별 전력 보정."""
-    pc = calc_cfg.get("selected_pc", "none")
-    corrections = calc_cfg.get("power_corrections", {}).get(pc, {})
-    for col, val in corrections.items():
-        if col in df.columns and val != 0:
-            df[col] = df[col] + val
-    return df
+def _apply_power_corrections(df, calc_cfg, filename=None):
+    """
+    PC별 전력 보정: Po_corrected = Po × weight + bias
+    
+    PC 결정 우선순위:
+      1. 파일명에 _P1_, _P2_ 등이 있으면 자동 감지
+      2. calc_cfg['selected_pc'] (수동 선택)
+      3. 둘 다 없으면 보정 없음
+    """
+    import re
+    pc_configs = calc_cfg.get("pc_corrections", {})
+    
+    # 1. 파일명에서 PC 번호 자동 감지
+    pc_auto = None
+    if filename:
+        m = re.search(r'_[Pp](\d+)_', filename)
+        if m:
+            pc_auto = f"P{m.group(1)}"
+    
+    # 2. 최종 PC 결정
+    pc = pc_auto or calc_cfg.get("selected_pc", "none")
+    if pc == "none" or not pc or pc not in pc_configs:
+        return df, None
+    
+    cfg = pc_configs[pc]
+    applied = {}
+    for col in ["Po_WD", "Po_Comp", "Po_Fan"]:
+        if col not in df.columns:
+            continue
+        w = float(cfg.get(col, {}).get("weight", 1.0))
+        b = float(cfg.get(col, {}).get("bias", 0.0))
+        if w != 1.0 or b != 0.0:
+            df[col] = df[col] * w + b
+            applied[col] = {"weight": w, "bias": b}
+    
+    info = {"pc": pc, "source": "auto" if pc_auto else "manual", "applied": applied}
+    return df, info
 
 
 # ════════════════════════════════════════════════

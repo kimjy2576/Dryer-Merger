@@ -788,7 +788,7 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
 
             # Stage 2 실행 (파일별 실험값 지원)
             file_exp = exp.get(fn, exp) if isinstance(exp, dict) and fn in exp else exp
-            df_calc = run_stage2(df, cfg, file_exp)
+            df_calc = run_stage2(df, cfg, file_exp, filename=fn)
             _log(sid, f"  계산 완료: {len(df_calc.columns)}열")
             rh_mode = "측정값 사용" if "RH_Eva_In" in df.columns else "에너지밸런스 역산 (수렴 반복)"
             _log(sid, f"  RH 모드: {rh_mode}")

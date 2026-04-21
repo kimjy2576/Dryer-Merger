@@ -121,13 +121,23 @@ calculation:
     T_Comp_In: -2.0
     T_Comp_Out: -2.0
 
-  # DAQ PC별 전력 보정 상수 [W]
-  power_corrections:
-    Gasan_PC1: { Po_WD: 0.8, Po_Comp: 2.0, Po_Fan: 6.0 }
-    Gasan_PC2: { Po_WD: 0.0, Po_Comp: 4.0, Po_Fan: 3.5 }
-    Gasan_PC3: { Po_WD: 0.0, Po_Comp: -3.5, Po_Fan: 5.5 }
-    none: { Po_WD: 0.0, Po_Comp: 0.0, Po_Fan: 0.0 }
-  selected_pc: "none"            # 사용할 PC: "Gasan_PC1" | ... | "none"
+  # PC별 전력 보정: Po_corrected = Po × weight + bias
+  # 파일명에 _P1_, _P2_ 등이 있으면 자동 감지 (우선순위 높음)
+  # 없으면 selected_pc 사용
+  pc_corrections:
+    P1:
+      Po_WD:   { weight: 1.0, bias: 0.0 }
+      Po_Comp: { weight: 1.0, bias: 0.0 }
+      Po_Fan:  { weight: 1.0, bias: 0.0 }
+    P2:
+      Po_WD:   { weight: 1.0, bias: 0.0 }
+      Po_Comp: { weight: 1.0, bias: 0.0 }
+      Po_Fan:  { weight: 1.0, bias: 0.0 }
+    P3:
+      Po_WD:   { weight: 1.0, bias: 0.0 }
+      Po_Comp: { weight: 1.0, bias: 0.0 }
+      Po_Fan:  { weight: 1.0, bias: 0.0 }
+  selected_pc: "none"            # 파일명 자동 감지 실패 시 사용할 PC ("P1", "P2", "P3", "none")
 
   # 드럼 전력 추정 (Po_Drum 컬럼이 없을 때)
   drum_power:
