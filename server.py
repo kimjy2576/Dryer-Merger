@@ -788,9 +788,8 @@ def _run_calc(sid: str, cfg: dict, source_files: list[str],
 
             # Stage 2 실행 (파일별 실험값 지원)
             file_exp = exp.get(fn, exp) if isinstance(exp, dict) and fn in exp else exp
-            t_s2 = time.perf_counter()
             df_calc = run_stage2(df, cfg, file_exp, filename=fn)
-            _log(sid, f"  🧮 Stage2: {time.perf_counter()-t_s2:.1f}s ({len(df_calc)}행, {len(df_calc.columns)}열)")
+            _log(sid, f"  계산 완료: {len(df_calc.columns)}열")
             rh_mode = "측정값 사용" if "RH_Eva_In" in df.columns else "에너지밸런스 역산 (수렴 반복)"
             _log(sid, f"  RH 모드: {rh_mode}")
 
@@ -985,34 +984,14 @@ def _read(ap, bp, mp_list, dt, np_list=None, file_rules=None):
     """
     df_a, df_b, df_m, df_n = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     fr = file_rules or {}
-    def _detect_enc(path, size=4096):
-        """BOM/BOMless 빠른 인코딩 감지 (한국어 한정)"""
-        try:
-            with open(path, 'rb') as f:
-                raw = f.read(size)
-            if raw.startswith(b'\xef\xbb\xbf'): return "utf-8-sig"
-            # KS완성형(cp949) 바이트 패턴 감지 (0xA1-0xFE, 0x81-0xA0 중 상위 바이트)
-            try:
-                raw.decode('utf-8'); return "utf-8"
-            except UnicodeDecodeError:
-                return "cp949"
-        except: return "utf-8"
-    
     def _read_csv(path, src_key, default_skip=1):
-        """csv/tsv 읽기 — 인코딩 빠른 감지 + pyarrow 엔진"""
+        """csv/tsv 읽기 — cp949/utf-8 자동 폴백"""
         sep = '\t' if path.lower().endswith('.tsv') else ','
         skip = fr.get(src_key,{}).get("skip_rows", default_skip)
         skiparg = list(range(skip)) if skip else None
-        enc = _detect_enc(path)
-        # 우선 pyarrow 시도 (3~5배 빠름), 실패 시 c 엔진 폴백
-        for engine, try_enc in [("pyarrow", enc), ("c", enc), ("c", "cp949"), ("c", "latin1")]:
+        for enc in ["utf-8", "cp949", "euc-kr", "latin1"]:
             try:
-                if engine == "pyarrow":
-                    # pyarrow는 skiprows=list 미지원 → skiprows=int 변환
-                    skip_n = len(skiparg) if skiparg else 0
-                    df = pd.read_csv(path, encoding=try_enc, sep=sep, skiprows=skip_n, engine="pyarrow")
-                else:
-                    df = pd.read_csv(path, encoding=try_enc, sep=sep, skiprows=skiparg, engine="c", low_memory=False)
+                df = pd.read_csv(path, encoding=enc, sep=sep, skiprows=skiparg)
                 df.columns = [c.strip() for c in df.columns]
                 return df
             except: continue
@@ -1020,27 +999,22 @@ def _read(ap, bp, mp_list, dt, np_list=None, file_rules=None):
 
     def _read_excel(path):
         skip = fr.get("mx100",{}).get("skip_rows",24)
-        # calamine 엔진 시도 (openpyxl 대비 10배 빠름, Rust 기반)
-        for engine in ["calamine", "openpyxl"]:
+        try:
+            df = pd.read_excel(path, skiprows=skip, header=0)
+            df.columns = [c.strip() for c in df.columns]
+            return df
+        except Exception as e1:
             try:
-                df = pd.read_excel(path, skiprows=skip, header=0, engine=engine)
-                df.columns = [c.strip() for c in df.columns]
+                df = pd.read_excel(path, skiprows=skip, header=[0,1])
+                cols = [c[1] if "Unnamed" in str(c[0]) else c[0] for c in df.columns]
+                df.columns = [c.strip() for c in cols]
+                if "Date" in df.columns and "Time" in df.columns:
+                    df["Time"] = df["Date"].astype(str)+" "+df["Time"].astype(str)
+                    df.drop(columns=["Date"], inplace=True, errors="ignore")
                 return df
-            except ImportError: continue
-            except Exception as e1:
-                try:
-                    df = pd.read_excel(path, skiprows=skip, header=[0,1], engine=engine)
-                    cols = [c[1] if "Unnamed" in str(c[0]) else c[0] for c in df.columns]
-                    df.columns = [c.strip() for c in cols]
-                    if "Date" in df.columns and "Time" in df.columns:
-                        df["Time"] = df["Date"].astype(str)+" "+df["Time"].astype(str)
-                        df.drop(columns=["Date"], inplace=True, errors="ignore")
-                    return df
-                except ImportError: continue
-                except Exception as e2:
-                    continue
-        print(f"[MX100] 읽기 실패: {path}")
-        return pd.DataFrame()
+            except Exception as e2:
+                print(f"[MX100] 읽기 실패: {e1} / {e2}")
+                return pd.DataFrame()
 
     def _merge_multi(dfs):
         """여러 df를 Time 기준 병합 (중복 컬럼은 첫 번째 우선)"""
