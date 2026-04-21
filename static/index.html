@@ -2064,8 +2064,8 @@ return(<div><div className="fg"><div>
 <div className="cd"><div className="ct">응축수 초반 튐 방어</div>
 <div style={{fontSize:10,color:'var(--tx3)',marginBottom:6}}>워밍업 직후 응축량이 과대 계산되어 IMC 보정 시 전체 값이 0에 수렴하는 문제를 방지합니다.</div>
 <CfgField lb="Warm-up 지연" p="calculation.water_warmup.extra_min" t="number" st="0.1" u="분" {...fp}/>
-<CfgField lb="물리적 상한" p="calculation.water_warmup.max_gs" t="number" st="0.1" u="g/s" {...fp}/>
-<div style={{fontSize:9,color:'var(--tx3)',padding:'4px 12px'}}>Ctrl_DryMotion≥2 시점부터 N분 간 응축수=0 | 순간 응축량 상한 (정상 0.5~2 g/s)</div>
+<CfgField lb="압축기 ON Hz" p="calculation.water_warmup.min_comp_hz" t="number" st="0.5" u="Hz" {...fp}/>
+<div style={{fontSize:9,color:'var(--tx3)',padding:'4px 12px'}}>DryMotion≥2 후 N분 + 압축기 Hz≥기준 조건 모두 만족시에만 응축수 계산 (상한 없음)</div>
 </div>
 <div className="cd"><div className="ct">RH 수렴 계산</div><CfgField lb="증발기 출구 RH" p="calculation.rh_eva_out_assumed" t="number" st="0.01" {...fp}/><CfgField lb="최대 반복" p="calculation.rh_iteration.max_iter" t="number" {...fp}/><CfgField lb="수렴 임계값" p="calculation.rh_iteration.tolerance" t="number" st="0.001" {...fp}/><CfgField lb="감쇠 계수" p="calculation.rh_iteration.damping" t="number" st="0.05" {...fp}/></div>
 <div className="cd"><div className="ct">센서 보정 [°C]</div><CfgField lb="T_Cond_In" p="calculation.sensor_offsets.T_Cond_In" t="number" st="0.1" {...fp}/><CfgField lb="T_Cond_Out" p="calculation.sensor_offsets.T_Cond_Out" t="number" st="0.1" {...fp}/><CfgField lb="T_Cond_M1" p="calculation.sensor_offsets.T_Cond_M1" t="number" st="0.1" {...fp}/><CfgField lb="T_Air_Eva_Out" p="calculation.sensor_offsets.T_Air_Eva_Out" t="number" st="0.1" {...fp}/><CfgField lb="T_Comp_In" p="calculation.sensor_offsets.T_Comp_In" t="number" st="0.1" {...fp}/><CfgField lb="T_Comp_Out" p="calculation.sensor_offsets.T_Comp_Out" t="number" st="0.1" {...fp}/></div>

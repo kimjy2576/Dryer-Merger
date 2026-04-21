@@ -103,7 +103,7 @@ calculation:
   # 응축수 초반 튐 방어
   water_warmup:
     extra_min: 1.5          # Ctrl_DryMotion>=2 시점 + N분 이후부터 응축 계산
-    max_gs: 3.0             # 물리적 상한 [g/s] (정상 ~0.5-2 g/s)
+    min_comp_hz: 1.0        # 압축기 ON 판정 Hz (이 값 이상이면 응축 계산)
 
   # RH 미측정 시 수렴 반복 설정
   rh_iteration:

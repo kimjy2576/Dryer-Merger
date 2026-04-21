@@ -718,10 +718,10 @@ def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, 
     # 원식: water_gs = (AH_eva_in - AH_cond_in) × mdot_dair × 1000 / 3600
     raw_water_gs = (AH_eva_in - AH_cond_in) * mdot_dair * 1000 / 3600
 
-    # ── 초반 튐 방어 (3단계 필터) ──
+    # ── 초반 튐 방어 (2단계 필터) ──
     ww = (cfg or {}).get("calculation", {}).get("water_warmup", {})
     warmup_extra_min = float(ww.get("extra_min", 1.5))
-    max_gs = float(ww.get("max_gs", 3.0))
+    min_comp_hz = float(ww.get("min_comp_hz", 1.0))
 
     # 1. Warm-up 마스크: Ctrl_DryMotion >= 2 (히트펌프 건조 구간) 이후부터
     if "Ctrl_DryMotion" in df.columns and (df["Ctrl_DryMotion"] >= 2).any():
@@ -730,14 +730,20 @@ def _calc_evaporator_air_and_performance(df, props, patm, rh_eva_out, air_cond, 
         hp_start = 0
     mask_warmup = time_min >= (hp_start + warmup_extra_min)
 
-    # 2. 음수 방어: 증발(AH 감소)은 물리적으로 없음
+    # 2. 압축기 ON 마스크: Ctrl_Comp_Hz >= min_comp_hz
+    if "Ctrl_Comp_Hz" in df.columns:
+        comp_hz = df["Ctrl_Comp_Hz"].values.astype(float)
+    elif "HP_CompCurrentHz" in df.columns:
+        comp_hz = df["HP_CompCurrentHz"].values.astype(float)
+    else:
+        comp_hz = np.full(len(df), min_comp_hz + 1)  # 컬럼 없으면 항상 ON
+    mask_comp = comp_hz >= min_comp_hz
+
+    # 3. 음수 방어: 증발(AH 감소)은 물리적으로 없음 (상한 클리핑 없음)
     raw_water_gs = np.maximum(raw_water_gs, 0)
 
-    # 3. 물리적 상한 클리핑
-    raw_water_gs = np.minimum(raw_water_gs, max_gs)
-
-    # 최종 water_gs
-    water_gs = np.where(mask_warmup, raw_water_gs, 0)
+    # 최종 water_gs: warm-up + 압축기 ON 둘 다 만족해야 응축 계산
+    water_gs = np.where(mask_warmup & mask_comp, raw_water_gs, 0)
     water_gm = water_gs * 60
     water_kg = np.cumsum(water_gm * (dt / 60) / 1000)
 
