@@ -1200,22 +1200,19 @@ return(<div>
     </div>
     <div className="it" style={{marginBottom:6}}>💡 "자동" 모드: 같은 base명의 merged+calc+formula를 자동으로 하나의 케이스로 병합합니다.</div>
     {files.length>0?(()=>{
-      // source_dir 기준 그룹핑
+      // base명 기준 그룹핑 (_merged, _calc, _formula 접미사 제거)
+      const getBase=n=>n.replace(/_(merged|calc|formula)\.(csv|xlsx|xls)$/i,'').replace(/\.(csv|xlsx|xls)$/i,'');
       const groups={};
-      const noDir=[];
       files.forEach(f=>{
-        if(f.source_dir){
-          const key=f.source_dir;
-          if(!groups[key])groups[key]={dir:key,files:[]};
-          groups[key].files.push(f);
-        }else noDir.push(f);
+        const base=getBase(f.name);
+        if(!groups[base])groups[base]={base,files:[]};
+        groups[base].files.push(f);
       });
-      const groupList=Object.values(groups).sort((a,b)=>a.dir.localeCompare(b.dir));
-      if(noDir.length)groupList.push({dir:null,files:noDir});
+      const groupList=Object.values(groups).sort((a,b)=>a.base.localeCompare(b.base));
       
       return(<div className="file-sel" style={{maxHeight:320,overflowY:'auto'}}>
         {groupList.map((g,gi)=>{
-          const isExp=expandedGroups[g.dir]!==false; // 기본 열림
+          const isExp=expandedGroups[g.base]!==false;
           const allSel=g.files.every(f=>selFiles.has(f.name));
           const someSel=g.files.some(f=>selFiles.has(f.name));
           const toggleGroup=()=>{
@@ -1227,15 +1224,14 @@ return(<div>
             });
             setFilterMode('');
           };
-          const toggleExp=()=>setExpandedGroups(p=>({...p,[g.dir]:!isExp}));
-          const dirName=g.dir?g.dir.split(/[\\/]/).pop()||g.dir:'(경로 없음)';
+          const toggleExp=()=>setExpandedGroups(p=>({...p,[g.base]:!isExp}));
           return(<div key={gi} style={{borderBottom:'1px solid var(--bd)'}}>
-            {/* 폴더 헤더 */}
+            {/* 그룹 헤더 (base명) */}
             <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 8px',background:'var(--bg3)',cursor:'pointer'}}>
               <button onClick={toggleExp} style={{fontSize:10,padding:'0 4px',border:0,background:0,color:'var(--tx2)',cursor:'pointer',width:16}}>{isExp?'▼':'▶'}</button>
               <input type="checkbox" checked={allSel} ref={el=>{if(el)el.indeterminate=someSel&&!allSel}} onChange={toggleGroup} onClick={e=>e.stopPropagation()} style={{accentColor:'var(--teal)'}}/>
-              <span onClick={toggleExp} style={{flex:1,fontSize:12,fontWeight:500,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={g.dir||''}>
-                📁 {dirName}
+              <span onClick={toggleExp} style={{flex:1,fontSize:12,fontWeight:500,color:'var(--tx)',fontFamily:'var(--mono)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={g.base}>
+                📄 {g.base}
               </span>
               <span style={{fontSize:9,color:'var(--tx3)'}}>{g.files.filter(f=>selFiles.has(f.name)).length}/{g.files.length}</span>
             </div>
@@ -1731,6 +1727,11 @@ function VwPsych({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
   const[timeR,setTimeR]=useState(.5);
   const[autoFit,setAutoFit]=useState(true);
   const[fixedRange,setFixedRange]=useState(null);
+  const[fontFamily,setFontFamily]=useState('sans');
+  const[titleFontSize,setTitleFontSize]=useState(12);
+  const[tickFontSize,setTickFontSize]=useState(10);
+  const[legendFontSize,setLegendFontSize]=useState(11);
+  const[titleBold,setTitleBold]=useState(true);
   const ref=useRef(null);
   const timeIdx=useMemo(()=>cases.map(cs=>{const t=cs?.data?.Time_min||cs?.data?.Time_sec||cs?.data?.Time;if(!t||!t.length)return 0;const tgt=t[t.length-1]*timeR;let b=0;for(let i=1;i<t.length;i++){if(Math.abs(t[i]-tgt)<Math.abs(t[b]-tgt))b=i}return b}),[cases,timeR]);
   const curT=cases[0]?.data?.Time_min?.[timeIdx[0]]||cases[0]?.data?.Time_sec?.[timeIdx[0]]||0;
@@ -1771,17 +1772,23 @@ function VwPsych({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
       if(autoFit){xRange=calcX;yRange=calcY}
       else if(fixedRange){xRange=fixedRange.x;yRange=fixedRange.y}
     }
+    const fontMap={sans:'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',mono:'ui-monospace,"SF Mono",Consolas,monospace',serif:'Georgia,"Times New Roman",serif'};
+    const ff=fontMap[fontFamily]||fontMap.sans;
+    const tFont={size:titleFontSize,family:ff,...(titleBold?{weight:700}:{})};
+    const tkFont={size:tickFontSize,family:ff};
+    const lgFont={size:legendFontSize,family:ff};
+    const wB=s=>titleBold?'<b>'+s+'</b>':s;
     try{Plotly.react(ref.current,tr,{
-      title:{text:'<b>습공기 선도</b>'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':''),font:{size:14},y:.98,yanchor:'top'},
-      xaxis:{title:{text:'<b>건구온도</b> [°C]',font:{size:12}},range:xRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,tickfont:{size:11}},
-      yaxis:{title:{text:'<b>절대습도</b> [kg/kg]',font:{size:12}},range:yRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,tickfont:{size:11}},
+      title:{text:'<b>습공기 선도</b>'+(dataStatus.anyPt?' (t='+curT.toFixed(1)+' min)':''),font:{size:14,family:ff},y:.98,yanchor:'top'},
+      xaxis:{title:{text:wB('건구온도 [°C]'),font:tFont},range:xRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,tickfont:tkFont},
+      yaxis:{title:{text:wB('절대습도 [kg/kg]'),font:tFont},range:yRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,tickfont:tkFont},
       height:chartH,width:fW,margin:{t:60,b:60,l:80,r:30},
       paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',
-      font:{family:'var(--font)',color:'#3a3a4e',size:11},
-      legend:{orientation:'h',y:-.15,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,0.8)'},
+      font:{family:ff,color:'#3a3a4e',size:tickFontSize},
+      legend:{orientation:'h',y:-.15,x:.5,xanchor:'center',font:lgFont,bgcolor:'rgba(255,255,255,0.8)'},
       hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'
     },{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPsych:',e)}
-  },[cases,caseVis,caseColors,timeIdx,lw,chartH,chartW,dragMode,curT,dataStatus.anyPt,autoFit]);
+  },[cases,caseVis,caseColors,timeIdx,lw,chartH,chartW,dragMode,curT,dataStatus.anyPt,autoFit,fontFamily,titleFontSize,tickFontSize,legendFontSize,titleBold]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d)return null;
     const pts=[];
@@ -1877,6 +1884,11 @@ function VwPh({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setChar
   const[autoFit,setAutoFit]=useState(true);
   const[fixedRange,setFixedRange]=useState(null);
   const[refName,setRefName]=useState(cfg?.environment?.refrigerant||'R290');
+  const[fontFamily,setFontFamily]=useState('sans');
+  const[titleFontSize,setTitleFontSize]=useState(12);
+  const[tickFontSize,setTickFontSize]=useState(10);
+  const[legendFontSize,setLegendFontSize]=useState(11);
+  const[titleBold,setTitleBold]=useState(true);
   const[satData,setSatData]=useState(null);
   const[satErr,setSatErr]=useState('');
   const ref=useRef(null);
@@ -1925,17 +1937,23 @@ function VwPh({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setChar
       hRange=[Math.min(...s.hl)*.8,Math.max(...s.hv)*1.05];
       pRange=[Math.log10(.5),Math.log10(c.P*1.15)];
     }
+    const fontMap={sans:'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',mono:'ui-monospace,"SF Mono",Consolas,monospace',serif:'Georgia,"Times New Roman",serif'};
+    const ff=fontMap[fontFamily]||fontMap.sans;
+    const tFont={size:titleFontSize,family:ff,...(titleBold?{weight:700}:{})};
+    const tkFont={size:tickFontSize,family:ff};
+    const lgFont={size:legendFontSize,family:ff};
+    const wB=s=>titleBold?'<b>'+s+'</b>':s;
     try{Plotly.react(ref.current,tr,{
-      title:{text:'<b>P-h 선도</b> — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':''),font:{size:14},y:.98,yanchor:'top'},
-      xaxis:{title:{text:'<b>엔탈피</b> [kJ/kg]',font:{size:12}},range:hRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,tickfont:{size:11}},
-      yaxis:{title:{text:'<b>압력</b> [bar abs]',font:{size:12}},type:'log',range:pRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,dtick:.30103,tickfont:{size:11}},
+      title:{text:'<b>P-h 선도</b> — '+satData.coolprop_name+(hasOverlay?' (t='+curT.toFixed(1)+' min)':''),font:{size:14,family:ff},y:.98,yanchor:'top'},
+      xaxis:{title:{text:wB('엔탈피 [kJ/kg]'),font:tFont},range:hRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,tickfont:tkFont},
+      yaxis:{title:{text:wB('압력 [bar abs]'),font:tFont},type:'log',range:pRange,gridcolor:'rgba(0,0,0,0.08)',linecolor:'rgba(0,0,0,0.2)',linewidth:1,mirror:true,zeroline:false,dtick:.30103,tickfont:tkFont},
       height:chartH,width:fW,margin:{t:60,b:60,l:80,r:30},
       paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',
-      font:{family:'var(--font)',color:'#3a3a4e',size:11},
-      legend:{orientation:'h',y:-.15,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,0.8)'},
+      font:{family:ff,color:'#3a3a4e',size:tickFontSize},
+      legend:{orientation:'h',y:-.15,x:.5,xanchor:'center',font:lgFont,bgcolor:'rgba(255,255,255,0.8)'},
       hovermode:'closest',dragmode:dragMode==='pan'?'pan':'zoom'
     },{responsive:!fW,displaylogo:false,scrollZoom:true})}catch(e){console.error('VwPh:',e)}
-  },[satData,cases,caseVis,caseColors,timeIdx,lw,chartH,chartW,dragMode,curT,autoFit]);
+  },[satData,cases,caseVis,caseColors,timeIdx,lw,chartH,chartW,dragMode,curT,autoFit,fontFamily,titleFontSize,tickFontSize,legendFontSize,titleBold]);
 
   const stPts=useMemo(()=>cases.map((cs,ci)=>{if(!caseVis[cs.name])return null;const i=timeIdx[ci];const d=cs.data;if(!d?.h_Comp_In_ref?.[i]||!d?.P_Comp_In?.[i])return null;const BA=1.01325;
     const pts=[];
