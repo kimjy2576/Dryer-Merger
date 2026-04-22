@@ -1252,60 +1252,9 @@ return(<div>
       </div>)})}
     </div>
   </div>
-  <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>
-
-    {/* 행1: 선 두께 */}
-    <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>선 두께</span>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw(+e.target.value)} style={{width:80}}/>
-      <span style={{fontFamily:'var(--mono)',color:'var(--tx2)',minWidth:20}}>{lw}</span>
-    </div>
-
-    {/* 행2: 크기 (높이 + 너비) */}
-    <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>크기</span>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{color:'var(--tx3)',fontSize:10}}>높이</span>
-      {[[400,'S'],[700,'M'],[1000,'L'],[1400,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH(h)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
-      <input type="range" min="300" max="1600" step="10" value={chartH} onChange={e=>setChartH(+e.target.value)} style={{width:60}}/>
-      <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartH}px</span>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{color:'var(--tx3)',fontSize:10}}>너비</span>
-      <button className={`bt bs ${chartW===0?'on':''}`} onClick={()=>setChartW(0)} style={{padding:'2px 6px',fontSize:10}}>자동</button>
-      {[[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW(w)} style={{padding:'2px 6px',fontSize:10}}>{lb}</button>)}
-      <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW(+e.target.value)} style={{width:60}}/>
-      <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10}}>{chartW?chartW+'px':'자동'}</span>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <button className="bt bs" onClick={()=>{setChartH(750);setChartW(0);setLw(2);setXGap(.25);setYGap(.35)}} style={{fontSize:9,padding:'2px 8px',color:'var(--tx3)'}}>↺ 초기화</button>
-    </div>
-
-    {/* 행3: 간격 */}
-    <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>간격</span>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{fontSize:9,color:'var(--tx3)'}}>X</span>
-      <input type="range" min="0.02" max="0.40" step=".01" value={xGap} onChange={e=>setXGap(+e.target.value)} style={{width:70}}/>
-      <span style={{fontSize:9,color:'var(--tx3)'}}>Y</span>
-      <input type="range" min="0.05" max="0.50" step=".01" value={yGap} onChange={e=>setYGap(+e.target.value)} style={{width:70}}/>
-      <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:9}}>{xGap.toFixed(2)} / {yGap.toFixed(2)}</span>
-    </div>
-
-    {/* 행4: 설정 저장 */}
-    <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>설정</span>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <button className="bt bs" onClick={async()=>{try{await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode})});alert(`✅ Viewer 디폴트 저장\n선 두께: ${lw}\n높이: ${chartH}px\n너비: ${chartW||'자동'}\n간격: X=${xGap.toFixed(2)} Y=${yGap.toFixed(2)}`)}catch(e){alert('실패')}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 디폴트 저장</button>
-      <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-viewer-settings`);const d=await r.json();if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);alert('디폴트 불러옴')}catch(e){alert('실패')}}} style={{color:'var(--teal)',fontSize:9,padding:'2px 8px'}}>⭐ 불러오기</button>
-      <SaveSlots category="viewer" label="슬롯"
-        getData={()=>({type:'viewer_settings',lw,xGap,yGap,chartH,chartW,dragMode})}
-        onLoad={d=>{if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode)}}/>
-    </div>
-
-  </div>
 
   <ErrorBound>
-  <div style={{display:sub==='chart'?'block':'none'}}><VwChart cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} xGap={xGap} yGap={yGap}/></div>
+  <div style={{display:sub==='chart'?'block':'none'}}><VwChart cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} setLw={setLw} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW} dragMode={dragMode} setDragMode={setDragMode} xGap={xGap} setXGap={setXGap} yGap={yGap} setYGap={setYGap}/></div>
   <div style={{display:sub==='psych'?'block':'none'}}><VwPsych cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/></div>
   <div style={{display:sub==='ph'?'block':'none'}}><VwPh cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} cfg={cfg}/></div>
   <div style={{display:sub==='perf'?'block':'none'}}><VwPerf cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW}/></div>
@@ -1387,7 +1336,7 @@ const VL={
 const yTitle=k=>VL[k]?`<b>${VL[k]}</b>`:`<b>${k}</b>`;
 
 // ═══ Viewer: 라인차트 ═══
-function VwChart({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,xGap,yGap}){
+function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setChartW,dragMode,setDragMode,xGap,setXGap,yGap,setYGap}){
   const allVars=useMemo(()=>{
     if(!cases?.length)return[];
     const s=new Set();
@@ -1595,6 +1544,53 @@ function VwChart({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,xGap,yGap})
       <div style={{display:'flex',gap:4,alignItems:'center'}}>
         <span style={{color:'var(--tx3)',fontSize:10,minWidth:28}}>레전드</span>
         <input type="number" min="6" max="32" value={tab.legendFontSize||11} onChange={e=>updateTab({legendFontSize:+e.target.value||11})} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+      </div>
+    </div>
+
+    {/* ── 구역 5: 차트 스타일 (선/크기/간격) ── */}
+    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>차트 스타일</div>
+      <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+        <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>선두께</span>
+        <input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw(+e.target.value)} style={{flex:1,minWidth:0}}/>
+        <span style={{fontFamily:'var(--mono)',color:'var(--tx2)',fontSize:10,minWidth:20,textAlign:'right'}}>{lw}</span>
+      </div>
+      <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+        <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>높이</span>
+        <input type="range" min="300" max="1600" step="10" value={chartH} onChange={e=>setChartH(+e.target.value)} style={{flex:1,minWidth:0}}/>
+        <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10,minWidth:40,textAlign:'right'}}>{chartH}px</span>
+      </div>
+      <div style={{display:'flex',gap:3,marginBottom:5}}>
+        {[[400,'S'],[700,'M'],[1000,'L'],[1400,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH(h)} style={{padding:'2px 0',fontSize:9,flex:1}}>{lb}</button>)}
+      </div>
+      <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+        <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>너비</span>
+        <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW(+e.target.value)} style={{flex:1,minWidth:0}}/>
+        <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10,minWidth:40,textAlign:'right'}}>{chartW?chartW+'px':'자동'}</span>
+      </div>
+      <div style={{display:'flex',gap:3,marginBottom:5}}>
+        <button className={`bt bs ${chartW===0?'on':''}`} onClick={()=>setChartW(0)} style={{padding:'2px 0',fontSize:9,flex:1}}>자동</button>
+        {[[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW(w)} style={{padding:'2px 0',fontSize:9,flex:1}}>{lb}</button>)}
+      </div>
+      <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+        <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>간격 X</span>
+        <input type="range" min="0.02" max="0.40" step=".01" value={xGap} onChange={e=>setXGap(+e.target.value)} style={{flex:1,minWidth:0}}/>
+        <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:9,minWidth:30,textAlign:'right'}}>{xGap.toFixed(2)}</span>
+      </div>
+      <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:5}}>
+        <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>간격 Y</span>
+        <input type="range" min="0.05" max="0.50" step=".01" value={yGap} onChange={e=>setYGap(+e.target.value)} style={{flex:1,minWidth:0}}/>
+        <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:9,minWidth:30,textAlign:'right'}}>{yGap.toFixed(2)}</span>
+      </div>
+      <button className="bt bs" onClick={()=>{setChartH(750);setChartW(0);setLw(2);setXGap(.25);setYGap(.35)}} style={{fontSize:9,padding:'2px 6px',color:'var(--tx3)',width:'100%'}}>↺ 스타일 초기화</button>
+    </div>
+
+    {/* ── 구역 6: 저장/불러오기 ── */}
+    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>Viewer 디폴트</div>
+      <div style={{display:'flex',gap:3}}>
+        <button className="bt bs" onClick={async()=>{try{await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode})});alert(`✅ Viewer 디폴트 저장`)}catch(e){alert('실패')}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'3px 6px',flex:1}}>⭐ 저장</button>
+        <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-viewer-settings`);const d=await r.json();if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);alert('불러옴')}catch(e){alert('실패')}}} style={{color:'var(--teal)',fontSize:9,padding:'3px 6px',flex:1}}>⭐ 불러오기</button>
       </div>
     </div>
 
