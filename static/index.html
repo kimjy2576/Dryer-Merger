@@ -1470,7 +1470,7 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
 
   return(<div style={{display:'grid',gridTemplateColumns:`${sideW}px 4px 1fr`,gap:0,alignItems:'start'}}>
   {/* ═══════════════════ 좌측 사이드바 ═══════════════════ */}
-  <div style={{display:'flex',flexDirection:'column',gap:8,position:'sticky',top:8,maxHeight:'calc(100vh - 20px)',overflowY:'auto',paddingRight:4}}>
+  <div style={{display:'flex',flexDirection:'column',gap:8,position:'sticky',top:8,alignSelf:'start',maxHeight:'calc(100vh - 20px)',overflowY:'auto',overflowX:'hidden',paddingRight:6,scrollbarGutter:'stable'}}>
     {/* ── 구역 1: 탭 관리 ── */}
     <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
       <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>카테고리</div>
@@ -1761,36 +1761,48 @@ function VwPsych({cases,caseVis,caseColors,lw,chartH,chartW,dragMode}){
     return`[${c.name}] idx=${i}\n①T_Air_Eva_In=${v('T_Air_Eva_In')} AH_Eva_In=${v('AH_Eva_In')}\n②T_Air_Eva_Out=${v('T_Air_Eva_Out')} T_Eva_Out=${v('T_Eva_Out')} AH_Cond_In=${v('AH_Cond_In')}\n③T_Air_Cond_Out=${v('T_Air_Cond_Out')} AH_Cond_Out=${v('AH_Cond_Out')}`;
   },[cases,caseVis,timeIdx]);
 
-  return(<div>
-    {!dataStatus.anyPt&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
-      ⚠️ 습공기 선도: T_Air_Eva_In + AH_Eva_In 등이 필요합니다.
-    </div>}
-    <div style={{padding:8,margin:'0 0 8px',background:'var(--bg3)',borderRadius:6,fontFamily:'var(--mono)',fontSize:10,whiteSpace:'pre-wrap',color:'var(--tx2)'}}>
-      상태: Pt1={dataStatus.hasPt1?'✓':'✗'} Pt2={dataStatus.hasPt2?'✓':'✗'} Pt3={dataStatus.hasPt3?'✓':'✗'}{'\n'}{psychDbg}
-    </div>
-    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
-      <span className="it">시점:</span><input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{flex:1,maxWidth:300}}/>
-      <span style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--teal)',padding:'3px 8px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:5}}>{curT.toFixed(1)} min</span>
-      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-      <button className={`bt bs ${autoFit?'on':''}`} onClick={()=>setAutoFit(!autoFit)} style={autoFit?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff',fontSize:10}:{fontSize:10}}>{autoFit?'📐 Auto Fit':'📌 고정'}</button>
-      {!autoFit&&<button className="bt bs" onClick={()=>{setFixedRange(null);setAutoFit(true)}} style={{fontSize:10}}>↺ 리셋</button>}
-    </div>
-    <div className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
-    {stPts.length>0&&<div className="cd" style={{marginTop:10}}>
-      <div className="ct">습공기 상태점 @ t={curT.toFixed(1)} min</div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:10}}>
-      {stPts.map(sp=><div key={sp.name} style={{background:'var(--bg3,#1a1a25)',border:'1px solid var(--bd2)',borderRadius:8,padding:10}}>
-        <div style={{fontSize:12,fontWeight:500,marginBottom:6,display:'flex',alignItems:'center',gap:5}}><span style={{width:8,height:8,borderRadius:'50%',background:sp.color}}/>{sp.name}</div>
-        {sp.pts.map(p=><div key={p.lb} style={{marginBottom:6}}>
-          <div style={{fontSize:11,color:'var(--teal)',marginBottom:2}}>{p.lb}</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:2,fontSize:11}}>
-            <span>T: <b>{p.T.toFixed(1)}°C</b></span><span>W: <b>{p.W.toFixed(4)}</b></span><span>RH: <b>{(p.rh*100).toFixed(1)}%</b></span>
-            <span>h: <b>{p.h.toFixed(1)}</b></span><span>Td: <b>{p.dp.toFixed(1)}°C</b></span><span>v: <b>{p.v.toFixed(3)}</b></span>
-          </div>
-        </div>)}
-      </div>)}
+  return(<div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:10,alignItems:'start'}}>
+    {/* ═══ 사이드바 ═══ */}
+    <div style={{display:'flex',flexDirection:'column',gap:8,position:'sticky',top:8,alignSelf:'start',maxHeight:'calc(100vh - 20px)',overflowY:'auto',overflowX:'hidden',paddingRight:6,scrollbarGutter:'stable'}}>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>시점</div>
+        <input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{width:'100%'}}/>
+        <div style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--teal)',textAlign:'center',marginTop:4}}>{curT.toFixed(1)} min</div>
       </div>
-    </div>}
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>축 범위</div>
+        <button className={`bt bs ${autoFit?'on':''}`} onClick={()=>setAutoFit(!autoFit)} style={autoFit?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff',fontSize:10,width:'100%'}:{fontSize:10,width:'100%'}}>{autoFit?'📐 Auto Fit':'📌 고정'}</button>
+        {!autoFit&&<button className="bt bs" onClick={()=>{setFixedRange(null);setAutoFit(true)}} style={{fontSize:10,width:'100%',marginTop:4}}>↺ 리셋</button>}
+      </div>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:10}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>데이터 상태</div>
+        <div style={{fontFamily:'var(--mono)',fontSize:10,color:'var(--tx2)'}}>
+          Pt1 {dataStatus.hasPt1?'✓':'✗'}<br/>Pt2 {dataStatus.hasPt2?'✓':'✗'}<br/>Pt3 {dataStatus.hasPt3?'✓':'✗'}
+        </div>
+      </div>
+    </div>
+    {/* ═══ 메인 ═══ */}
+    <div style={{minWidth:0}}>
+      {!dataStatus.anyPt&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
+        ⚠️ 습공기 선도: T_Air_Eva_In + AH_Eva_In 등이 필요합니다.
+      </div>}
+      <div className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
+      {stPts.length>0&&<div className="cd" style={{marginTop:10}}>
+        <div className="ct">습공기 상태점 @ t={curT.toFixed(1)} min</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:10}}>
+        {stPts.map(sp=><div key={sp.name} style={{background:'var(--bg3,#1a1a25)',border:'1px solid var(--bd2)',borderRadius:8,padding:10}}>
+          <div style={{fontSize:12,fontWeight:500,marginBottom:6,display:'flex',alignItems:'center',gap:5}}><span style={{width:8,height:8,borderRadius:'50%',background:sp.color}}/>{sp.name}</div>
+          {sp.pts.map(p=><div key={p.lb} style={{marginBottom:6}}>
+            <div style={{fontSize:11,color:'var(--teal)',marginBottom:2}}>{p.lb}</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:2,fontSize:11}}>
+              <span>T: <b>{p.T.toFixed(1)}°C</b></span><span>W: <b>{p.W.toFixed(4)}</b></span><span>RH: <b>{(p.rh*100).toFixed(1)}%</b></span>
+              <span>h: <b>{p.h.toFixed(1)}</b></span><span>Td: <b>{p.dp.toFixed(1)}°C</b></span><span>v: <b>{p.v.toFixed(3)}</b></span>
+            </div>
+          </div>)}
+        </div>)}
+        </div>
+      </div>}
+    </div>
   </div>)
 }
 
@@ -1870,42 +1882,52 @@ function VwPh({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,cfg}){
     return pts.length?{name:cs.label||cs.name,color:(caseColors?.[cs.name]||VW_COLORS[ci%VW_COLORS.length]),pts}:null;
   }).filter(Boolean),[cases,caseVis,timeIdx]);
 
-  return(<div>
-    {!hasRefData&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
-      ⚠️ P-h 선도: T_Comp_In + P_Comp_In이 있으면 서버에서 엔탈피를 자동 계산합니다. 현재 데이터에 압력/온도 컬럼이 없습니다.
-    </div>}
-    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10,flexWrap:'wrap'}}>
-      <span className="it">냉매:</span>
-      <select value={refName} onChange={e=>setRefName(e.target.value)} style={{width:130}}>
-        <option value="R290">R290 (Propane)</option><option value="R134a">R134a</option>
-        <option value="R32">R32</option><option value="R410A">R410A</option>
-        <option value="R1234yf">R1234yf</option>
-      </select>
-      {satData&&<span className="it">Tc={satData.critical.T.toFixed(1)}°C / Pc={satData.critical.P.toFixed(1)}bar</span>}
-      {satErr&&<span style={{fontSize:11,color:'var(--red)'}}>{satErr}</span>}
-      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-      <span className="it">시점:</span><input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{flex:1,maxWidth:300}}/>
-      <span style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--teal)',padding:'3px 8px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:5}}>{curT.toFixed(1)} min</span>
-      <span style={{width:1,height:16,background:'var(--bd2)'}}/>
-      <button className={`bt bs ${autoFit?'on':''}`} onClick={()=>setAutoFit(!autoFit)} style={autoFit?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff',fontSize:10}:{fontSize:10}}>{autoFit?'📐 Auto Fit':'📌 고정'}</button>
-      {!autoFit&&<button className="bt bs" onClick={()=>{setFixedRange(null);setAutoFit(true)}} style={{fontSize:10}}>↺ 리셋</button>}
-    </div>
-    <div className="cd" style={{overflowX:'auto',padding:4}}>{satData?<div ref={ref}/>:<div className="it" style={{padding:30,textAlign:'center'}}>{satErr||'포화선 데이터 로딩 중...'}</div>}</div>
-    {stPts.length>0&&<div className="cd" style={{marginTop:10}}>
-      <div className="ct">냉매 상태점 — {refName} @ t={curT.toFixed(1)} min</div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:10}}>
-      {stPts.map(sp=><div key={sp.name} style={{background:'var(--bg3,#1a1a25)',border:'1px solid var(--bd2)',borderRadius:8,padding:10}}>
-        <div style={{fontSize:12,fontWeight:500,marginBottom:6,display:'flex',alignItems:'center',gap:5}}><span style={{width:8,height:8,borderRadius:'50%',background:sp.color}}/>{sp.name}</div>
-        {sp.pts.map(p=><div key={p.lb} style={{marginBottom:4}}>
-          <div style={{fontSize:11,color:'var(--teal)',marginBottom:2}}>{p.lb}</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,fontSize:11}}>
-            <span>P: <b>{p.P.toFixed(2)} bar</b></span><span>h: <b>{p.h?.toFixed(1)} kJ/kg</b></span>
-            {p.T!=null&&<span>T: <b>{p.T.toFixed(1)} °C</b></span>}
-          </div>
-        </div>)}
-      </div>)}
+  return(<div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:10,alignItems:'start'}}>
+    {/* ═══ 사이드바 ═══ */}
+    <div style={{display:'flex',flexDirection:'column',gap:8,position:'sticky',top:8,alignSelf:'start',maxHeight:'calc(100vh - 20px)',overflowY:'auto',overflowX:'hidden',paddingRight:6,scrollbarGutter:'stable'}}>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>냉매</div>
+        <select value={refName} onChange={e=>setRefName(e.target.value)} style={{width:'100%',fontSize:11}}>
+          <option value="R290">R290 (Propane)</option><option value="R134a">R134a</option>
+          <option value="R32">R32</option><option value="R410A">R410A</option>
+          <option value="R1234yf">R1234yf</option>
+        </select>
+        {satData&&<div style={{fontSize:10,color:'var(--tx3)',marginTop:4,fontFamily:'var(--mono)'}}>Tc={satData.critical.T.toFixed(1)}°C<br/>Pc={satData.critical.P.toFixed(1)}bar</div>}
+        {satErr&&<div style={{fontSize:10,color:'var(--red)',marginTop:4}}>{satErr}</div>}
       </div>
-    </div>}
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>시점</div>
+        <input type="range" min="0" max="1" step=".005" value={timeR} onChange={e=>setTimeR(+e.target.value)} style={{width:'100%'}}/>
+        <div style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--teal)',textAlign:'center',marginTop:4}}>{curT.toFixed(1)} min</div>
+      </div>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>축 범위</div>
+        <button className={`bt bs ${autoFit?'on':''}`} onClick={()=>setAutoFit(!autoFit)} style={autoFit?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff',fontSize:10,width:'100%'}:{fontSize:10,width:'100%'}}>{autoFit?'📐 Auto Fit':'📌 고정'}</button>
+        {!autoFit&&<button className="bt bs" onClick={()=>{setFixedRange(null);setAutoFit(true)}} style={{fontSize:10,width:'100%',marginTop:4}}>↺ 리셋</button>}
+      </div>
+    </div>
+    {/* ═══ 메인 ═══ */}
+    <div style={{minWidth:0}}>
+      {!hasRefData&&<div style={{padding:12,margin:'0 0 10px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'var(--amber)'}}>
+        ⚠️ P-h 선도: T_Comp_In + P_Comp_In이 있으면 서버에서 엔탈피를 자동 계산합니다.
+      </div>}
+      <div className="cd" style={{overflowX:'auto',padding:4}}>{satData?<div ref={ref}/>:<div className="it" style={{padding:30,textAlign:'center'}}>{satErr||'포화선 데이터 로딩 중...'}</div>}</div>
+      {stPts.length>0&&<div className="cd" style={{marginTop:10}}>
+        <div className="ct">냉매 상태점 — {refName} @ t={curT.toFixed(1)} min</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:10}}>
+        {stPts.map(sp=><div key={sp.name} style={{background:'var(--bg3,#1a1a25)',border:'1px solid var(--bd2)',borderRadius:8,padding:10}}>
+          <div style={{fontSize:12,fontWeight:500,marginBottom:6,display:'flex',alignItems:'center',gap:5}}><span style={{width:8,height:8,borderRadius:'50%',background:sp.color}}/>{sp.name}</div>
+          {sp.pts.map(p=><div key={p.lb} style={{marginBottom:4}}>
+            <div style={{fontSize:11,color:'var(--teal)',marginBottom:2}}>{p.lb}</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,fontSize:11}}>
+              <span>P: <b>{p.P.toFixed(2)} bar</b></span><span>h: <b>{p.h?.toFixed(1)} kJ/kg</b></span>
+              {p.T!=null&&<span>T: <b>{p.T.toFixed(1)} °C</b></span>}
+            </div>
+          </div>)}
+        </div>)}
+        </div>
+      </div>}
+    </div>
   </div>)
 }
 
