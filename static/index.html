@@ -1255,9 +1255,9 @@ return(<div>
 
   <ErrorBound>
   <div style={{display:sub==='chart'?'block':'none'}}><VwChart cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} setLw={setLw} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW} dragMode={dragMode} setDragMode={setDragMode} xGap={xGap} setXGap={setXGap} yGap={yGap} setYGap={setYGap}/></div>
-  <div style={{display:sub==='psych'?'block':'none'}}><VwPsych cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode}/></div>
-  <div style={{display:sub==='ph'?'block':'none'}}><VwPh cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} chartH={chartH} chartW={chartW} dragMode={dragMode} cfg={cfg}/></div>
-  <div style={{display:sub==='perf'?'block':'none'}}><VwPerf cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW}/></div>
+  <div style={{display:sub==='psych'?'block':'none'}}><VwPsych cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} setLw={setLw} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW} dragMode={dragMode}/></div>
+  <div style={{display:sub==='ph'?'block':'none'}}><VwPh cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} setLw={setLw} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW} dragMode={dragMode} cfg={cfg}/></div>
+  <div style={{display:sub==='perf'?'block':'none'}}><VwPerf cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW}/></div>
   </ErrorBound>
   </>}
 </div>)}
@@ -1687,7 +1687,7 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
 }
 
 // ═══ Viewer: 습공기 선도 ═══
-function VwPsych({cases,caseVis,caseColors,lw,chartH,chartW,dragMode}){
+function VwPsych({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setChartW,dragMode}){
   const findCol=(d,names)=>{for(const n of names){if(d[n])return d[n]}return null};
   const[timeR,setTimeR]=useState(.5);
   const[autoFit,setAutoFit]=useState(true);
@@ -1774,10 +1774,35 @@ function VwPsych({cases,caseVis,caseColors,lw,chartH,chartW,dragMode}){
         <button className={`bt bs ${autoFit?'on':''}`} onClick={()=>setAutoFit(!autoFit)} style={autoFit?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff',fontSize:10,width:'100%'}:{fontSize:10,width:'100%'}}>{autoFit?'📐 Auto Fit':'📌 고정'}</button>
         {!autoFit&&<button className="bt bs" onClick={()=>{setFixedRange(null);setAutoFit(true)}} style={{fontSize:10,width:'100%',marginTop:4}}>↺ 리셋</button>}
       </div>
-      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:10}}>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
         <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>데이터 상태</div>
         <div style={{fontFamily:'var(--mono)',fontSize:10,color:'var(--tx2)'}}>
           Pt1 {dataStatus.hasPt1?'✓':'✗'}<br/>Pt2 {dataStatus.hasPt2?'✓':'✗'}<br/>Pt3 {dataStatus.hasPt3?'✓':'✗'}
+        </div>
+      </div>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>차트 스타일</div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>선두께</span>
+          <input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw?.(+e.target.value)} style={{flex:1,minWidth:0}}/>
+          <span style={{fontFamily:'var(--mono)',color:'var(--tx2)',fontSize:10,minWidth:20,textAlign:'right'}}>{lw}</span>
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>높이</span>
+          <input type="range" min="300" max="1600" step="10" value={chartH} onChange={e=>setChartH?.(+e.target.value)} style={{flex:1,minWidth:0}}/>
+          <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10,minWidth:40,textAlign:'right'}}>{chartH}px</span>
+        </div>
+        <div style={{display:'flex',gap:3,marginBottom:4}}>
+          {[[400,'S'],[700,'M'],[1000,'L'],[1400,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH?.(h)} style={{padding:'2px 0',fontSize:9,flex:1}}>{lb}</button>)}
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>너비</span>
+          <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW?.(+e.target.value)} style={{flex:1,minWidth:0}}/>
+          <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10,minWidth:40,textAlign:'right'}}>{chartW?chartW+'px':'자동'}</span>
+        </div>
+        <div style={{display:'flex',gap:3}}>
+          <button className={`bt bs ${chartW===0?'on':''}`} onClick={()=>setChartW?.(0)} style={{padding:'2px 0',fontSize:9,flex:1}}>자동</button>
+          {[[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW?.(w)} style={{padding:'2px 0',fontSize:9,flex:1}}>{lb}</button>)}
         </div>
       </div>
     </div>
@@ -1807,7 +1832,7 @@ function VwPsych({cases,caseVis,caseColors,lw,chartH,chartW,dragMode}){
 }
 
 // ═══ Viewer: P-h 선도 ═══
-function VwPh({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,cfg}){
+function VwPh({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setChartW,dragMode,cfg}){
   const hasRefData=useMemo(()=>cases.some(c=>c?.data?.h_Comp_In_ref||c?.data?.P_Comp_In),[cases]);
   const[timeR,setTimeR]=useState(.5);
   const[autoFit,setAutoFit]=useState(true);
@@ -1904,6 +1929,31 @@ function VwPh({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,cfg}){
         <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>축 범위</div>
         <button className={`bt bs ${autoFit?'on':''}`} onClick={()=>setAutoFit(!autoFit)} style={autoFit?{background:'var(--teal)',borderColor:'var(--teal)',color:'#fff',fontSize:10,width:'100%'}:{fontSize:10,width:'100%'}}>{autoFit?'📐 Auto Fit':'📌 고정'}</button>
         {!autoFit&&<button className="bt bs" onClick={()=>{setFixedRange(null);setAutoFit(true)}} style={{fontSize:10,width:'100%',marginTop:4}}>↺ 리셋</button>}
+      </div>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>차트 스타일</div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>선두께</span>
+          <input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw?.(+e.target.value)} style={{flex:1,minWidth:0}}/>
+          <span style={{fontFamily:'var(--mono)',color:'var(--tx2)',fontSize:10,minWidth:20,textAlign:'right'}}>{lw}</span>
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>높이</span>
+          <input type="range" min="300" max="1600" step="10" value={chartH} onChange={e=>setChartH?.(+e.target.value)} style={{flex:1,minWidth:0}}/>
+          <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10,minWidth:40,textAlign:'right'}}>{chartH}px</span>
+        </div>
+        <div style={{display:'flex',gap:3,marginBottom:4}}>
+          {[[400,'S'],[700,'M'],[1000,'L'],[1400,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH?.(h)} style={{padding:'2px 0',fontSize:9,flex:1}}>{lb}</button>)}
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>너비</span>
+          <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW?.(+e.target.value)} style={{flex:1,minWidth:0}}/>
+          <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10,minWidth:40,textAlign:'right'}}>{chartW?chartW+'px':'자동'}</span>
+        </div>
+        <div style={{display:'flex',gap:3}}>
+          <button className={`bt bs ${chartW===0?'on':''}`} onClick={()=>setChartW?.(0)} style={{padding:'2px 0',fontSize:9,flex:1}}>자동</button>
+          {[[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW?.(w)} style={{padding:'2px 0',fontSize:9,flex:1}}>{lb}</button>)}
+        </div>
       </div>
     </div>
     {/* ═══ 메인 ═══ */}
@@ -2044,17 +2094,47 @@ function PerfChart({cases,caseVis,caseColors,chartH,chartW,defaultVars,defaultY1
   </div>)
 }
 
-function VwPerf({cases,caseVis,caseColors,chartH,chartW}){
-  return(<div>
-    <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="ewd"
-      defaultVars={[{key:'E_WD',axis:'y1',type:'bar',agg:'last'}]}
-      defaultY1="총 소비전력량 [Wh]"/>
-    <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="rmc"
-      defaultVars={[{key:'RMC_calc',axis:'y1',type:'bar',agg:'last'}]}
-      defaultY1="잔여수분율 [%]"/>
-    <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="time"
-      defaultVars={[{key:'Time_min',axis:'y1',type:'bar',agg:'last'}]}
-      defaultY1="운전시간 [min]"/>
+function VwPerf({cases,caseVis,caseColors,chartH,setChartH,chartW,setChartW}){
+  return(<div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:10,alignItems:'start'}}>
+    {/* ═══ 사이드바 ═══ */}
+    <div style={{display:'flex',flexDirection:'column',gap:8,position:'sticky',top:8,alignSelf:'start',maxHeight:'calc(100vh - 20px)',overflowY:'auto',overflowX:'hidden',paddingRight:6,scrollbarGutter:'stable'}}>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>차트 스타일</div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>높이</span>
+          <input type="range" min="300" max="1200" step="10" value={chartH} onChange={e=>setChartH?.(+e.target.value)} style={{flex:1,minWidth:0}}/>
+          <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10,minWidth:40,textAlign:'right'}}>{chartH}px</span>
+        </div>
+        <div style={{display:'flex',gap:3,marginBottom:4}}>
+          {[[300,'S'],[450,'M'],[600,'L'],[900,'XL']].map(([h,lb])=><button key={h} className={`bt bs ${chartH===h?'on':''}`} onClick={()=>setChartH?.(h)} style={{padding:'2px 0',fontSize:9,flex:1}}>{lb}</button>)}
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>너비</span>
+          <input type="range" min="0" max="2000" step="50" value={chartW} onChange={e=>setChartW?.(+e.target.value)} style={{flex:1,minWidth:0}}/>
+          <span style={{fontFamily:'var(--mono)',color:'var(--tx3)',fontSize:10,minWidth:40,textAlign:'right'}}>{chartW?chartW+'px':'자동'}</span>
+        </div>
+        <div style={{display:'flex',gap:3}}>
+          <button className={`bt bs ${chartW===0?'on':''}`} onClick={()=>setChartW?.(0)} style={{padding:'2px 0',fontSize:9,flex:1}}>자동</button>
+          {[[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW?.(w)} style={{padding:'2px 0',fontSize:9,flex:1}}>{lb}</button>)}
+        </div>
+      </div>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:10,color:'var(--tx3)'}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>💡 안내</div>
+        각 차트별 개별 설정은 차트 상단의 '설정 펼치기' 버튼으로 열 수 있습니다.
+      </div>
+    </div>
+    {/* ═══ 메인 ═══ */}
+    <div style={{minWidth:0}}>
+      <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="ewd"
+        defaultVars={[{key:'E_WD',axis:'y1',type:'bar',agg:'last'}]}
+        defaultY1="총 소비전력량 [Wh]"/>
+      <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="rmc"
+        defaultVars={[{key:'RMC_calc',axis:'y1',type:'bar',agg:'last'}]}
+        defaultY1="잔여수분율 [%]"/>
+      <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="time"
+        defaultVars={[{key:'Time_min',axis:'y1',type:'bar',agg:'last'}]}
+        defaultY1="운전시간 [min]"/>
+    </div>
   </div>)
 }
 
