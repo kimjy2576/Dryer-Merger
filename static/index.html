@@ -1007,6 +1007,10 @@ const VW_CATS=[
 function ViewerTab({cfg,autoLoad,clearAutoLoad}){
 const[files,setFiles]=useState([]);
 const[expandedGroups,setExpandedGroups]=useState({});
+const[folderMap,setFolderMap]=useState(()=>{try{return JSON.parse(localStorage.getItem('vw_folderMap')||'{}')}catch{return{}}}); // {baseName: folderName}
+const[folders,setFolders]=useState(()=>{try{return JSON.parse(localStorage.getItem('vw_folders')||'[]')}catch{return[]}}); // ["폴더1","폴더2"]
+useEffect(()=>{try{localStorage.setItem('vw_folderMap',JSON.stringify(folderMap))}catch{}},[folderMap]);
+useEffect(()=>{try{localStorage.setItem('vw_folders',JSON.stringify(folders))}catch{}},[folders]);
 const[selFiles,setSelFiles]=useState(new Set());
 const[cases,setCases]=useState([]);  // [{name,data:{col:[...]}}]
 const[caseVis,setCaseVis]=useState({});
@@ -1208,46 +1212,96 @@ return(<div>
         if(!groups[base])groups[base]={base,files:[]};
         groups[base].files.push(f);
       });
-      const groupList=Object.values(groups).sort((a,b)=>a.base.localeCompare(b.base));
+      // 폴더 구조: 각 base는 folderMap에 따라 폴더에 배정, 없으면 '(분류 없음)'
+      const allBases=Object.keys(groups);
+      const folderBuckets={};
+      folders.forEach(fn=>{folderBuckets[fn]=[]});
+      const UNSORTED='(분류 없음)';
+      folderBuckets[UNSORTED]=[];
+      allBases.forEach(b=>{
+        const fn=folderMap[b];
+        if(fn&&folders.includes(fn))folderBuckets[fn].push(b);
+        else folderBuckets[UNSORTED].push(b);
+      });
+      // 각 폴더 내 base 정렬
+      Object.values(folderBuckets).forEach(arr=>arr.sort((a,b)=>a.localeCompare(b)));
       
-      return(<div className="file-sel" style={{maxHeight:320,overflowY:'auto'}}>
-        {groupList.map((g,gi)=>{
-          const isExp=expandedGroups[g.base]!==false;
-          const allSel=g.files.every(f=>selFiles.has(f.name));
-          const someSel=g.files.some(f=>selFiles.has(f.name));
-          const toggleGroup=()=>{
-            setSelFiles(p=>{
-              const s=new Set(p);
-              if(allSel)g.files.forEach(f=>s.delete(f.name));
-              else g.files.forEach(f=>s.add(f.name));
-              return s;
-            });
-            setFilterMode('');
-          };
-          const toggleExp=()=>setExpandedGroups(p=>({...p,[g.base]:!isExp}));
-          return(<div key={gi} style={{borderBottom:'1px solid var(--bd)'}}>
-            {/* 그룹 헤더 (base명) */}
-            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 8px',background:'var(--bg3)',cursor:'pointer'}}>
-              <button onClick={toggleExp} style={{fontSize:10,padding:'0 4px',border:0,background:0,color:'var(--tx2)',cursor:'pointer',width:16}}>{isExp?'▼':'▶'}</button>
-              <input type="checkbox" checked={allSel} ref={el=>{if(el)el.indeterminate=someSel&&!allSel}} onChange={toggleGroup} onClick={e=>e.stopPropagation()} style={{accentColor:'var(--teal)'}}/>
-              <span onClick={toggleExp} style={{flex:1,fontSize:12,fontWeight:500,color:'var(--tx)',fontFamily:'var(--mono)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={g.base}>
-                📄 {g.base}
-              </span>
-              <span style={{fontSize:9,color:'var(--tx3)'}}>{g.files.filter(f=>selFiles.has(f.name)).length}/{g.files.length}</span>
-            </div>
-            {/* 파일 목록 */}
-            {isExp&&g.files.map((f,fi)=>(<div key={f.name} className="file-sel-item" style={{display:'flex',alignItems:'center',gap:6,padding:'3px 8px 3px 28px',borderTop:'1px solid var(--bd)'}}>
-              <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>{setSelFiles(p=>{const s=new Set(p);s.has(f.name)?s.delete(f.name):s.add(f.name);return s});setFilterMode('')}} style={{accentColor:'var(--teal)'}}/>
-              <span style={{flex:1,fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
-              {f.name.includes('_formula')&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:4,background:'rgba(168,85,247,.1)',color:'#a855f7'}}>formula</span>}
-              {f.name.includes('_calc')&&!f.name.includes('_formula')&&<span className="rt rt-c">calc</span>}
-              {f.name.includes('_merged')&&<span className="rt rt-m">merged</span>}
-              <span className="it">{(f.size/1024).toFixed(0)}KB</span>
-              <button onClick={async()=>{if(!confirm(`${f.name} 삭제?`))return;await fetch(`${API}/api/results/${f.name}`,{method:'DELETE'});setSelFiles(p=>{const s=new Set(p);s.delete(f.name);return s});reloadFiles()}} style={{fontSize:9,padding:'1px 5px',border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.05)',color:'var(--red)',borderRadius:3,cursor:'pointer'}}>×</button>
-            </div>))}
-          </div>);
-        })}
-      </div>);
+      const expandAll=()=>{const n={};[...folders,UNSORTED].forEach(f=>n['__folder__'+f]=true);allBases.forEach(b=>n[b]=true);setExpandedGroups(n)};
+      const collapseAll=()=>{const n={};[...folders,UNSORTED].forEach(f=>n['__folder__'+f]=false);allBases.forEach(b=>n[b]=false);setExpandedGroups(n)};
+      const addFolder=()=>{const name=prompt('새 폴더 이름:');if(!name||!name.trim())return;if(folders.includes(name.trim())){alert('이미 존재함');return}setFolders(p=>[...p,name.trim()])};
+      const removeFolder=(fn)=>{if(!confirm(`폴더 "${fn}" 삭제? (하위 케이스는 분류 없음으로 이동)`))return;setFolders(p=>p.filter(x=>x!==fn));setFolderMap(p=>{const n={...p};Object.keys(n).forEach(b=>{if(n[b]===fn)delete n[b]});return n})};
+      const renameFolder=(fn)=>{const nn=prompt('새 이름:',fn);if(!nn||!nn.trim()||nn===fn)return;if(folders.includes(nn.trim())){alert('이미 존재함');return}setFolders(p=>p.map(x=>x===fn?nn.trim():x));setFolderMap(p=>{const n={...p};Object.keys(n).forEach(b=>{if(n[b]===fn)n[b]=nn.trim()});return n})};
+      const moveBaseToFolder=(base,fn)=>{setFolderMap(p=>{const n={...p};if(fn)n[base]=fn;else delete n[base];return n})};
+      
+      const renderBase=(b)=>{
+        const g=groups[b];
+        const isExp=expandedGroups[b]!==false;
+        const allSel=g.files.every(f=>selFiles.has(f.name));
+        const someSel=g.files.some(f=>selFiles.has(f.name));
+        const toggleGroup=()=>{setSelFiles(p=>{const s=new Set(p);if(allSel)g.files.forEach(f=>s.delete(f.name));else g.files.forEach(f=>s.add(f.name));return s});setFilterMode('')};
+        const toggleExp=()=>setExpandedGroups(p=>({...p,[b]:!isExp}));
+        const currentFolder=folderMap[b]||'';
+        return(<div key={b} style={{borderBottom:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px 4px 20px',background:'var(--bg)',cursor:'pointer'}}>
+            <button onClick={toggleExp} style={{fontSize:10,padding:'0 4px',border:0,background:0,color:'var(--tx2)',cursor:'pointer',width:16}}>{isExp?'▼':'▶'}</button>
+            <input type="checkbox" checked={allSel} ref={el=>{if(el)el.indeterminate=someSel&&!allSel}} onChange={toggleGroup} onClick={e=>e.stopPropagation()} style={{accentColor:'var(--teal)'}}/>
+            <span onClick={toggleExp} style={{flex:1,fontSize:12,fontWeight:500,color:'var(--tx)',fontFamily:'var(--mono)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={b}>📄 {b}</span>
+            <select value={currentFolder} onChange={e=>moveBaseToFolder(b,e.target.value)} onClick={e=>e.stopPropagation()} style={{fontSize:9,padding:'1px 3px',background:'var(--bg2)',border:'1px solid var(--bd2)',borderRadius:3,color:'var(--tx3)',maxWidth:100}} title="폴더로 이동">
+              <option value="">(미분류)</option>
+              {folders.map(fn=><option key={fn} value={fn}>📁 {fn}</option>)}
+            </select>
+            <span style={{fontSize:9,color:'var(--tx3)',minWidth:24,textAlign:'right'}}>{g.files.filter(f=>selFiles.has(f.name)).length}/{g.files.length}</span>
+          </div>
+          {isExp&&g.files.map((f)=>(<div key={f.name} className="file-sel-item" style={{display:'flex',alignItems:'center',gap:6,padding:'3px 8px 3px 48px',borderTop:'1px solid var(--bd)'}}>
+            <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>{setSelFiles(p=>{const s=new Set(p);s.has(f.name)?s.delete(f.name):s.add(f.name);return s});setFilterMode('')}} style={{accentColor:'var(--teal)'}}/>
+            <span style={{flex:1,fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
+            {f.name.includes('_formula')&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:4,background:'rgba(168,85,247,.1)',color:'#a855f7'}}>formula</span>}
+            {f.name.includes('_calc')&&!f.name.includes('_formula')&&<span className="rt rt-c">calc</span>}
+            {f.name.includes('_merged')&&<span className="rt rt-m">merged</span>}
+            <span className="it">{(f.size/1024).toFixed(0)}KB</span>
+            <button onClick={async()=>{if(!confirm(`${f.name} 삭제?`))return;await fetch(`${API}/api/results/${f.name}`,{method:'DELETE'});setSelFiles(p=>{const s=new Set(p);s.delete(f.name);return s});reloadFiles()}} style={{fontSize:9,padding:'1px 5px',border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.05)',color:'var(--red)',borderRadius:3,cursor:'pointer'}}>×</button>
+          </div>))}
+        </div>);
+      };
+      
+      const folderOrder=[...folders,UNSORTED];
+      return(<>
+        {/* 툴바 */}
+        <div style={{display:'flex',gap:4,alignItems:'center',padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderTop:'1px solid var(--bd)',borderRadius:'8px 8px 0 0',fontSize:10}}>
+          <button className="bt bs" onClick={expandAll} style={{fontSize:9,padding:'2px 8px'}}>⊞ 모두 펼치기</button>
+          <button className="bt bs" onClick={collapseAll} style={{fontSize:9,padding:'2px 8px'}}>⊟ 모두 접기</button>
+          <span style={{width:1,height:12,background:'var(--bd2)',margin:'0 4px'}}/>
+          <button className="bt bs" onClick={addFolder} style={{fontSize:9,padding:'2px 8px',color:'var(--teal)',borderColor:'var(--teal)'}}>+ 폴더</button>
+          <span style={{flex:1}}/>
+          <span style={{color:'var(--tx3)',fontSize:9}}>{allBases.length}개 케이스 / {folders.length}개 폴더</span>
+        </div>
+        <div className="file-sel" style={{maxHeight:320,overflowY:'auto',borderTop:0,borderRadius:'0 0 8px 8px'}}>
+          {folderOrder.map((fn)=>{
+            const bases=folderBuckets[fn]||[];
+            if(fn===UNSORTED&&bases.length===0)return null; // 미분류 비어있으면 숨김
+            const isUnsorted=fn===UNSORTED;
+            const fExp=expandedGroups['__folder__'+fn]!==false;
+            const fToggle=()=>setExpandedGroups(p=>({...p,['__folder__'+fn]:!fExp}));
+            // 폴더 내 모든 파일 개수
+            const fFiles=bases.flatMap(b=>groups[b].files);
+            const fAllSel=fFiles.length>0&&fFiles.every(f=>selFiles.has(f.name));
+            const fSomeSel=fFiles.some(f=>selFiles.has(f.name));
+            const fToggleSel=()=>{setSelFiles(p=>{const s=new Set(p);if(fAllSel)fFiles.forEach(f=>s.delete(f.name));else fFiles.forEach(f=>s.add(f.name));return s});setFilterMode('')};
+            return(<div key={fn} style={{borderBottom:'1px solid var(--bd)'}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 8px',background:isUnsorted?'var(--bg2)':'var(--bg3)',cursor:'pointer',fontWeight:600}}>
+                <button onClick={fToggle} style={{fontSize:10,padding:'0 4px',border:0,background:0,color:'var(--tx2)',cursor:'pointer',width:16}}>{fExp?'▼':'▶'}</button>
+                <input type="checkbox" checked={fAllSel} ref={el=>{if(el)el.indeterminate=fSomeSel&&!fAllSel}} onChange={fToggleSel} onClick={e=>e.stopPropagation()} style={{accentColor:'var(--teal)'}}/>
+                <span onClick={fToggle} style={{flex:1,fontSize:12,color:isUnsorted?'var(--tx3)':'var(--teal)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{isUnsorted?'📂':'📁'} {fn} <span style={{fontSize:9,color:'var(--tx3)',fontWeight:400}}>({bases.length})</span></span>
+                {!isUnsorted&&<>
+                  <button onClick={e=>{e.stopPropagation();renameFolder(fn)}} style={{fontSize:9,padding:'1px 5px',border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--tx3)',borderRadius:3,cursor:'pointer'}} title="이름 변경">✏️</button>
+                  <button onClick={e=>{e.stopPropagation();removeFolder(fn)}} style={{fontSize:9,padding:'1px 5px',border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.05)',color:'var(--red)',borderRadius:3,cursor:'pointer'}} title="폴더 삭제">×</button>
+                </>}
+              </div>
+              {fExp&&bases.map(b=>renderBase(b))}
+            </div>);
+          })}
+        </div>
+      </>);
     })():<div className="it" style={{padding:16,textAlign:'center'}}>결과 파일이 없습니다.</div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8,flexWrap:'wrap'}}>
       <button className="bt bg" onClick={loadData} disabled={loading||!selFiles.size}>{loading?'로딩 중...':'데이터 로드 ('+selFiles.size+'개)'}</button>
