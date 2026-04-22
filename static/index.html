@@ -1827,6 +1827,25 @@ function VwPsych({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
         </div>
       </div>
       <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>글꼴</div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:5}}>
+          <select value={fontFamily} onChange={e=>setFontFamily(e.target.value)} style={{flex:1,fontSize:10,padding:'2px 4px'}}>
+            <option value="sans">Sans</option><option value="mono">Mono</option><option value="serif">Serif</option>
+          </select>
+          <label style={{fontSize:10,color:'var(--tx3)',cursor:'pointer',display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={titleBold} onChange={e=>setTitleBold(e.target.checked)} style={{accentColor:'var(--teal)'}}/>Bold</label>
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:28}}>제목</span>
+          <input type="number" min="6" max="32" value={titleFontSize} onChange={e=>setTitleFontSize(+e.target.value||12)} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:28,marginLeft:4}}>눈금</span>
+          <input type="number" min="6" max="32" value={tickFontSize} onChange={e=>setTickFontSize(+e.target.value||10)} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center'}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:28}}>레전드</span>
+          <input type="number" min="6" max="32" value={legendFontSize} onChange={e=>setLegendFontSize(+e.target.value||11)} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+        </div>
+      </div>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
         <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>차트 스타일</div>
         <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
           <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>선두께</span>
@@ -1988,6 +2007,25 @@ function VwPh({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setChar
         {!autoFit&&<button className="bt bs" onClick={()=>{setFixedRange(null);setAutoFit(true)}} style={{fontSize:10,width:'100%',marginTop:4}}>↺ 리셋</button>}
       </div>
       <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>글꼴</div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:5}}>
+          <select value={fontFamily} onChange={e=>setFontFamily(e.target.value)} style={{flex:1,fontSize:10,padding:'2px 4px'}}>
+            <option value="sans">Sans</option><option value="mono">Mono</option><option value="serif">Serif</option>
+          </select>
+          <label style={{fontSize:10,color:'var(--tx3)',cursor:'pointer',display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={titleBold} onChange={e=>setTitleBold(e.target.checked)} style={{accentColor:'var(--teal)'}}/>Bold</label>
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:28}}>제목</span>
+          <input type="number" min="6" max="32" value={titleFontSize} onChange={e=>setTitleFontSize(+e.target.value||12)} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:28,marginLeft:4}}>눈금</span>
+          <input type="number" min="6" max="32" value={tickFontSize} onChange={e=>setTickFontSize(+e.target.value||10)} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center'}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:28}}>레전드</span>
+          <input type="number" min="6" max="32" value={legendFontSize} onChange={e=>setLegendFontSize(+e.target.value||11)} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+        </div>
+      </div>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
         <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>차트 스타일</div>
         <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
           <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>선두께</span>
@@ -2062,7 +2100,7 @@ const PERF_PRESETS=[
   {key:'P_Comp_Out',label:'평균 토출압력 [barg]',agg:'mean'},
 ];
 
-function PerfChart({cases,caseVis,caseColors,chartH,chartW,defaultVars,defaultY1,id}){
+function PerfChart({cases,caseVis,caseColors,chartH,chartW,defaultVars,defaultY1,id,globalFont}){
   const VW_COLORS=['#2563eb','#dc2626','#16a34a','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16'];
   const BAR_COLORS=['#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6'];
   const ref=useRef();
@@ -2101,15 +2139,23 @@ function PerfChart({cases,caseVis,caseColors,chartH,chartW,defaultVars,defaultY1
     if(grouped){bv.forEach((v,vi)=>{const vals=vc.map(c=>getSummary(c.data,v.key,v.agg));traces.push({x:cn,y:vals,name:getLabel(v.key),type:'bar',yaxis:v.axis==='y2'?'y2':'y',marker:{color:BAR_COLORS[vi%BAR_COLORS.length],line:{width:1,color:'rgba(0,0,0,.15)'}},text:mt(vals),textposition:'outside',textfont:dl})})}
     else{const bl=bv.map(v=>getLabel(v.key));vc.forEach((c,ci)=>{const col=caseColors[c.name]||VW_COLORS[ci%VW_COLORS.length];const vals=bv.map(v=>getSummary(c.data,v.key,v.agg));traces.push({x:bl,y:vals,name:c.label||c.name,type:'bar',marker:{color:col,line:{width:1,color:'rgba(0,0,0,.15)'}},text:mt(vals),textposition:'outside',textfont:dl,legendgroup:c.name})})}
     lv.forEach((v,vi)=>{const vals=vc.map(c=>getSummary(c.data,v.key,v.agg));traces.push({x:cn,y:vals,name:getLabel(v.key),type:'scatter',mode:showDataLabels?'lines+markers+text':'lines+markers',yaxis:v.axis==='y2'?'y2':'y',line:{width:2.5,shape:'spline',color:BAR_COLORS[(bv.length+vi)%BAR_COLORS.length]},marker:{size:10,line:{width:2,color:'#fff'}},text:mt(vals),textposition:'top center',textfont:dl})});
-    const fW=chartW>0?chartW:undefined;const af={size:axisFontSize};
-    const at=t=>({text:axisBold?'<b>'+t+'</b>':t,font:af});
+    const fW=chartW>0?chartW:undefined;
+    const gf=globalFont||{};
+    const fontMap={sans:'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',mono:'ui-monospace,"SF Mono",Consolas,monospace',serif:'Georgia,"Times New Roman",serif'};
+    const ff=fontMap[gf.fontFamily]||fontMap.sans;
+    const tSize=gf.titleFontSize??axisFontSize;
+    const tkSize=gf.tickFontSize??axisFontSize;
+    const lgSize=gf.legendFontSize??11;
+    const tBold=gf.titleBold??axisBold;
+    const af={size:tSize,family:ff,...(tBold?{weight:700}:{})};
+    const at=t=>({text:tBold?'<b>'+t+'</b>':t,font:af});
     const g1=y1Grid?'rgba(0,0,0,0.08)':'rgba(0,0,0,0)';const g2=y2Grid?'rgba(0,0,0,0.08)':'rgba(0,0,0,0)';
     const r1=y1Range[0]!==''&&y1Range[1]!==''?[+y1Range[0],+y1Range[1]]:undefined;
     const r2=y2Range[0]!==''&&y2Range[1]!==''?[+y2Range[0],+y2Range[1]]:undefined;
-    const lo={width:fW,height:chartH||400,margin:{l:70,r:70,t:30,b:60},barmode:'group',bargap:1-barWidth,bargroupgap:0.1,paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:'var(--sans)'},xaxis:{title:xLabel?at(xLabel):undefined,tickfont:{size:axisFontSize},linecolor:'rgba(0,0,0,0.2)',linewidth:1},yaxis:{title:at(y1Label||'Y축'),tickfont:{size:axisFontSize},range:r1,gridcolor:g1,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false},legend:{orientation:'h',y:-.22,x:.5,xanchor:'center',font:{size:11},bgcolor:'rgba(255,255,255,.8)'}};
-    if(vars.some(v=>v.axis==='y2'))lo.yaxis2={title:at(y2Label||'우측 Y축'),tickfont:{size:axisFontSize},range:r2,overlaying:'y',side:'right',gridcolor:g2,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false};
+    const lo={width:fW,height:chartH||400,margin:{l:70,r:70,t:30,b:60},barmode:'group',bargap:1-barWidth,bargroupgap:0.1,paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:ff,size:tkSize},xaxis:{title:xLabel?at(xLabel):undefined,tickfont:{size:tkSize,family:ff},linecolor:'rgba(0,0,0,0.2)',linewidth:1},yaxis:{title:at(y1Label||'Y축'),tickfont:{size:tkSize,family:ff},range:r1,gridcolor:g1,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false},legend:{orientation:'h',y:-.22,x:.5,xanchor:'center',font:{size:lgSize,family:ff},bgcolor:'rgba(255,255,255,.8)'}};
+    if(vars.some(v=>v.axis==='y2'))lo.yaxis2={title:at(y2Label||'우측 Y축'),tickfont:{size:tkSize,family:ff},range:r2,overlaying:'y',side:'right',gridcolor:g2,linecolor:'rgba(0,0,0,0.2)',linewidth:1,zeroline:false};
     try{Plotly.react(ref.current,traces,lo,{responsive:!fW,displaylogo:false})}catch(e){console.error('PerfChart:',e)}
-  },[cases,caseVis,caseColors,vars,grouped,chartH,chartW,xLabel,y1Label,y2Label,y1Range,y2Range,axisFontSize,axisBold,showDataLabels,dataLabelSize,dataLabelBold,y1Grid,y2Grid,barWidth]);
+  },[cases,caseVis,caseColors,vars,grouped,chartH,chartW,xLabel,y1Label,y2Label,y1Range,y2Range,axisFontSize,axisBold,showDataLabels,dataLabelSize,dataLabelBold,y1Grid,y2Grid,barWidth,globalFont?.fontFamily,globalFont?.titleFontSize,globalFont?.tickFontSize,globalFont?.legendFontSize,globalFont?.titleBold]);
 
   return(<div style={{marginBottom:12}}>
     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
@@ -2152,6 +2198,12 @@ function PerfChart({cases,caseVis,caseColors,chartH,chartW,defaultVars,defaultY1
 }
 
 function VwPerf({cases,caseVis,caseColors,chartH,setChartH,chartW,setChartW}){
+  const[fontFamily,setFontFamily]=useState('sans');
+  const[titleFontSize,setTitleFontSize]=useState(12);
+  const[tickFontSize,setTickFontSize]=useState(10);
+  const[legendFontSize,setLegendFontSize]=useState(11);
+  const[titleBold,setTitleBold]=useState(true);
+  const globalFont={fontFamily,titleFontSize,tickFontSize,legendFontSize,titleBold};
   return(<div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:10,alignItems:'start'}}>
     {/* ═══ 사이드바 ═══ */}
     <div style={{display:'flex',flexDirection:'column',gap:8,position:'sticky',top:8,alignSelf:'start',maxHeight:'calc(100vh - 20px)',overflowY:'auto',overflowX:'hidden',paddingRight:6,scrollbarGutter:'stable'}}>
@@ -2175,20 +2227,39 @@ function VwPerf({cases,caseVis,caseColors,chartH,setChartH,chartW,setChartW}){
           {[[900,'S'],[1200,'M'],[1500,'L']].map(([w,lb])=><button key={w} className={`bt bs ${chartW===w?'on':''}`} onClick={()=>setChartW?.(w)} style={{padding:'2px 0',fontSize:9,flex:1}}>{lb}</button>)}
         </div>
       </div>
+      <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+        <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>글꼴 (전체 공통)</div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:5}}>
+          <select value={fontFamily} onChange={e=>setFontFamily(e.target.value)} style={{flex:1,fontSize:10,padding:'2px 4px'}}>
+            <option value="sans">Sans</option><option value="mono">Mono</option><option value="serif">Serif</option>
+          </select>
+          <label style={{fontSize:10,color:'var(--tx3)',cursor:'pointer',display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={titleBold} onChange={e=>setTitleBold(e.target.checked)} style={{accentColor:'var(--teal)'}}/>Bold</label>
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:28}}>제목</span>
+          <input type="number" min="6" max="32" value={titleFontSize} onChange={e=>setTitleFontSize(+e.target.value||12)} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:28,marginLeft:4}}>눈금</span>
+          <input type="number" min="6" max="32" value={tickFontSize} onChange={e=>setTickFontSize(+e.target.value||10)} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+        </div>
+        <div style={{display:'flex',gap:4,alignItems:'center'}}>
+          <span style={{color:'var(--tx3)',fontSize:10,minWidth:28}}>레전드</span>
+          <input type="number" min="6" max="32" value={legendFontSize} onChange={e=>setLegendFontSize(+e.target.value||11)} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+        </div>
+      </div>
       <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:10,color:'var(--tx3)'}}>
         <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>💡 안내</div>
-        각 차트별 개별 설정은 차트 상단의 '설정 펼치기' 버튼으로 열 수 있습니다.
+        각 차트별 개별 설정(변수 추가/축 라벨 등)은 차트 상단의 '설정 펼치기' 버튼으로 열 수 있습니다.
       </div>
     </div>
     {/* ═══ 메인 ═══ */}
     <div style={{minWidth:0}}>
-      <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="ewd"
+      <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="ewd" globalFont={globalFont}
         defaultVars={[{key:'E_WD',axis:'y1',type:'bar',agg:'last'}]}
         defaultY1="총 소비전력량 [Wh]"/>
-      <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="rmc"
+      <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="rmc" globalFont={globalFont}
         defaultVars={[{key:'RMC_calc',axis:'y1',type:'bar',agg:'last'}]}
         defaultY1="잔여수분율 [%]"/>
-      <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="time"
+      <PerfChart cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} chartW={chartW} id="time" globalFont={globalFont}
         defaultVars={[{key:'Time_min',axis:'y1',type:'bar',agg:'last'}]}
         defaultY1="운전시간 [min]"/>
     </div>
