@@ -1496,21 +1496,24 @@ function VwChart({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,xGap,yGap})
     return{...z,stats}}),[zones,tab,cases,caseVis]);
   const visCase=cases.filter(c=>caseVis[c.name]);
 
-  return(<div>
+  return(<div style={{display:'grid',gridTemplateColumns:'320px 1fr',gap:10,alignItems:'start'}}>
+  {/* ═══════════════════ 좌측 사이드바 ═══════════════════ */}
+  <div style={{display:'flex',flexDirection:'column',gap:8,position:'sticky',top:8,maxHeight:'calc(100vh - 20px)',overflowY:'auto',paddingRight:4}}>
     {/* ── 구역 1: 탭 관리 ── */}
-    <div style={{display:'flex',gap:5,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:4,fontSize:11}}>
-      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>카테고리</span>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>카테고리</div>
+      <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:5}}>
       {tabs.map((t,i)=><div key={t.id} style={{display:'flex',alignItems:'center',gap:0}}>
         <button className={`bt bs ${tabIdx===i?'on':''}`} onClick={()=>setTabIdx(i)} style={{borderRadius:tabs.length>1&&i===tabIdx?'6px 0 0 6px':'6px',fontSize:10,padding:'3px 8px'}}>{t.name}</button>
         {tabs.length>1&&tabIdx===i&&<button onClick={()=>removeTab(i)} style={{padding:'3px 5px',fontSize:9,border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--red)',borderRadius:'0 6px 6px 0',cursor:'pointer',fontFamily:'var(--font)'}}>×</button>}
       </div>)}
+      </div>
+      <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
       <button className="bt bs" onClick={addCustomTab} style={{fontSize:9,padding:'3px 8px'}}>+ 탭</button>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
       <button className="bt bs" onClick={()=>{
         const cfg={version:1,type:'viewer_chart_settings',tabs:tabs.map(t=>({name:t.name,rows:t.rows,cols:t.cols,plots:t.plots,yranges:t.yranges||{}})),tabIdx,smOn,smM,smW,zones,timestamp:new Date().toISOString()};
         const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='viewer_chart_settings.json';a.click()
-      }} style={{fontSize:9,padding:'3px 8px'}}>💾 저장</button>
+      }} style={{fontSize:9,padding:'3px 8px'}}>💾</button>
       <button className="bt bs" onClick={()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=ev=>{
         const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=e=>{try{
           const c=JSON.parse(e.target.result);if(c.tabs){
@@ -1518,74 +1521,99 @@ function VwChart({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,xGap,yGap})
             if(c.smOn!=null)setSmOn(c.smOn);if(c.smM)setSmM(c.smM);if(c.smW)setSmW(c.smW);
             if(c.zones)setZones(c.zones);
           }}catch(er){alert('설정 파일 파싱 실패')}};rd.readAsText(f)};inp.click()
-      }} style={{fontSize:9,padding:'3px 8px'}}>📂 불러오기</button>
-    </div>
-
-    {/* ── 구역 2: 레이아웃 + 스무딩 + 보기 ── */}
-    <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:4,fontSize:11}}>
-      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>레이아웃</span>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{color:'var(--tx3)',fontSize:10}}>행</span>
-      <select value={tab.rows} onChange={e=>{const r=+e.target.value;const need=r*tab.cols;
-        if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({rows:r,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({rows:r})}
-      }} style={{width:42,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
-      <span style={{color:'var(--tx3)',fontSize:10}}>열</span>
-      <select value={tab.cols} onChange={e=>{const c=+e.target.value;const need=tab.rows*c;
-        if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({cols:c,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({cols:c})}
-      }} style={{width:42,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
-      <span style={{fontSize:9,color:'var(--tx3)',fontFamily:'var(--mono)'}}>{tab.rows}×{tab.cols}</span>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>스무딩</span>
-      <input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>
-      {smOn&&<><select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:55,fontSize:10}}><option>SMA</option><option>EMA</option></select><input type="range" min="3" max="120" value={smW} onChange={e=>setSmW(+e.target.value)} style={{width:70}}/><span style={{fontSize:9,fontFamily:'var(--mono)',color:'var(--tx3)'}}>w={smW}</span></>}
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>글꼴</span>
-      <select value={tab.fontFamily||'sans'} onChange={e=>updateTab({fontFamily:e.target.value})} style={{width:75,fontSize:10,padding:'2px 4px'}}>
-        <option value="sans">Sans</option>
-        <option value="mono">Mono</option>
-        <option value="serif">Serif</option>
-      </select>
-      <span style={{color:'var(--tx3)',fontSize:10}}>제목</span>
-      <input type="number" min="6" max="32" value={tab.titleFontSize||11} onChange={e=>updateTab({titleFontSize:+e.target.value||11})} style={{width:36,fontSize:10,padding:'1px 3px'}}/>
-      <span style={{color:'var(--tx3)',fontSize:10}}>눈금</span>
-      <input type="number" min="6" max="32" value={tab.tickFontSize||10} onChange={e=>updateTab({tickFontSize:+e.target.value||10})} style={{width:36,fontSize:10,padding:'1px 3px'}}/>
-      <label style={{fontSize:10,color:'var(--tx3)',cursor:'pointer',display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={tab.titleBold!==false} onChange={e=>updateTab({titleBold:e.target.checked})} style={{accentColor:'var(--teal)'}}/>Bold</label>
-      <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-      <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>보기</span>
-      <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px'}}>📐 Fit</button>
-      <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px'}}>🔄 리셋</button>
-    </div>
-
-    {/* ── 구역 3: 변수 선택 + Y축 범위 ── */}
-    <div style={{padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:6}}>
-      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>변수/Y축</span>
-        <span style={{width:1,height:14,background:'var(--bd2)'}}/>
-        <button className="bt bs" onClick={addPlot} style={{fontSize:9,padding:'2px 8px'}}>+ 변수 추가</button>
-        <span style={{fontSize:9,color:'var(--tx3)'}}>{tab.plots.slice(0,tab.rows*tab.cols).length}개</span>
+      }} style={{fontSize:9,padding:'3px 8px'}}>📂</button>
       </div>
-      <div style={{maxHeight:200,overflowY:'auto'}}>
+    </div>
+
+    {/* ── 구역 2: 레이아웃 ── */}
+    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>레이아웃</div>
+      <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:5}}>
+        <span style={{color:'var(--tx3)',fontSize:10,minWidth:20}}>행</span>
+        <select value={tab.rows} onChange={e=>{const r=+e.target.value;const need=r*tab.cols;
+          if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({rows:r,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({rows:r})}
+        }} style={{width:42,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
+        <span style={{color:'var(--tx3)',fontSize:10,minWidth:20}}>열</span>
+        <select value={tab.cols} onChange={e=>{const c=+e.target.value;const need=tab.rows*c;
+          if(tab.plots.length<need){const rest=allVars.filter(k=>!tab.plots.includes(k));updateTab({cols:c,plots:[...tab.plots,...rest.slice(0,need-tab.plots.length)]})}else{updateTab({cols:c})}
+        }} style={{width:42,fontSize:11,padding:'2px 4px'}}>{[1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select>
+        <span style={{fontSize:9,color:'var(--tx3)',fontFamily:'var(--mono)',marginLeft:4}}>{tab.rows}×{tab.cols}</span>
+      </div>
+      <div style={{display:'flex',gap:4,alignItems:'center'}}>
+        <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px',flex:1}}>📐 Fit</button>
+        <button className="bt bs" onClick={fitAll} style={{fontSize:9,padding:'2px 8px',flex:1}}>🔄 리셋</button>
+      </div>
+    </div>
+
+    {/* ── 구역 3: 스무딩 ── */}
+    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:smOn?5:0}}>
+        <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer',fontWeight:600,color:'var(--tx2)',fontSize:10}}>
+          <input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>스무딩
+        </label>
+      </div>
+      {smOn&&<div style={{display:'flex',gap:4,alignItems:'center'}}>
+        <select value={smM} onChange={e=>setSmM(e.target.value)} style={{width:55,fontSize:10}}><option>SMA</option><option>EMA</option></select>
+        <input type="range" min="3" max="120" value={smW} onChange={e=>setSmW(+e.target.value)} style={{flex:1}}/>
+        <span style={{fontSize:9,fontFamily:'var(--mono)',color:'var(--tx3)',minWidth:32}}>w={smW}</span>
+      </div>}
+    </div>
+
+    {/* ── 구역 4: 글꼴 ── */}
+    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>글꼴</div>
+      <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:5}}>
+        <select value={tab.fontFamily||'sans'} onChange={e=>updateTab({fontFamily:e.target.value})} style={{flex:1,fontSize:10,padding:'2px 4px'}}>
+          <option value="sans">Sans</option>
+          <option value="mono">Mono</option>
+          <option value="serif">Serif</option>
+        </select>
+        <label style={{fontSize:10,color:'var(--tx3)',cursor:'pointer',display:'flex',alignItems:'center',gap:3}}><input type="checkbox" checked={tab.titleBold!==false} onChange={e=>updateTab({titleBold:e.target.checked})} style={{accentColor:'var(--teal)'}}/>Bold</label>
+      </div>
+      <div style={{display:'flex',gap:4,alignItems:'center'}}>
+        <span style={{color:'var(--tx3)',fontSize:10,minWidth:28}}>제목</span>
+        <input type="number" min="6" max="32" value={tab.titleFontSize||11} onChange={e=>updateTab({titleFontSize:+e.target.value||11})} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+        <span style={{color:'var(--tx3)',fontSize:10,minWidth:28,marginLeft:4}}>눈금</span>
+        <input type="number" min="6" max="32" value={tab.tickFontSize||10} onChange={e=>updateTab({tickFontSize:+e.target.value||10})} style={{width:44,fontSize:10,padding:'1px 3px'}}/>
+      </div>
+    </div>
+
+    {/* ── 구역 5: 변수 선택 + Y축 범위 ── */}
+    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5}}>
+        <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>변수 / Y축</span>
+        <div style={{display:'flex',gap:4,alignItems:'center'}}>
+          <span style={{fontSize:9,color:'var(--tx3)'}}>{tab.plots.slice(0,tab.rows*tab.cols).length}개</span>
+          <button className="bt bs" onClick={addPlot} style={{fontSize:9,padding:'2px 6px'}}>+ 변수</button>
+        </div>
+      </div>
+      <div style={{maxHeight:'40vh',overflowY:'auto'}}>
       {tab.plots.slice(0,tab.rows*tab.cols).map((k,i)=>{const yr=tab.yranges?.[k];const hasR=yr&&(yr[0]!=null||yr[1]!=null);
-        return(<div key={i} style={{display:'flex',alignItems:'center',gap:4,padding:'3px 4px',borderBottom:'1px solid var(--bd)'}}>
+        return(<div key={i} style={{display:'flex',alignItems:'center',gap:3,padding:'3px 2px',borderBottom:'1px solid var(--bd)'}}>
         <div style={{display:'flex',flexDirection:'column',gap:0}}>
           <button onClick={()=>movePlot(i,i-1)} disabled={i===0} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i===0?'var(--bd2)':'var(--tx3)',cursor:i===0?'default':'pointer'}}>▲</button>
           <button onClick={()=>movePlot(i,i+1)} disabled={i>=tab.plots.slice(0,tab.rows*tab.cols).length-1} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:i>=tab.plots.slice(0,tab.rows*tab.cols).length-1?'var(--bd2)':'var(--tx3)',cursor:i>=tab.plots.slice(0,tab.rows*tab.cols).length-1?'default':'pointer'}}>▼</button>
         </div>
-        <span style={{fontSize:9,color:'var(--tx3)',minWidth:16,textAlign:'center'}}>{i+1}</span>
-        <select value={k} onChange={e=>setPlotVar(i,e.target.value)} style={{flex:1,fontSize:10,padding:'2px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)'}}>
+        <span style={{fontSize:9,color:'var(--tx3)',minWidth:14,textAlign:'center'}}>{i+1}</span>
+        <select value={k} onChange={e=>setPlotVar(i,e.target.value)} style={{flex:1,fontSize:10,padding:'2px 3px',background:'var(--bg)',border:'1px solid var(--bd2)',borderRadius:4,color:'var(--tx)',minWidth:0}}>
           {allVars.map(v=><option key={v} value={v}>{VL[v]||v}</option>)}
         </select>
-        <input value={yr?.[0]??''} onChange={e=>setYRange(k,0,e.target.value)} placeholder="min" title="Y축 최소" style={{width:40,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
-        <input value={yr?.[1]??''} onChange={e=>setYRange(k,1,e.target.value)} placeholder="max" title="Y축 최대" style={{width:40,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
-        {hasR&&<button onClick={()=>clearYRange(k)} title="Y축 자동" style={{fontSize:8,border:0,background:0,color:'var(--blue)',cursor:'pointer',padding:0}}>↺</button>}
         <button onClick={()=>removePlot(i)} style={{fontSize:9,border:0,background:0,color:'var(--red)',cursor:'pointer',padding:'0 2px'}}>×</button>
+        <div style={{display:'flex',gap:2,width:'100%',gridColumn:'1 / -1',marginTop:2}}>
+          <input value={yr?.[0]??''} onChange={e=>setYRange(k,0,e.target.value)} placeholder="min" title="Y축 최소" style={{flex:1,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
+          <input value={yr?.[1]??''} onChange={e=>setYRange(k,1,e.target.value)} placeholder="max" title="Y축 최대" style={{flex:1,fontSize:9,padding:'2px 3px',background:hasR?'rgba(59,130,246,.08)':'var(--bg)',border:'1px solid '+(hasR?'rgba(59,130,246,.3)':'var(--bd2)'),borderRadius:3,color:'var(--tx)',fontFamily:'var(--mono)',textAlign:'center'}}/>
+          {hasR&&<button onClick={()=>clearYRange(k)} title="Y축 자동" style={{fontSize:8,border:0,background:0,color:'var(--blue)',cursor:'pointer',padding:'0 3px'}}>↺</button>}
+        </div>
       </div>)})}
+      </div>
     </div>
-    </div>
+  </div>
 
-    {err&&<div style={{padding:10,margin:'6px 0',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,fontSize:12,color:'var(--red)'}}>{err}</div>}
+  {/* ═══════════════════ 우측 메인 영역 ═══════════════════ */}
+  <div style={{minWidth:0}}>
+    {err&&<div style={{padding:10,margin:'0 0 6px',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,fontSize:12,color:'var(--red)'}}>{err}</div>}
     {tab.plots.length>0?<div ref={containerRef} className="cd" style={{overflowX:'auto',padding:4}}><div ref={ref}/></div>
-    :<div className="cd"><div className="it" style={{padding:20,textAlign:'center'}}>변수를 추가하세요.</div></div>}
+    :<div className="cd"><div className="it" style={{padding:20,textAlign:'center'}}>좌측에서 변수를 추가하세요.</div></div>}
 
     {/* 구간 */}
     <div style={{display:'flex',gap:6,alignItems:'center',marginTop:8,padding:'8px 12px',background:'var(--bg2,var(--bg3))',border:'1px solid var(--bd)',borderRadius:8,flexWrap:'wrap'}}>
@@ -1618,6 +1646,7 @@ function VwChart({cases,caseVis,caseColors,lw,chartH,chartW,dragMode,xGap,yGap})
         </tr>))}</tbody>
       </table>
     </div>}
+  </div>
   </div>)
 }
 
