@@ -1006,6 +1006,7 @@ const VW_CATS=[
 // ═══ Viewer 탭 ═══
 function ViewerTab({cfg,autoLoad,clearAutoLoad}){
 const[files,setFiles]=useState([]);
+const[expandedGroups,setExpandedGroups]=useState({});
 const[selFiles,setSelFiles]=useState(new Set());
 const[cases,setCases]=useState([]);  // [{name,data:{col:[...]}}]
 const[caseVis,setCaseVis]=useState({});
@@ -1198,22 +1199,60 @@ return(<div>
       </div>
     </div>
     <div className="it" style={{marginBottom:6}}>💡 "자동" 모드: 같은 base명의 merged+calc+formula를 자동으로 하나의 케이스로 병합합니다.</div>
-    {files.length>0?<div className="file-sel" style={{maxHeight:200}}>
-      {files.map((f,fi)=><div key={f.name} className="file-sel-item" style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px',borderBottom:'1px solid var(--bd)'}}>
-        <div style={{display:'flex',flexDirection:'column',gap:0}}>
-          <button onClick={()=>{if(fi===0)return;setFiles(prev=>{const a=[...prev];[a[fi],a[fi-1]]=[a[fi-1],a[fi]];return a})}} disabled={fi===0} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:fi===0?'var(--bd2)':'var(--tx3)',cursor:fi===0?'default':'pointer'}}>▲</button>
-          <button onClick={()=>{if(fi===files.length-1)return;setFiles(prev=>{const a=[...prev];[a[fi],a[fi+1]]=[a[fi+1],a[fi]];return a})}} disabled={fi===files.length-1} style={{fontSize:6,lineHeight:'8px',padding:'0 2px',border:0,background:0,color:fi===files.length-1?'var(--bd2)':'var(--tx3)',cursor:fi===files.length-1?'default':'pointer'}}>▼</button>
-        </div>
-        <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>{setSelFiles(p=>{const s=new Set(p);s.has(f.name)?s.delete(f.name):s.add(f.name);return s});setFilterMode('')}} style={{accentColor:'var(--teal)'}}/>
-        <span style={{flex:1,fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
-        {f.name.includes('_formula')&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:4,background:'rgba(168,85,247,.1)',color:'#a855f7'}}>formula</span>}
-        {f.name.includes('_calc')&&!f.name.includes('_formula')&&<span className="rt rt-c">calc</span>}
-        {f.name.includes('_merged')&&<span className="rt rt-m">merged</span>}
-        {f.source_dir&&<span className="it" title={f.source_dir} style={{fontSize:9,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>📁{f.source_dir.split(/[\\/]/).pop()}</span>}
-        <span className="it">{(f.size/1024).toFixed(0)}KB</span>
-        <button onClick={async()=>{if(!confirm(`${f.name} 삭제?`))return;await fetch(`${API}/api/results/${f.name}`,{method:'DELETE'});setSelFiles(p=>{const s=new Set(p);s.delete(f.name);return s});reloadFiles()}} style={{fontSize:9,padding:'1px 5px',border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.05)',color:'var(--red)',borderRadius:3,cursor:'pointer'}}>×</button>
-      </div>)}
-    </div>:<div className="it" style={{padding:16,textAlign:'center'}}>결과 파일이 없습니다.</div>}
+    {files.length>0?(()=>{
+      // source_dir 기준 그룹핑
+      const groups={};
+      const noDir=[];
+      files.forEach(f=>{
+        if(f.source_dir){
+          const key=f.source_dir;
+          if(!groups[key])groups[key]={dir:key,files:[]};
+          groups[key].files.push(f);
+        }else noDir.push(f);
+      });
+      const groupList=Object.values(groups).sort((a,b)=>a.dir.localeCompare(b.dir));
+      if(noDir.length)groupList.push({dir:null,files:noDir});
+      
+      return(<div className="file-sel" style={{maxHeight:320,overflowY:'auto'}}>
+        {groupList.map((g,gi)=>{
+          const isExp=expandedGroups[g.dir]!==false; // 기본 열림
+          const allSel=g.files.every(f=>selFiles.has(f.name));
+          const someSel=g.files.some(f=>selFiles.has(f.name));
+          const toggleGroup=()=>{
+            setSelFiles(p=>{
+              const s=new Set(p);
+              if(allSel)g.files.forEach(f=>s.delete(f.name));
+              else g.files.forEach(f=>s.add(f.name));
+              return s;
+            });
+            setFilterMode('');
+          };
+          const toggleExp=()=>setExpandedGroups(p=>({...p,[g.dir]:!isExp}));
+          const dirName=g.dir?g.dir.split(/[\\/]/).pop()||g.dir:'(경로 없음)';
+          return(<div key={gi} style={{borderBottom:'1px solid var(--bd)'}}>
+            {/* 폴더 헤더 */}
+            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 8px',background:'var(--bg3)',cursor:'pointer'}}>
+              <button onClick={toggleExp} style={{fontSize:10,padding:'0 4px',border:0,background:0,color:'var(--tx2)',cursor:'pointer',width:16}}>{isExp?'▼':'▶'}</button>
+              <input type="checkbox" checked={allSel} ref={el=>{if(el)el.indeterminate=someSel&&!allSel}} onChange={toggleGroup} onClick={e=>e.stopPropagation()} style={{accentColor:'var(--teal)'}}/>
+              <span onClick={toggleExp} style={{flex:1,fontSize:12,fontWeight:500,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={g.dir||''}>
+                📁 {dirName}
+              </span>
+              <span style={{fontSize:9,color:'var(--tx3)'}}>{g.files.filter(f=>selFiles.has(f.name)).length}/{g.files.length}</span>
+            </div>
+            {/* 파일 목록 */}
+            {isExp&&g.files.map((f,fi)=>(<div key={f.name} className="file-sel-item" style={{display:'flex',alignItems:'center',gap:6,padding:'3px 8px 3px 28px',borderTop:'1px solid var(--bd)'}}>
+              <input type="checkbox" checked={selFiles.has(f.name)} onChange={()=>{setSelFiles(p=>{const s=new Set(p);s.has(f.name)?s.delete(f.name):s.add(f.name);return s});setFilterMode('')}} style={{accentColor:'var(--teal)'}}/>
+              <span style={{flex:1,fontFamily:'var(--mono)',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
+              {f.name.includes('_formula')&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:4,background:'rgba(168,85,247,.1)',color:'#a855f7'}}>formula</span>}
+              {f.name.includes('_calc')&&!f.name.includes('_formula')&&<span className="rt rt-c">calc</span>}
+              {f.name.includes('_merged')&&<span className="rt rt-m">merged</span>}
+              <span className="it">{(f.size/1024).toFixed(0)}KB</span>
+              <button onClick={async()=>{if(!confirm(`${f.name} 삭제?`))return;await fetch(`${API}/api/results/${f.name}`,{method:'DELETE'});setSelFiles(p=>{const s=new Set(p);s.delete(f.name);return s});reloadFiles()}} style={{fontSize:9,padding:'1px 5px',border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.05)',color:'var(--red)',borderRadius:3,cursor:'pointer'}}>×</button>
+            </div>))}
+          </div>);
+        })}
+      </div>);
+    })():<div className="it" style={{padding:16,textAlign:'center'}}>결과 파일이 없습니다.</div>}
     <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8,flexWrap:'wrap'}}>
       <button className="bt bg" onClick={loadData} disabled={loading||!selFiles.size}>{loading?'로딩 중...':'데이터 로드 ('+selFiles.size+'개)'}</button>
       <span style={{fontSize:11,color:'var(--tx2)'}}>병합:</span>
