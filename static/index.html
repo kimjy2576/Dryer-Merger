@@ -1430,11 +1430,18 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
       const wrapB=(s)=>tBold?`<b>${s}</b>`:s;
       const yTitleClean=k=>VL[k]||k;  // <b> 래핑 제거 → font.weight로 처리
       const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:xGap,ygap:yGap},height:totalH,width:finalW,margin:{t:30,b:50,l:80,r:30},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:fontFamily,color:'#3a3a4e',size:tickSize},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:legendFont},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
+      const yRangeFor=k=>{
+        const yr=tab.yranges?.[k];
+        const hasMin=yr?.[0]!=null&&yr[0]!=='';
+        const hasMax=yr?.[1]!=null&&yr[1]!=='';
+        if(hasMin&&hasMax)return{range:[+yr[0],+yr[1]],autorange:false};
+        return{autorange:true};  // 명시적으로 autorange 활성화
+      };
       nPlots.forEach((k,pi)=>{
         const xk='x'+(pi+1>1?pi+1:''),yk='y'+(pi+1>1?pi+1:'');
-        lo['xaxis'+(pi+1)]={title:Math.floor(pi/actC)+1===actR?{text:wrapB('Time [min]'),font:titleFont}:undefined,gridcolor:'rgba(0,0,0,0.06)',tickfont:tickFont,zeroline:false,linecolor:'rgba(0,0,0,0.15)',linewidth:1,mirror:true};
+        lo['xaxis'+(pi+1)]={title:Math.floor(pi/actC)+1===actR?{text:wrapB('Time [min]'),font:titleFont}:undefined,gridcolor:'rgba(0,0,0,0.06)',tickfont:tickFont,zeroline:false,linecolor:'rgba(0,0,0,0.15)',linewidth:1,mirror:true,autorange:true};
         lo['yaxis'+(pi+1)]={title:{text:wrapB(yTitleClean(k)),font:titleFont},gridcolor:'rgba(0,0,0,0.06)',tickfont:tickFont,zeroline:false,linecolor:'rgba(0,0,0,0.15)',linewidth:1,mirror:true,
-          ...(tab.yranges?.[k]?.length===2&&tab.yranges[k][0]!=null&&tab.yranges[k][1]!=null?{range:tab.yranges[k],autorange:false}:{})};
+          ...yRangeFor(k)};
         zones.forEach((z,zi)=>{shapes.push({type:'rect',xref:xk,yref:yk+' domain',x0:z.start,x1:z.end,y0:0,y1:1,fillcolor:VW_ZC[zi%VW_ZC.length],line:{color:VW_ZB[zi%VW_ZB.length],width:1,dash:'dot'},layer:'below'})});
         cases.forEach((cs,ci)=>{
           if(!cs?.data||!caseVis[cs.name]||!cs.data[k])return;
