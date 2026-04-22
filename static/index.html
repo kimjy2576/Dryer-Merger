@@ -1469,6 +1469,7 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
   },[]);
   const[err,setErr]=useState('');
   const ref=useRef(null);
+  const lastFontRef=useRef('');  // 폰트 변경 감지 (purge 트리거)
 
   // 구간
   const[zones,setZones]=useState([]);const[zs,setZs]=useState('');const[ze,setZe]=useState('');
@@ -1521,10 +1522,11 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
       const lo={grid:{rows:actR,columns:actC,pattern:'independent',xgap:xGap,ygap:yGap},height:totalH,width:finalW,margin:{t:30,b:50,l:80,r:30},paper_bgcolor:'rgba(255,255,255,0)',plot_bgcolor:'#ffffff',font:{family:fontFamily,color:'#3a3a4e',size:tickSize},showlegend:true,legend:{orientation:'h',y:1.06,x:.5,xanchor:'center',font:legendFont},hovermode:'x unified',dragmode:dragMode==='pan'?'pan':'zoom',shapes};
       const yRangeFor=k=>{
         const yr=tab.yranges?.[k];
-        const hasMin=yr?.[0]!=null&&yr[0]!=='';
-        const hasMax=yr?.[1]!=null&&yr[1]!=='';
+        const hasMin=yr?.[0]!=null&&yr[0]!==''&&!isNaN(+yr[0]);
+        const hasMax=yr?.[1]!=null&&yr[1]!==''&&!isNaN(+yr[1]);
         if(hasMin&&hasMax)return{range:[+yr[0],+yr[1]],autorange:false};
-        return{autorange:true};  // 명시적으로 autorange 활성화
+        // 한쪽만 있거나 둘 다 없으면 autorange 사용 (range 필드 명시적 제거)
+        return{autorange:true,range:undefined};
       };
       nPlots.forEach((k,pi)=>{
         const xk='x'+(pi+1>1?pi+1:''),yk='y'+(pi+1>1?pi+1:'');
@@ -1541,7 +1543,16 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
           tr.push({x:xArr,y:yArr,type:'scattergl',mode:'lines',name:cs.label||cs.name,legendgroup:cs.name,showlegend:pi===0,line:{color:(caseColors?.[cs.name]||VW_COLORS[ci%VW_COLORS.length]),width:lw},xaxis:xk,yaxis:yk,hovertemplate:'%{y:.2f}<extra>'+(cs.label||cs.name)+'</extra>'});
         });
       });
-      if(tr.length)Plotly.react(ref.current,tr,lo,{responsive:!finalW,displaylogo:false,scrollZoom:true});
+      if(tr.length){
+        // 폰트/Bold 변경 감지: Plotly.react의 layout diff가 font 변경 시 yaxis.autorange 복구 못해서
+        // y축이 기본값 -1~4로 리셋되는 버그 있음 → 폰트 바뀌면 purge 후 newPlot으로 완전 재렌더
+        const fontKey=`${tab.fontFamily||'sans'}|${titleSize}|${tickSize}|${legendSize}|${tBold?1:0}`;
+        if(lastFontRef.current&&lastFontRef.current!==fontKey){
+          try{Plotly.purge(ref.current)}catch(e){}
+        }
+        lastFontRef.current=fontKey;
+        Plotly.react(ref.current,tr,lo,{responsive:!finalW,displaylogo:false,scrollZoom:true});
+      }
       else setErr('표시할 데이터 없음');
     }catch(e){console.error('VwChart:',e);setErr('렌더링 오류: '+e.message)}
   },[cases,caseVis,caseColors,lw,chartH,finalW,tab,smOn,smM,smW,dragMode,zones,xGap,yGap]);
