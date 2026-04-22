@@ -1505,10 +1505,10 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
 
   return(<div style={{display:'grid',gridTemplateColumns:`${sideW}px 4px 1fr`,gap:0,alignItems:'start'}}>
   {/* ═══════════════════ 좌측 사이드바 ═══════════════════ */}
-  <div style={{display:'flex',flexDirection:'column',gap:8,position:'sticky',top:8,alignSelf:'start',maxHeight:'calc(100vh - 20px)',overflowY:'auto',overflowX:'hidden',paddingRight:6,scrollbarGutter:'stable'}}>
+  <div style={{display:'flex',flexDirection:'column',gap:5,position:'sticky',top:8,alignSelf:'start',maxHeight:'calc(100vh - 20px)',overflowY:'auto',overflowX:'hidden',paddingRight:6,scrollbarGutter:'stable'}}>
     {/* ── 구역 1: 탭 관리 ── */}
-    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>카테고리</div>
+    <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:3}}>카테고리</div>
       <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:5}}>
       {tabs.map((t,i)=><div key={t.id} style={{display:'flex',alignItems:'center',gap:0}}>
         <button className={`bt bs ${tabIdx===i?'on':''}`} onClick={()=>setTabIdx(i)} style={{borderRadius:tabs.length>1&&i===tabIdx?'6px 0 0 6px':'6px',fontSize:10,padding:'3px 8px'}}>{t.name}</button>
@@ -1533,8 +1533,8 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
     </div>
 
     {/* ── 구역 2: 레이아웃 ── */}
-    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>레이아웃</div>
+    <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:3}}>레이아웃</div>
       <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:5}}>
         <span style={{color:'var(--tx3)',fontSize:10,minWidth:20}}>행</span>
         <select value={tab.rows} onChange={e=>{const r=+e.target.value;const need=r*tab.cols;
@@ -1553,7 +1553,7 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
     </div>
 
     {/* ── 구역 3: 스무딩 ── */}
-    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+    <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
       <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:smOn?5:0}}>
         <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer',fontWeight:600,color:'var(--tx2)',fontSize:10}}>
           <input type="checkbox" checked={smOn} onChange={e=>setSmOn(e.target.checked)} style={{accentColor:'var(--teal)'}}/>스무딩
@@ -1567,8 +1567,8 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
     </div>
 
     {/* ── 구역 4: 글꼴 ── */}
-    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>글꼴</div>
+    <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:3}}>글꼴</div>
       <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:5}}>
         <select value={tab.fontFamily||'sans'} onChange={e=>updateTab({fontFamily:e.target.value})} style={{flex:1,fontSize:10,padding:'2px 4px'}}>
           <option value="sans">Sans</option>
@@ -1590,8 +1590,8 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
     </div>
 
     {/* ── 구역 5: 차트 스타일 (선/크기/간격) ── */}
-    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>차트 스타일</div>
+    <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:3}}>차트 스타일</div>
       <div style={{display:'flex',gap:4,alignItems:'center',marginBottom:4}}>
         <span style={{color:'var(--tx3)',fontSize:10,minWidth:40}}>선두께</span>
         <input type="range" min="1" max="5" step=".5" value={lw} onChange={e=>setLw(+e.target.value)} style={{flex:1,minWidth:0}}/>
@@ -1628,8 +1628,8 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
     </div>
 
     {/* ── 구역 6: 저장/불러오기 ── */}
-    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:5}}>Viewer 디폴트</div>
+    <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:3}}>Viewer 디폴트</div>
       <div style={{display:'flex',gap:3}}>
         <button className="bt bs" onClick={async()=>{try{await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode})});alert(`✅ Viewer 디폴트 저장`)}catch(e){alert('실패')}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'3px 6px',flex:1}}>⭐ 저장</button>
         <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-viewer-settings`);const d=await r.json();if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);alert('불러옴')}catch(e){alert('실패')}}} style={{color:'var(--teal)',fontSize:9,padding:'3px 6px',flex:1}}>⭐ 불러오기</button>
@@ -1637,7 +1637,7 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
     </div>
 
     {/* ── 구역 5: 변수 선택 + Y축 범위 ── */}
-    <div style={{padding:'6px 10px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
+    <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5}}>
         <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10}}>변수 / Y축</span>
         <div style={{display:'flex',gap:4,alignItems:'center'}}>
@@ -1645,7 +1645,7 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
           <button className="bt bs" onClick={addPlot} style={{fontSize:9,padding:'2px 6px'}}>+ 변수</button>
         </div>
       </div>
-      <div style={{maxHeight:'40vh',overflowY:'auto'}}>
+      <div style={{maxHeight:'28vh',overflowY:'auto'}}>
       {tab.plots.slice(0,tab.rows*tab.cols).map((k,i)=>{const yr=tab.yranges?.[k];const hasR=yr&&(yr[0]!=null||yr[1]!=null);
         return(<div key={i} style={{padding:'4px 2px',borderBottom:'1px solid var(--bd)'}}>
         {/* 1행: 순서 버튼 + 번호 + 변수 선택 + 삭제 */}
