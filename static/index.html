@@ -1024,7 +1024,17 @@ const[yGap,setYGap]=useState(.35);
 useEffect(()=>{fetch(`${API}/api/default-viewer-settings`).then(r=>r.json()).then(d=>{
   if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);
   if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);
+  // VwChart 마운트 후 tabs 복원 (지연 + ref 유효성 체크)
+  if(d.tabs&&Array.isArray(d.tabs)){
+    const tryApply=(retry=0)=>{
+      if(vwChartRef?.current?.setTabs){
+        vwChartRef.current.setTabs(d.tabs.map((t,i)=>({...t,id:Date.now()+i})));
+      }else if(retry<20){setTimeout(()=>tryApply(retry+1),150)}
+    };
+    setTimeout(()=>tryApply(),300);
+  }
 }).catch(()=>{})},[]);
+const vwChartRef=useRef(null);
 const[dragMode,setDragMode]=useState('xy');
 const[chartH,setChartH]=useState(750);
 const[chartW,setChartW]=useState(0);
@@ -1343,7 +1353,7 @@ return(<div>
   </div>
 
   <ErrorBound>
-  <div style={{display:sub==='chart'?'block':'none'}}><VwChart cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} setLw={setLw} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW} dragMode={dragMode} setDragMode={setDragMode} xGap={xGap} setXGap={setXGap} yGap={yGap} setYGap={setYGap}/></div>
+  <div style={{display:sub==='chart'?'block':'none'}}><VwChart vwRef={vwChartRef} cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} setLw={setLw} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW} dragMode={dragMode} setDragMode={setDragMode} xGap={xGap} setXGap={setXGap} yGap={yGap} setYGap={setYGap}/></div>
   <div style={{display:sub==='psych'?'block':'none'}}><VwPsych cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} setLw={setLw} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW} dragMode={dragMode}/></div>
   <div style={{display:sub==='ph'?'block':'none'}}><VwPh cases={cases} caseVis={caseVis} caseColors={caseColors} lw={lw} setLw={setLw} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW} dragMode={dragMode} cfg={cfg}/></div>
   <div style={{display:sub==='perf'?'block':'none'}}><VwPerf cases={cases} caseVis={caseVis} caseColors={caseColors} chartH={chartH} setChartH={setChartH} chartW={chartW} setChartW={setChartW}/></div>
@@ -1425,7 +1435,7 @@ const VL={
 const yTitle=k=>VL[k]?`<b>${VL[k]}</b>`:`<b>${k}</b>`;
 
 // ═══ Viewer: 라인차트 ═══
-function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setChartW,dragMode,setDragMode,xGap,setXGap,yGap,setYGap}){
+function VwChart({vwRef,cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setChartW,dragMode,setDragMode,xGap,setXGap,yGap,setYGap}){
   const allVars=useMemo(()=>{
     if(!cases?.length)return[];
     const s=new Set();
@@ -1445,6 +1455,8 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
   };
   const[tabs,setTabs]=useState(()=>initTabs());
   const[tabIdx,setTabIdx]=useState(0);
+  // vwRef로 tabs/setTabs 외부 노출 (디폴트 저장/불러오기용)
+  useEffect(()=>{if(vwRef)vwRef.current={getTabs:()=>tabs,setTabs:(t)=>setTabs(t)}},[tabs,vwRef]);
   // cases 변경 시 탭 재초기화
   useEffect(()=>{if(cases?.length)setTabs(initTabs())},[allVars.length]);
 
@@ -1695,8 +1707,21 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
     <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
       <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:3}}>Viewer 디폴트</div>
       <div style={{display:'flex',gap:3}}>
-        <button className="bt bs" onClick={async()=>{try{await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode})});alert(`✅ Viewer 디폴트 저장`)}catch(e){alert('실패')}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'3px 6px',flex:1}}>⭐ 저장</button>
-        <button className="bt bs" onClick={async()=>{try{const r=await fetch(`${API}/api/default-viewer-settings`);const d=await r.json();if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);alert('불러옴')}catch(e){alert('실패')}}} style={{color:'var(--teal)',fontSize:9,padding:'3px 6px',flex:1}}>⭐ 불러오기</button>
+        <button className="bt bs" onClick={async()=>{try{
+          const t=vwRef?.current?.getTabs?.()||[];
+          const tabsLite=t.map(x=>({name:x.name,rows:x.rows,cols:x.cols,plots:x.plots,yranges:x.yranges||{},fontFamily:x.fontFamily,titleFontSize:x.titleFontSize,tickFontSize:x.tickFontSize,legendFontSize:x.legendFontSize,titleBold:x.titleBold}));
+          await fetch(`${API}/api/save-default-viewer-settings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lw,xGap,yGap,chartH,chartW,dragMode,tabs:tabsLite})});
+          alert(`✅ Viewer 디폴트 저장\n- 공통 설정 (선두께/크기/간격)\n- 카테고리 ${tabsLite.length}개 (변수/Y축 범위/글꼴 포함)`);
+        }catch(e){alert('실패: '+e.message)}}} style={{borderColor:'var(--teal)',color:'var(--teal)',fontSize:9,padding:'3px 6px',flex:1}}>⭐ 저장</button>
+        <button className="bt bs" onClick={async()=>{try{
+          const r=await fetch(`${API}/api/default-viewer-settings`);const d=await r.json();
+          if(d.lw!=null)setLw(d.lw);if(d.xGap!=null)setXGap(d.xGap);if(d.yGap!=null)setYGap(d.yGap);
+          if(d.chartH!=null)setChartH(d.chartH);if(d.chartW!=null)setChartW(d.chartW);if(d.dragMode!=null)setDragMode(d.dragMode);
+          if(d.tabs&&Array.isArray(d.tabs)&&vwRef?.current?.setTabs){
+            vwRef.current.setTabs(d.tabs.map((t,i)=>({...t,id:Date.now()+i})));
+          }
+          alert(`✅ 불러옴${d.tabs?`\n- 카테고리 ${d.tabs.length}개 복원`:''}`);
+        }catch(e){alert('실패: '+e.message)}}} style={{color:'var(--teal)',fontSize:9,padding:'3px 6px',flex:1}}>⭐ 불러오기</button>
       </div>
     </div>
 
