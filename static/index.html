@@ -1568,35 +1568,34 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
     return{...z,stats}}),[zones,tab,cases,caseVis]);
   const visCase=cases.filter(c=>caseVis[c.name]);
 
-  return(<div style={{display:'grid',gridTemplateColumns:`${sideW}px 4px 1fr`,gap:0,alignItems:'start'}}>
+  return(<>
+  {/* ═══════════════════ 카테고리 (상단 가로 바) ═══════════════════ */}
+  <div style={{display:'flex',gap:5,alignItems:'center',flexWrap:'wrap',padding:'5px 12px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,marginBottom:8,fontSize:11}}>
+    <span style={{fontWeight:600,color:'var(--tx2)',fontSize:10,minWidth:50}}>카테고리</span>
+    <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+    {tabs.map((t,i)=><div key={t.id} style={{display:'flex',alignItems:'center',gap:0}}>
+      <button className={`bt bs ${tabIdx===i?'on':''}`} onClick={()=>setTabIdx(i)} style={{borderRadius:tabs.length>1&&i===tabIdx?'6px 0 0 6px':'6px',fontSize:10,padding:'3px 10px'}}>{t.name}</button>
+      {tabs.length>1&&tabIdx===i&&<button onClick={()=>removeTab(i)} style={{padding:'3px 5px',fontSize:9,border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--red)',borderRadius:'0 6px 6px 0',cursor:'pointer',fontFamily:'var(--font)'}}>×</button>}
+    </div>)}
+    <button className="bt bs" onClick={addCustomTab} style={{fontSize:9,padding:'3px 8px'}}>+ 탭</button>
+    <span style={{width:1,height:14,background:'var(--bd2)'}}/>
+    <button className="bt bs" onClick={()=>{
+      const cfg={version:1,type:'viewer_chart_settings',tabs:tabs.map(t=>({name:t.name,rows:t.rows,cols:t.cols,plots:t.plots,yranges:t.yranges||{}})),tabIdx,smOn,smM,smW,zones,timestamp:new Date().toISOString()};
+      const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='viewer_chart_settings.json';a.click()
+    }} style={{fontSize:9,padding:'3px 8px'}}>💾 저장</button>
+    <button className="bt bs" onClick={()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=ev=>{
+      const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=e=>{try{
+        const c=JSON.parse(e.target.result);if(c.tabs){
+          setTabs(c.tabs.map((t,i)=>({...t,id:Date.now()+i})));setTabIdx(c.tabIdx||0);
+          if(c.smOn!=null)setSmOn(c.smOn);if(c.smM)setSmM(c.smM);if(c.smW)setSmW(c.smW);
+          if(c.zones)setZones(c.zones);
+        }}catch(er){alert('설정 파일 파싱 실패')}};rd.readAsText(f)};inp.click()
+    }} style={{fontSize:9,padding:'3px 8px'}}>📂 불러오기</button>
+  </div>
+
+  <div style={{display:'grid',gridTemplateColumns:`${sideW}px 4px 1fr`,gap:0,alignItems:'start'}}>
   {/* ═══════════════════ 좌측 사이드바 ═══════════════════ */}
   <div style={{display:'flex',flexDirection:'column',gap:5,position:'sticky',top:8,alignSelf:'start',maxHeight:'calc(100vh - 20px)',overflowY:'auto',overflowX:'hidden',paddingRight:6,scrollbarGutter:'stable'}}>
-    {/* ── 구역 1: 탭 관리 ── */}
-    <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
-      <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:3}}>카테고리</div>
-      <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:5}}>
-      {tabs.map((t,i)=><div key={t.id} style={{display:'flex',alignItems:'center',gap:0}}>
-        <button className={`bt bs ${tabIdx===i?'on':''}`} onClick={()=>setTabIdx(i)} style={{borderRadius:tabs.length>1&&i===tabIdx?'6px 0 0 6px':'6px',fontSize:10,padding:'3px 8px'}}>{t.name}</button>
-        {tabs.length>1&&tabIdx===i&&<button onClick={()=>removeTab(i)} style={{padding:'3px 5px',fontSize:9,border:'1px solid var(--bd2)',background:'var(--bg)',color:'var(--red)',borderRadius:'0 6px 6px 0',cursor:'pointer',fontFamily:'var(--font)'}}>×</button>}
-      </div>)}
-      </div>
-      <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-      <button className="bt bs" onClick={addCustomTab} style={{fontSize:9,padding:'3px 8px'}}>+ 탭</button>
-      <button className="bt bs" onClick={()=>{
-        const cfg={version:1,type:'viewer_chart_settings',tabs:tabs.map(t=>({name:t.name,rows:t.rows,cols:t.cols,plots:t.plots,yranges:t.yranges||{}})),tabIdx,smOn,smM,smW,zones,timestamp:new Date().toISOString()};
-        const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='viewer_chart_settings.json';a.click()
-      }} style={{fontSize:9,padding:'3px 8px'}}>💾</button>
-      <button className="bt bs" onClick={()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=ev=>{
-        const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=e=>{try{
-          const c=JSON.parse(e.target.result);if(c.tabs){
-            setTabs(c.tabs.map((t,i)=>({...t,id:Date.now()+i})));setTabIdx(c.tabIdx||0);
-            if(c.smOn!=null)setSmOn(c.smOn);if(c.smM)setSmM(c.smM);if(c.smW)setSmW(c.smW);
-            if(c.zones)setZones(c.zones);
-          }}catch(er){alert('설정 파일 파싱 실패')}};rd.readAsText(f)};inp.click()
-      }} style={{fontSize:9,padding:'3px 8px'}}>📂</button>
-      </div>
-    </div>
-
     {/* ── 구역 2: 레이아웃 ── */}
     <div style={{padding:'4px 8px',background:'var(--bg3)',border:'1px solid var(--bd)',borderRadius:8,fontSize:11}}>
       <div style={{fontWeight:600,color:'var(--tx2)',fontSize:10,marginBottom:3}}>레이아웃</div>
@@ -1783,7 +1782,8 @@ function VwChart({cases,caseVis,caseColors,lw,setLw,chartH,setChartH,chartW,setC
       </table>
     </div>}
   </div>
-  </div>)
+  </div>
+  </>)
 }
 
 // ═══ Viewer: 습공기 선도 ═══
